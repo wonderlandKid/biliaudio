@@ -2,6 +2,7 @@ package com.wonderlandkid.biliaudio.ui.album
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wonderlandkid.biliaudio.data.impl.SplitTextParser
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
@@ -39,14 +40,25 @@ data class SplitEditorUiState(
     val isAlbumInPlayer: Boolean = false,
     /** 播放器的专辑绝对进度（毫秒） */
     val albumPositionMs: Long = 0L,
+    // ---------------- 文本导入分割点 ----------------
+    /** 「文本导入分割点」弹窗是否可见 */
+    val textImportVisible: Boolean = false,
+    /** 文本导入输入框内容 */
+    val textImportText: String = "",
+    /** 文本实时识别结果（null = 尚未输入或已清空） */
+    val textImportResult: SplitTextParser.Result? = null,
 ) {
     val canSave: Boolean get() = !isSaving && album != null && segments.isNotEmpty()
 
-    /** 分割点列表总覆盖时长文案。 */
+    /** 分割点列表摘要文案（未分割时给更容易理解的说明）。 */
     val summaryText: String
         get() {
             val total = album?.durationMs ?: 0L
-            return "${segments.size} 个分割点 · 专辑时长 ${TimeUtils.formatDuration(total)}"
+            return if (segments.isEmpty()) {
+                "尚未分割 · 专辑时长 ${TimeUtils.formatDuration(total)}"
+            } else {
+                "${segments.size} 个分割点 · 专辑时长 ${TimeUtils.formatDuration(total)}"
+            }
         }
 }
 
@@ -204,6 +216,90 @@ class SplitEditorViewModel(
     /** 按时间点重新排序（编辑过程中顺序乱了可一键恢复）。 */
     fun sortByTime() {
         _uiState.update { it.copy(segments = it.segments.sortedBy { draft -> draft.startMs }) }
+    }
+
+    // ------------------------------------------------------------------
+    // 文本导入分割点
+    // ------------------------------------------------------------------
+
+    /** 打开「文本导入分割点」弹窗（清空上次输入与识别结果）。 */
+    fun openTextImport() {
+        _uiState.update {
+            it.copy(textImportVisible = true, textImportText = "", textImportResult = null)
+        }
+    }
+
+    /** 关闭「文本导入分割点」弹窗（保留状态，下次打开会重置）。 */
+    fun dismissTextImport() {
+        _uiState.update { it.copy(textImportVisible = false) }
+    }
+
+    /** 输入变化时实时识别（解析纯文本很轻，直接同步执行）。 */
+    fun onTextImportInputChange(text: String) {
+        _uiState.update {
+            it.copy(
+                textImportText = text,
+                textImportResult = if (text.isBlank()) null else SplitTextParser.parse(text),
+            )
+        }
+    }
+
+    /**
+     * 应用文本导入结果。
+     *
+     * @param text 用户粘贴的分割点文本（直接交给 [SplitTextParser] 解析）
+     * @param replace true = 替换全部分割点；false = 追加到末尾（与现有分割点重复的时间点以现有为准）
+     */
+    fun importSegmentsFromText(text: String, replace: Boolean) {
+        val state = _uiState.value
+        val album = state.album ?: return
+        val result = SplitTextParser.parse(text)
+        if (result.segments.isEmpty()) {
+            _uiState.update { it.copy(message = "未识别到分割点，请检查文本格式") }
+            return
+        }
+        // 超出专辑时长的时间点无法成为分割点，导入时跳过
+        val inRange = result.segments.filter { it.startMs in 0L until album.durationMs }
+        val outOfRangeCount = result.segments.size - inRange.size
+        if (inRange.isEmpty()) {
+            _uiState.update {
+                it.copy(message = "识别到的分割点都超出了专辑时长（${TimeUtils.formatDuration(album.durationMs)}）")
+            }
+            return
+        }
+        val existingTimes = state.segments.map { draft -> draft.startMs }.toSet()
+        var duplicateCount = 0
+        val importedDrafts: List<SegmentDraft> = if (replace) {
+            inRange.map { parsed -> SegmentDraft(key = nextDraftKey(), startMs = parsed.startMs, title = parsed.title) }
+        } else {
+            inRange.mapNotNull { parsed ->
+                if (parsed.startMs in existingTimes) {
+                    duplicateCount++
+                    null
+                } else {
+                    SegmentDraft(key = nextDraftKey(), startMs = parsed.startMs, title = parsed.title)
+                }
+            }
+        }
+        if (importedDrafts.isEmpty()) {
+            _uiState.update { it.copy(message = "没有可导入的分割点：时间点与现有分割点重复") }
+            return
+        }
+        val merged = (if (replace) importedDrafts else state.segments + importedDrafts)
+            .sortedBy { draft -> draft.startMs }
+        val extraNote = buildString {
+            if (duplicateCount > 0) append("，跳过重复 $duplicateCount 个")
+            if (outOfRangeCount > 0) append("，跳过超时长 $outOfRangeCount 个")
+        }
+        _uiState.update {
+            it.copy(
+                segments = merged,
+                textImportVisible = false,
+                textImportText = "",
+                textImportResult = null,
+                message = "已导入 ${importedDrafts.size} 个分割点$extraNote",
+            )
+        }
     }
 
     /**

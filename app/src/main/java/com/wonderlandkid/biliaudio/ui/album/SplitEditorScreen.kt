@@ -1,6 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.album
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -50,9 +53,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wonderlandkid.biliaudio.data.impl.SplitTextParser
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
@@ -152,6 +159,7 @@ fun SplitEditorScreen(
                 onUseCurrentPosition = viewModel::useCurrentPlaybackPosition,
                 onAddSegment = viewModel::addSegment,
                 onSort = viewModel::sortByTime,
+                onOpenTextImport = viewModel::openTextImport,
                 onEditSegment = { key -> editingKey = key },
                 onDeleteSegment = viewModel::deleteSegment,
                 onPreviewSegment = viewModel::previewFrom,
@@ -172,6 +180,21 @@ fun SplitEditorScreen(
             },
         )
     }
+
+    // 「文本导入分割点」弹窗：粘贴 → 实时识别 → 替换 / 追加
+    if (state.textImportVisible) {
+        TextImportDialog(
+            text = state.textImportText,
+            result = state.textImportResult,
+            existingSegmentCount = state.segments.size,
+            albumDurationMs = state.album?.durationMs ?: 0L,
+            onTextChange = viewModel::onTextImportInputChange,
+            onDismiss = viewModel::dismissTextImport,
+            onImport = { replace ->
+                viewModel.importSegmentsFromText(state.textImportText, replace)
+            },
+        )
+    }
 }
 
 @Composable
@@ -183,6 +206,7 @@ private fun SplitEditorContent(
     onUseCurrentPosition: () -> Unit,
     onAddSegment: () -> Unit,
     onSort: () -> Unit,
+    onOpenTextImport: () -> Unit,
     onEditSegment: (Long) -> Unit,
     onDeleteSegment: (Long) -> Unit,
     onPreviewSegment: (Long) -> Unit,
@@ -209,6 +233,7 @@ private fun SplitEditorContent(
                 onTitleInputChange = onTitleInputChange,
                 onUseCurrentPosition = onUseCurrentPosition,
                 onAddSegment = onAddSegment,
+                onOpenTextImport = onOpenTextImport,
             )
         }
         item(key = "segmentsHeader") {
@@ -222,8 +247,10 @@ private fun SplitEditorContent(
         if (state.segments.isEmpty()) {
             item(key = "segmentsEmpty") {
                 EmptyState(
-                    title = "还没有分割点",
-                    description = "先输入第一个时间点（通常是 00:00）和歌名，添加后继续切分后面的歌曲",
+                    title = "尚未分割",
+                    description = "可直接文本导入或手动添加，第一个时间点通常是 00:00",
+                    actionLabel = "文本导入",
+                    onAction = onOpenTextImport,
                 )
             }
         } else {
@@ -313,6 +340,7 @@ private fun AddSegmentPanel(
     onTitleInputChange: (String) -> Unit,
     onUseCurrentPosition: () -> Unit,
     onAddSegment: () -> Unit,
+    onOpenTextImport: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
@@ -325,10 +353,25 @@ private fun AddSegmentPanel(
             modifier = Modifier.padding(Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Text(
-                text = "新增分割点",
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "新增分割点",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = onOpenTextImport,
+                    contentPadding = PaddingValues(horizontal = Spacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentPaste,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(Spacing.xxs))
+                    Text("文本导入", maxLines = 1)
+                }
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
@@ -563,3 +606,205 @@ private fun EditSegmentDialog(
 /** 分割点时间文案：整秒 mm:ss，带毫秒则 mm:ss.SSS。 */
 private fun formatSplitTime(ms: Long): String =
     if (ms % 1000L == 0L) TimeUtils.formatDuration(ms) else TimeUtils.formatDurationPrecise(ms)
+
+
+// ---------------------------------------------------------------------------
+// 文本导入分割点
+// ---------------------------------------------------------------------------
+
+/** 「文本导入分割点」弹窗：粘贴文本 → 实时识别 → 替换 / 追加。 */
+@Composable
+private fun TextImportDialog(
+    text: String,
+    result: SplitTextParser.Result?,
+    existingSegmentCount: Int,
+    albumDurationMs: Long,
+    onTextChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onImport: (replace: Boolean) -> Unit,
+) {
+    var showReplaceConfirm by remember { mutableStateOf(false) }
+    val parsedCount = result?.segments?.size ?: 0
+    val canImport = parsedCount > 0
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.xl),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Column {
+                    Text(
+                        text = "文本导入分割点",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = "每行一首，三种格式可混用；粘贴后自动识别。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            text = "示例（三种格式可混用）：\n1.Breakaway00:00\n00:00 Tap Out\nOh! Darling 10:50",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 8,
+                    maxLines = 10,
+                    shape = RoundedCornerShape(16.dp),
+                )
+                TextImportSummary(result = result, albumDurationMs = albumDurationMs)
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    TextButton(
+                        onClick = {
+                            if (existingSegmentCount > 0) {
+                                showReplaceConfirm = true
+                            } else {
+                                onImport(true)
+                            }
+                        },
+                        enabled = canImport,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm),
+                    ) {
+                        Text(
+                            text = "替换全部分割点",
+                            maxLines = 1,
+                            color = if (existingSegmentCount > 0 && canImport) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    Button(
+                        onClick = { onImport(false) },
+                        enabled = canImport,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(percent = 50),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
+                    ) {
+                        Text("追加到末尾", maxLines = 1)
+                    }
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text("取消")
+                }
+            }
+        }
+    }
+
+    if (showReplaceConfirm) {
+        AlertDialog(
+            onDismissRequest = { showReplaceConfirm = false },
+            title = { Text("替换全部分割点？") },
+            text = {
+                Text(
+                    "将清除当前 $existingSegmentCount 个分割点，替换为文本识别出的 $parsedCount 个。\n" +
+                        "点「保存」后才会写入专辑。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showReplaceConfirm = false
+                        onImport(true)
+                    },
+                ) {
+                    Text("替换", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+}
+
+/** 文本识别结果摘要：识别/跳过数量、格式提示、跳过行前 3 条、超时长提示。 */
+@Composable
+private fun TextImportSummary(
+    result: SplitTextParser.Result?,
+    albumDurationMs: Long,
+) {
+    if (result == null) {
+        Text(
+            text = "支持 `1.Breakaway00:00` / `00:00 Tap Out` / `Oh! Darling 10:50` 三种写法",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    if (result.segments.isEmpty()) {
+        Text(
+            text = "未识别到分割点：请确认每行都包含时间（mm:ss）",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        return
+    }
+    val skippedCount = result.skippedLines.size
+    val outOfRangeCount =
+        if (albumDurationMs > 0L) result.segments.count { it.startMs >= albumDurationMs } else 0
+    Text(
+        text = "识别 ${result.segments.size} 个分割点" +
+            if (skippedCount > 0) " · 跳过 $skippedCount 行" else "",
+        style = MaterialTheme.typography.titleSmall,
+    )
+    Text(
+        text = result.styleHint,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (outOfRangeCount > 0) {
+        Text(
+            text = "其中 $outOfRangeCount 个时间点超出专辑时长，导入时会跳过",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    if (result.skippedLines.isNotEmpty()) {
+        Text(
+            text = "跳过的行（前 3 条）：",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        result.skippedLines.take(3).forEach { line ->
+            Text(
+                text = "· ${line.take(60)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (result.skippedLines.size > 3) {
+            Text(
+                text = "…共 ${result.skippedLines.size} 行",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

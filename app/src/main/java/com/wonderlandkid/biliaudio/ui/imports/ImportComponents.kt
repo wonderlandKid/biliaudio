@@ -217,6 +217,7 @@ fun VideoPreviewCard(
     state: VideoImportState,
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
+    onSplitTextChange: (String) -> Unit,
     onImport: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onReset: () -> Unit,
@@ -315,6 +316,109 @@ fun VideoPreviewCard(
                 }
             }
 
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
+            // ---- 可选：分曲文本（评论区「歌名 + 时间点」） ----
+            Text(
+                text = "分曲文本（可选）",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "粘贴带时间点的歌名列表可自动生成分曲；不填则先导入为未分割专辑" +
+                    "（整张按一首播放），之后可在分曲编辑里补时间点。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = state.splitText,
+                onValueChange = onSplitTextChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text(
+                        text = "1.Breakaway00:00\n00:00 Tap Out\n Come Together00:00",
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                },
+                minLines = 6,
+                maxLines = 12,
+                shape = RoundedCornerShape(14.dp),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
+                ),
+            )
+            if (state.splitText.isNotBlank()) {
+                val parsed = state.splitParse
+                val segments = state.splitSegments
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "已识别 ${segments.size} 个分割点 · 跳过 ${parsed?.skippedLines?.size ?: 0} 行",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (segments.isEmpty()) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { onSplitTextChange("") }) { Text("清空") }
+                }
+                if (segments.isEmpty()) {
+                    Text(
+                        text = "未识别到有效时间点：请检查格式（示例：00:42 歌名 / 歌名00:42 / " +
+                            "1.歌名00:42），或清空分曲文本后以未分割专辑导入。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    val styleHint = parsed?.styleHint
+                    if (!styleHint.isNullOrBlank()) {
+                        Text(
+                            text = styleHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    // 前几条识别结果，便于用户快速确认
+                    segments.take(4).forEach { spec ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            InfoPill(TimeUtils.formatDuration(spec.startMs))
+                            Text(
+                                text = spec.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                    if (segments.size > 4) {
+                        Text(
+                            text = "… 等共 ${segments.size} 个分割点",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    val skipped = parsed?.skippedLines.orEmpty()
+                    if (skipped.isNotEmpty()) {
+                        Text(
+                            text = "跳过的行：${skipped.take(2).joinToString("  /  ")}" +
+                                if (skipped.size > 2) " 等 ${skipped.size} 行" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
             // ---- 导入按钮 / 成功卡片 ----
             if (state.importedAlbumId != null) {
                 ImportSuccessPanel(
@@ -341,7 +445,14 @@ fun VideoPreviewCard(
                         Spacer(Modifier.width(Spacing.sm))
                         Text("正在导入…")
                     } else {
-                        Text("导入到我的专辑")
+                        // 未填分曲文本时明确提示会导入为未分割专辑
+                        Text(
+                            text = if (state.splitText.isBlank()) {
+                                "导入为未分割专辑"
+                            } else {
+                                "导入到我的专辑"
+                            },
+                        )
                     }
                 }
                 if (state.importError != null) {
@@ -389,8 +500,13 @@ private fun ImportSuccessPanel(
             }
             Spacer(Modifier.height(Spacing.xs))
             Text(
-                text = "《${state.importedTitle ?: state.albumTitle}》已加入音乐库，" +
-                    "共 ${state.importedTrackCount} 首曲目。",
+                text = if (state.importedTrackCount == 0) {
+                    "《${state.importedTitle ?: state.albumTitle}》已导入（未分割，整张专辑按一首播放），" +
+                        "之后可在分曲编辑里补时间点。"
+                } else {
+                    "《${state.importedTitle ?: state.albumTitle}》已加入音乐库，" +
+                        "共 ${state.importedTrackCount} 首曲目。"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )

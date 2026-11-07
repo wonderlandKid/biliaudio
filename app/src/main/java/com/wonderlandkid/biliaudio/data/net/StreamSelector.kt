@@ -7,7 +7,8 @@ import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
  *
  * 音质 id（docs/API_NOTES.md §3）：30280=192K、30232=132K、30216=64K；
  * 30250/30251 是杜比/Hi-Res，需要大会员，主动排除。
- * 视频：按需求选 ≤720P 中码率最低的一路（歌词页视频用，省流量）。
+ * 视频：歌词页用，**优先最高分辨率**（≤1080P，未登录一般最高 480P），
+ * 同分辨率优先 AVC（兼容性最好）再按码率高低，避免选到低清低码率流导致画面糊。
  */
 object StreamSelector {
 
@@ -57,20 +58,41 @@ object StreamSelector {
         return candidates.maxByOrNull { audioQualityRank(it.qualityId) }
     }
 
-    /** 选择 ≤720P 中码率最低的视频流；返回 null 表示没有可用视频。 */
+    /**
+     * 选择视频流（歌词页）：
+     * 1. 优先最高分辨率（封顶 1080P，避免 4K 解码/流量开销）；
+     * 2. 同分辨率优先 AVC（兼容性最好），其次按码率从高到低；
+     * 3. 若接口只返回 >1080P 的流（异常/会员高画质），取其中分辨率最低的一路。
+     *
+     * 返回 null 表示没有可用视频。
+     */
     fun selectVideo(videos: List<DashMedia>): VideoChoice? {
         val candidates = videos.mapNotNull { media ->
+            if (media.height <= 0) return@mapNotNull null
             val url = media.url ?: media.backupUrls.firstOrNull() ?: return@mapNotNull null
-            VideoPick(url = url, height = media.height, qualityId = media.id, bandwidth = media.bandwidth)
+            VideoPick(
+                url = url,
+                height = media.height,
+                qualityId = media.id,
+                bandwidth = media.bandwidth,
+                isAvc = media.codecs.startsWith("avc", ignoreCase = true),
+            )
         }
         if (candidates.isEmpty()) return null
-        val within720 = candidates.filter { it.height in 1..720 }
-        val best = if (within720.isNotEmpty()) {
-            // 码率最低优先；码率相同取分辨率更低的一路
-            within720.minWithOrNull(compareBy<VideoPick> { it.bandwidth }.thenBy { it.height })
+        val within1080 = candidates.filter { it.height <= 1080 }
+        val best = if (within1080.isNotEmpty()) {
+            within1080.maxWithOrNull(
+                compareBy<VideoPick> { it.height }
+                    .thenBy { if (it.isAvc) 1 else 0 }
+                    .thenBy { it.bandwidth },
+            )
         } else {
-            // 没有 ≤720P（异常情况）：取分辨率最低的一路
-            candidates.minByOrNull { it.height }
+            // 只有 >1080P 的流（异常/高画质会员）：取其中分辨率最低的一路，避免解码/流量过大
+            candidates.minWithOrNull(
+                compareBy<VideoPick> { it.height }
+                    .thenByDescending { if (it.isAvc) 1 else 0 }
+                    .thenByDescending { it.bandwidth },
+            )
         }
         return best?.let { VideoChoice(url = it.url, height = it.height, qualityId = it.qualityId) }
     }
@@ -80,6 +102,7 @@ object StreamSelector {
         val height: Int,
         val qualityId: Int,
         val bandwidth: Long,
+        val isAvc: Boolean,
     )
 
     private fun audioQualityRank(qualityId: Int): Int = when (qualityId) {

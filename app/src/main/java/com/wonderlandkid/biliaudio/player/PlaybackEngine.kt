@@ -190,8 +190,9 @@ class PlaybackEngine private constructor(
     override fun playAlbum(albumId: Long, startTrackIndex: Int) {
         launchOperation {
             val album = requireAlbum(albumId)
-            val tracks = albumRepository.getTracks(albumId).sortedBy { it.index }
-            require(tracks.isNotEmpty()) { "该专辑还没有分曲，请先编辑分曲时间点" }
+            val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
+            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
+            val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
             val albumData = loadAlbumPlaybackData(album)
             val specs = PlaybackMapping.buildPlaySpecs(
@@ -208,11 +209,22 @@ class PlaybackEngine private constructor(
         }
     }
 
+    /** 未分割专辑的虚拟整张曲目（不写库，只在播放队列中使用）。 */
+    private fun wholeAlbumTrack(album: Album): Track = Track(
+        id = -album.id,
+        albumId = album.id,
+        index = 0,
+        title = album.title,
+        startMs = 0L,
+        endMs = album.durationMs.coerceAtLeast(1L),
+    )
+
     override fun playTrack(albumId: Long, trackId: Long) {
         launchOperation {
             val album = requireAlbum(albumId)
-            val tracks = albumRepository.getTracks(albumId).sortedBy { it.index }
-            require(tracks.isNotEmpty()) { "该专辑还没有分曲，请先编辑分曲时间点" }
+            val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
+            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
+            val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
             val targetIndex = entries.indexOfFirst { it.track.id == trackId }
             require(targetIndex >= 0) { "歌曲不存在或已被删除" }

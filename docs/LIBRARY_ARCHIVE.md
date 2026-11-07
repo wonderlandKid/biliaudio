@@ -75,7 +75,8 @@
 ```
 
 - `title/artist/coverUrl/durationMs` 省略时：专辑不存在 → 用 B 站 view 信息补全后创建；专辑已存在 → 保留原值。
-- `segments` 省略 → 整段视频作为一首歌。
+- `segments` 省略/为空 → 专辑处于「未分割」状态：播放时整段视频按一首虚拟歌曲播放，
+  之后可在分曲编辑页补分割点（不会再生成需要手动删除的占位曲）。
 
 ### 2.3 只导入分割点（评论区分割点文件）
 
@@ -100,7 +101,7 @@
 | `albums[].coverUrl` | ❌ | 省略则用视频封面；仅接受 http/https |
 | `albums[].durationMs` | 新建时❌* | 省略则用 view 接口时长 |
 | `albums[].createdAt/lastPlayedAt/playCount` | ❌ | 用户数据，恢复时尽量保留 |
-| `albums[].segments[]` | ❌ | 为空 = 整段一首；最多 500 条 |
+| `albums[].segments[]` | ❌ | 为空 = 未分割（整段按一首虚拟播放）；最多 500 条 |
 | `segments[].startMs` 或 `segments[].start` | ✅ | 二选一：毫秒整数，或 `ss`/`mm:ss`/`mm:ss.SSS`/`hh:mm:ss` |
 | `segments[].title` 或 `segments[].name` | ❌ | 省略自动命名「曲目 N」 |
 

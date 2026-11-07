@@ -159,6 +159,7 @@ fun ImportScreen(
                         },
                         onAlbumTitleChange = viewModel::updateBvAlbumTitle,
                         onArtistChange = viewModel::updateBvArtist,
+                        onSplitTextChange = viewModel::updateBvSplitText,
                         onImport = viewModel::importBv,
                         onOpenAlbum = onImported,
                         onReset = viewModel::resetBvImport,
@@ -237,6 +238,7 @@ fun ImportScreen(
                         state = searchPreview,
                         onAlbumTitleChange = viewModel::updateSearchPreviewTitle,
                         onArtistChange = viewModel::updateSearchPreviewArtist,
+                        onSplitTextChange = viewModel::updateSearchPreviewSplitText,
                         onImport = viewModel::importSearchPreview,
                         onOpenAlbum = { albumId ->
                             viewModel.dismissSearchPreview()
@@ -366,6 +368,7 @@ private fun BvImportTab(
     onParse: () -> Unit,
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
+    onSplitTextChange: (String) -> Unit,
     onImport: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onReset: () -> Unit,
@@ -468,6 +471,7 @@ private fun BvImportTab(
                     state = state,
                     onAlbumTitleChange = onAlbumTitleChange,
                     onArtistChange = onArtistChange,
+                    onSplitTextChange = onSplitTextChange,
                     onImport = onImport,
                     onOpenAlbum = onOpenAlbum,
                     onReset = onReset,

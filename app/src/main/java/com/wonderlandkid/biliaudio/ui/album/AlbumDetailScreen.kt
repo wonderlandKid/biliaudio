@@ -280,7 +280,7 @@ private fun AlbumDetailContent(
             SectionHeader(
                 title = "曲目",
                 subtitle = if (tracks.isEmpty()) {
-                    "还没有分曲"
+                    "未分割 · 共 ${TimeUtils.formatDuration(album.durationMs)}"
                 } else {
                     "${tracks.size} 首 · 共 ${TimeUtils.formatDuration(album.durationMs)}"
                 },
@@ -289,8 +289,8 @@ private fun AlbumDetailContent(
         if (tracks.isEmpty()) {
             item(key = "tracksEmpty") {
                 EmptyState(
-                    title = "还没有分曲",
-                    description = "把整段音频按时间点切成歌曲，就能逐首播放",
+                    title = "尚未分割",
+                    description = "整张专辑会按一首歌播放；可在分曲编辑里添加时间点或粘贴文本",
                     actionLabel = "编辑分割点",
                     onAction = onOpenSplitEditor,
                 )
@@ -357,7 +357,13 @@ private fun AlbumHero(
             if (album.pageCount > 1) {
                 MetadataChip(text = "P${album.page}/${album.pageCount}")
             }
-            MetadataChip(text = "$trackCount 首 · ${TimeUtils.formatDuration(album.durationMs)}")
+            MetadataChip(
+                text = if (trackCount == 0) {
+                    "未分割 · ${TimeUtils.formatDuration(album.durationMs)}"
+                } else {
+                    "$trackCount 首 · ${TimeUtils.formatDuration(album.durationMs)}"
+                },
+            )
         }
     }
 }

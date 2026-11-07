@@ -89,25 +89,47 @@ class StreamSelectorTest {
     }
 
     @Test
-    fun `视频选 720P 以内码率最低的一路`() {
+    fun `视频优先最高分辨率（480P 优先于 360P）`() {
         // 真实响应：480P HEVC 218550 / 480P AVC 786766 / 360P HEVC 153220 / 360P AVC 350253
         val videos = listOf(
-            video(32, 480, 852, 218_550, codecs = "hev1"),
-            video(32, 480, 852, 786_766, codecs = "avc1"),
-            video(16, 360, 640, 153_220, codecs = "hev1"),
-            video(16, 360, 640, 350_253, codecs = "avc1"),
+            video(32, 480, 852, 218_550, url = "https://v/480-hevc", codecs = "hev1"),
+            video(32, 480, 852, 786_766, url = "https://v/480-avc", codecs = "avc1"),
+            video(16, 360, 640, 153_220, url = "https://v/360-hevc", codecs = "hev1"),
+            video(16, 360, 640, 350_253, url = "https://v/360-avc", codecs = "avc1"),
         )
         val choice = StreamSelector.selectVideo(videos)
-        assertEquals(360, choice?.height)
-        assertEquals(16, choice?.qualityId)
-        assertEquals("https://v/16/360", choice?.url)
+        assertEquals(480, choice?.height)
+        assertEquals(32, choice?.qualityId)
+        assertEquals("https://v/480-avc", choice?.url)
     }
 
     @Test
-    fun `视频全都高于 720P 时取分辨率最低`() {
-        val videos = listOf(video(80, 1080, 1920, 3_000_000), video(64, 720, 1280, 2_500_000))
-        // 720P 本身也算 <=720P
-        assertEquals(720, StreamSelector.selectVideo(videos)?.height)
+    fun `同分辨率优先 AVC，其次码率高`() {
+        val hevcHighBitrate = video(64, 720, 1280, 3_000_000, url = "https://v/720-hevc", codecs = "hev1")
+        val avcLowBitrate = video(64, 720, 1280, 1_500_000, url = "https://v/720-avc", codecs = "avc1")
+        assertEquals(
+            "https://v/720-avc",
+            StreamSelector.selectVideo(listOf(hevcHighBitrate, avcLowBitrate))?.url,
+        )
+    }
+
+    @Test
+    fun `视频优先最高分辨率且不超过 1080P`() {
+        val videos = listOf(
+            video(80, 1080, 1920, 3_000_000, url = "https://v/1080"),
+            video(64, 720, 1280, 2_500_000, url = "https://v/720"),
+            video(32, 480, 852, 800_000, url = "https://v/480"),
+        )
+        assertEquals("https://v/1080", StreamSelector.selectVideo(videos)?.url)
+    }
+
+    @Test
+    fun `只有 4K 及以上时取最低分辨率兜底`() {
+        val videos = listOf(
+            video(120, 2160, 3840, 9_000_000, url = "https://v/2160"),
+            video(112, 1440, 2560, 6_000_000, url = "https://v/1440"),
+        )
+        assertEquals("https://v/1440", StreamSelector.selectVideo(videos)?.url)
     }
 
     @Test

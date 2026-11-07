@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveCodec
+import com.wonderlandkid.biliaudio.data.impl.SplitTextParser
 import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
 import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
@@ -16,6 +17,7 @@ import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.data.model.ImportResult
+import com.wonderlandkid.biliaudio.data.model.SegmentSpec
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -63,9 +65,27 @@ data class VideoImportState(
     val importedAlbumId: Long? = null,
     val importedTitle: String? = null,
     val importedTrackCount: Int = 0,
+    /** 可选的分曲文本（评论区歌名 + 时间点），实时解析成分割点 */
+    val splitText: String = "",
+    /** [SplitTextParser] 的解析结果；文本为空时为 null */
+    val splitParse: SplitTextParser.Result? = null,
 ) {
+    /** 解析出的分割点（可直接传给 AlbumImportRequest.segments；空文本 → 空列表 = 未分割专辑） */
+    val splitSegments: List<SegmentSpec>
+        get() = splitParse?.toSegmentSpecs().orEmpty()
+
+    /** 文本非空但没识别出分割点时的错误提示（此时禁止导入） */
+    val splitError: String?
+        get() = if (splitText.isNotBlank() && splitSegments.isEmpty()) {
+            "未识别到有效时间点：请检查分曲文本格式（如「00:42 歌名」/「歌名00:42」/「1.歌名00:42」），" +
+                "或清空后以未分割专辑导入"
+        } else {
+            null
+        }
+
     val canImport: Boolean
-        get() = info != null && !isParsing && !isImporting && importedAlbumId == null
+        get() = info != null && !isParsing && !isImporting &&
+            importedAlbumId == null && splitError == null
 }
 
 /**
@@ -182,6 +202,11 @@ class ImportViewModel(
         _uiState.update { it.copy(bv = it.bv.copy(artist = text)) }
     }
 
+    /** 更新 BV 预览里的分曲文本，并实时解析成分割点。 */
+    fun updateBvSplitText(text: String) {
+        _uiState.update { it.copy(bv = it.bv.withSplitText(text)) }
+    }
+
     /** 解析 BV 号 / 链接，成功后展示可编辑的预览卡片。 */
     fun parseBvInput() {
         val input = _uiState.value.bv.input.trim()
@@ -227,6 +252,12 @@ class ImportViewModel(
     fun importBv() {
         val state = _uiState.value.bv
         val info = state.info ?: return
+        // 分曲文本非空但识别 0 个分割点：禁止导入并提示
+        state.splitError?.let { message ->
+            _uiState.update { it.copy(bv = it.bv.copy(importError = message)) }
+            _messages.tryEmit(message)
+            return
+        }
         if (state.isImporting) return
         _uiState.update { it.copy(bv = it.bv.copy(isImporting = true, importError = null)) }
         viewModelScope.launch {
@@ -239,6 +270,8 @@ class ImportViewModel(
                             albumTitle = state.albumTitle.trim().ifBlank { null },
                             artist = state.artist.trim().ifBlank { null },
                             mode = ImportMode.SINGLE_VIDEO,
+                            // 空文本 → 空列表：数据层生成 0 首未分割专辑（整张按一首播放）
+                            segments = state.splitSegments,
                         ),
                     )
                 }
@@ -254,7 +287,7 @@ class ImportViewModel(
                                 ),
                             )
                         }
-                        _messages.tryEmit("导入成功：《${result.albumTitle}》，共 ${result.trackCount} 首")
+                        _messages.tryEmit(importSuccessMessage(result.albumTitle, result.trackCount))
                     }
 
                     is ImportResult.Failure -> {
@@ -548,9 +581,20 @@ class ImportViewModel(
         updateSearchPreview { it.copy(artist = text) }
     }
 
+    /** 更新搜索预览里的分曲文本，并实时解析成分割点。 */
+    fun updateSearchPreviewSplitText(text: String) {
+        updateSearchPreview { it.withSplitText(text) }
+    }
+
     fun importSearchPreview() {
         val state = _uiState.value.searchPreview ?: return
         val info = state.info ?: return
+        // 分曲文本非空但识别 0 个分割点：禁止导入并提示
+        state.splitError?.let { message ->
+            updateSearchPreview { it.copy(importError = message) }
+            _messages.tryEmit(message)
+            return
+        }
         if (state.isImporting) return
         updateSearchPreview { it.copy(isImporting = true, importError = null) }
         viewModelScope.launch {
@@ -562,6 +606,8 @@ class ImportViewModel(
                             albumTitle = state.albumTitle.trim().ifBlank { null },
                             artist = state.artist.trim().ifBlank { null },
                             mode = ImportMode.SINGLE_VIDEO,
+                            // 空文本 → 空列表：数据层生成 0 首未分割专辑（整张按一首播放）
+                            segments = state.splitSegments,
                         ),
                     )
                 }
@@ -575,7 +621,7 @@ class ImportViewModel(
                                 importedTrackCount = result.trackCount,
                             )
                         }
-                        _messages.tryEmit("导入成功：《${result.albumTitle}》，共 ${result.trackCount} 首")
+                        _messages.tryEmit(importSuccessMessage(result.albumTitle, result.trackCount))
                     }
 
                     is ImportResult.Failure -> {
@@ -602,6 +648,20 @@ class ImportViewModel(
     // ------------------------------------------------------------------
     // 内部工具
     // ------------------------------------------------------------------
+
+    /** 更新分曲文本并重新解析（解析是纯文本操作，很快，直接主线程）。 */
+    private fun VideoImportState.withSplitText(text: String): VideoImportState = copy(
+        splitText = text,
+        splitParse = if (text.isBlank()) null else SplitTextParser.parse(text),
+    )
+
+    /** 导入成功提示：0 首表示未分割专辑（整张按一首播放）。 */
+    private fun importSuccessMessage(albumTitle: String, trackCount: Int): String =
+        if (trackCount == 0) {
+            "导入成功：《$albumTitle》（未分割，整张专辑按一首播放）"
+        } else {
+            "导入成功：《$albumTitle》，共 $trackCount 首"
+        }
 
     private inline fun updateSearchPreview(crossinline transform: (VideoImportState) -> VideoImportState) {
         _uiState.update { state ->

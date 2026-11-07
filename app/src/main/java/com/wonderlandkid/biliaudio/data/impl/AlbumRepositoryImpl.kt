@@ -252,11 +252,12 @@ class AlbumRepositoryImpl(
 
     /**
      * 生成曲目分割方案：
-     * - 未指定分割点 → 整段视频一首（默认标题 = 专辑名）；
+     * - 未指定分割点 → **不生成任何曲目**（专辑处于「未分割」状态，播放时由播放器虚拟成整张一首，
+     *   避免导入后出现一个需要手动删除的「整张专辑占位曲」）；
      * - 指定分割点 → 按开始时间排序、去重、裁剪到视频时长内，每首结束于下一首开始（最后一首到视频结束）。
      */
     private fun buildSegments(requested: List<SegmentSpec>, durationMs: Long, albumTitle: String): List<SegmentSpec> {
-        if (requested.isEmpty()) return listOf(SegmentSpec(startMs = 0L, title = albumTitle))
+        if (requested.isEmpty()) return emptyList()
         val normalized = requested
             .filter { it.startMs in 0 until durationMs }
             .sortedBy { it.startMs }
@@ -267,7 +268,7 @@ class AlbumRepositoryImpl(
                     title = segment.title.trim().ifBlank { "曲目 ${index + 1}" },
                 )
             }
-        return normalized.ifEmpty { listOf(SegmentSpec(startMs = 0L, title = albumTitle)) }
+        return normalized
     }
 
     private companion object {
