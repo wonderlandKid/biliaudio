@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.AlbumCard
+import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.AlbumCompactRow
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.ListBottomSpacer
@@ -173,24 +174,13 @@ private fun HomeHeader(
     statsText: String,
     onOpenSearch: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg),
-    ) {
-        Text(
-            text = "发现",
-            style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(Spacing.xs))
-        Text(
-            text = statsText,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 三个 Tab 页统一页头（位置/字号一致，见 ui/components/PageHeader.kt）
+        BiliPageHeader(title = "发现", subtitle = statsText)
         Spacer(Modifier.height(Spacing.lg))
-        SearchEntry(onClick = onOpenSearch)
+        Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+            SearchEntry(onClick = onOpenSearch)
+        }
     }
 }
 

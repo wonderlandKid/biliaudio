@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.5.0**（tag `v0.5.0`，2026-11-08；release commit 以 `git rev-parse v0.5.0` 为准）
+- **版本：v0.6.0**（tag `v0.6.0`，2026-11-08；release commit 以 `git rev-parse v0.6.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**141 个**（v0.5.0）
+- 单元测试：**152 个**（v0.6.0）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.5.0: 141 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.6.0: 152 个）
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 
 # 模拟器（AVD: biliaudio_api36，headless）
@@ -42,6 +42,8 @@ scripts/screenshot.sh home 8
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
 4. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
+5. **UI 规范**：Tab 页页头必须用 `ui/components/PageHeader.kt` 的 `BiliPageHeader`（标题位置统一）；
+   导航转场在 `AppNavHost` 统一定义（Tab 淡入淡出、详情页横向共享轴、播放页底部上滑），不要在页面内自写转场。
 
 ## 文档索引
 
@@ -50,7 +52,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.5.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.6.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | 音乐库归档 JSON 格式规范（备份/恢复/分割点文件） |

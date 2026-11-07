@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.settings
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -27,8 +28,10 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,14 +55,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.BuildConfig
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -108,6 +115,26 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) viewModel.exportLibrary(uri)
     }
+    val isExportingTree by viewModel.isExportingTree.collectAsStateWithLifecycle()
+    val isImportingTree by viewModel.isImportingTree.collectAsStateWithLifecycle()
+    val treeImportReport by viewModel.treeImportResult.collectAsStateWithLifecycle()
+
+    // 目录归档：导出到文件夹 / 从文件夹导入（SAF 选择目录）
+    val treeExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) viewModel.exportTreeToFolder(uri)
+    }
+    var pendingTreeImportUri by remember { mutableStateOf<Uri?>(null) }
+    var treeImportMode by remember { mutableStateOf(ArchiveImportMode.MERGE) }
+    val treeImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            treeImportMode = ArchiveImportMode.MERGE
+            pendingTreeImportUri = uri
+        }
+    }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
@@ -130,60 +157,71 @@ fun SettingsScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = Spacing.lg,
-                end = Spacing.lg,
-                top = Spacing.lg,
-                // 外层 Scaffold 已让出底部导航/迷你播放条高度，这里只留呼吸空间
+                // 与发现/音乐库一致：页头由 BiliPageHeader 自带水平 Spacing.lg
+                top = Spacing.md,
                 bottom = Spacing.xxxl,
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
-            item {
-                Text(
-                    text = "设置",
-                    style = MaterialTheme.typography.displayMedium,
-                    modifier = Modifier.padding(horizontal = Spacing.xs),
+            item(key = "header") {
+                BiliPageHeader(
+                    title = "设置",
+                    subtitle = "哔哩专辑 v${BuildConfig.VERSION_NAME} · 备份、外观与账号",
                 )
             }
             item {
-                AccountCard(
-                    authState = authState,
-                    onOpenLogin = onOpenLogin,
-                    onLogoutClick = { showLogoutDialog = true },
-                )
+                SettingsPadded {
+                    AccountCard(
+                        authState = authState,
+                        onOpenLogin = onOpenLogin,
+                        onLogoutClick = { showLogoutDialog = true },
+                    )
+                }
             }
-            item { SectionTitle("播放") }
+            item { SettingsPadded { SectionTitle("播放") } }
             item {
-                AudioQualityCard(
-                    selected = settings.audioQuality,
-                    onSelect = viewModel::setAudioQuality,
-                )
+                SettingsPadded {
+                    AudioQualityCard(
+                        selected = settings.audioQuality,
+                        onSelect = viewModel::setAudioQuality,
+                    )
+                }
             }
-            item { SectionTitle("外观") }
+            item { SettingsPadded { SectionTitle("外观") } }
             item {
-                DarkThemeCard(
-                    darkTheme = settings.darkTheme,
-                    onSelect = viewModel::setDarkTheme,
-                )
+                SettingsPadded {
+                    DarkThemeCard(
+                        darkTheme = settings.darkTheme,
+                        onSelect = viewModel::setDarkTheme,
+                    )
+                }
             }
-            item { SectionTitle("备份与恢复") }
+            item { SettingsPadded { SectionTitle("备份与恢复") } }
             item {
-                BackupRestoreCard(
-                    isExporting = isExporting,
-                    lastAutoBackupAt = lastAutoBackupAt,
-                    onExportClick = { exportLauncher.launch(defaultBackupFileName()) },
-                    onImportClick = onOpenBackupImport,
-                )
+                SettingsPadded {
+                    BackupRestoreCard(
+                        isExporting = isExporting,
+                        isExportingTree = isExportingTree,
+                        isImportingTree = isImportingTree,
+                        lastAutoBackupAt = lastAutoBackupAt,
+                        onExportSingleClick = { exportLauncher.launch(defaultBackupFileName()) },
+                        onImportSingleClick = onOpenBackupImport,
+                        onExportTreeClick = { treeExportLauncher.launch(null) },
+                        onImportTreeClick = { treeImportLauncher.launch(null) },
+                    )
+                }
             }
-            item { SectionTitle("诊断与维护") }
+            item { SettingsPadded { SectionTitle("诊断与维护") } }
             item {
-                DiagnosticsEntryCard(
-                    lineCount = diagLineCount,
-                    onClick = onOpenDiagnostics,
-                )
+                SettingsPadded {
+                    DiagnosticsEntryCard(
+                        lineCount = diagLineCount,
+                        onClick = onOpenDiagnostics,
+                    )
+                }
             }
-            item { SectionTitle("关于") }
-            item { AboutCard() }
+            item { SettingsPadded { SectionTitle("关于") } }
+            item { SettingsPadded { AboutCard() } }
             item {
                 Text(
                     text = "哔哩专辑 · 仅供个人学习与本地播放使用",
@@ -192,7 +230,7 @@ fun SettingsScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = Spacing.md),
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
                 )
             }
         }
@@ -201,6 +239,115 @@ fun SettingsScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(Spacing.lg),
+        )
+    }
+
+    // 从文件夹导入：先选导入模式（合并 / 仅更新分割点 / 覆盖全库）
+    val treeImportUri = pendingTreeImportUri
+    if (treeImportUri != null) {
+        AlertDialog(
+            onDismissRequest = { pendingTreeImportUri = null },
+            title = { Text("从文件夹导入") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Text(
+                        text = "按「顶层 → 艺术家 → 专辑 → 分割」目录结构读取 *.json 归档，请选择导入模式：",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TreeImportModeOption(
+                        label = "合并导入",
+                        description = "按 BV + 分 P 匹配：不存在新建，已存在更新元信息与分曲",
+                        selected = treeImportMode == ArchiveImportMode.MERGE,
+                        onSelect = { treeImportMode = ArchiveImportMode.MERGE },
+                    )
+                    TreeImportModeOption(
+                        label = "仅更新分割点",
+                        description = "只更新已存在专辑的分曲，不新建专辑、不改元信息",
+                        selected = treeImportMode == ArchiveImportMode.SEGMENTS_ONLY,
+                        onSelect = { treeImportMode = ArchiveImportMode.SEGMENTS_ONLY },
+                    )
+                    TreeImportModeOption(
+                        label = "覆盖全库",
+                        description = "先自动备份当前音乐库，再清空并导入（危险）",
+                        selected = treeImportMode == ArchiveImportMode.REPLACE,
+                        onSelect = { treeImportMode = ArchiveImportMode.REPLACE },
+                        isDanger = true,
+                    )
+                    if (treeImportMode == ArchiveImportMode.REPLACE) {
+                        Text(
+                            text = "覆盖前会自动备份到应用私有目录；如需长期保留，请先在「单文件备份」里导出。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingTreeImportUri = null
+                        viewModel.importTreeFromFolder(treeImportUri, treeImportMode)
+                    },
+                ) { Text("开始导入") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTreeImportUri = null }) { Text("取消") }
+            },
+        )
+    }
+
+    // 目录导入结果：统计 + 覆盖全库时的自动备份路径
+    val treeReport = treeImportReport
+    if (treeReport != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissTreeImportResult,
+            title = { Text("目录导入完成") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Text(
+                        text = "新建 ${treeReport.createdCount} · 更新 ${treeReport.updatedCount} · " +
+                            "分曲更新 ${treeReport.segmentsUpdatedCount} · 跳过 ${treeReport.skippedCount} · " +
+                            "失败 ${treeReport.failedCount}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (treeReport.mode == ArchiveImportMode.REPLACE) {
+                        val backupPath = treeReport.backupFilePath
+                        if (backupPath != null) {
+                            Text(
+                                text = "覆盖前已自动备份：",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = backupPath,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        } else {
+                            Text(
+                                text = "自动备份失败，请确认已手动导出备份。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    if (treeReport.parseErrors.isNotEmpty()) {
+                        Text(
+                            text = "有 ${treeReport.parseErrors.size} 条条目解析失败，详见诊断日志。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissTreeImportResult) { Text("确定") }
+            },
         )
     }
 
@@ -545,90 +692,133 @@ private fun AboutCard() {
 // 备份与恢复
 // ---------------------------------------------------------------------------
 
-/** 备份与恢复卡片：导出音乐库 / 导入恢复 / 上次自动备份时间。 */
+/** 备份与恢复卡片：单文件 JSON 备份 + 目录形态归档（顶层 → 艺术家 → 专辑 → 分割）。 */
 @Composable
 private fun BackupRestoreCard(
     isExporting: Boolean,
+    isExportingTree: Boolean,
+    isImportingTree: Boolean,
     lastAutoBackupAt: Long?,
-    onExportClick: () -> Unit,
-    onImportClick: () -> Unit,
+    onExportSingleClick: () -> Unit,
+    onImportSingleClick: () -> Unit,
+    onExportTreeClick: () -> Unit,
+    onImportTreeClick: () -> Unit,
 ) {
     SettingsCard {
-        // ---- 导出音乐库 ----
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.FileDownload,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "导出音乐库", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = "导出全部专辑与分曲时间点为 JSON 备份文件",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                )
-            }
-            Button(
-                onClick = onExportClick,
-                enabled = !isExporting,
-                shape = RoundedCornerShape(50),
-                contentPadding = PaddingValues(horizontal = Spacing.md),
-            ) {
-                if (isExporting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(Modifier.width(Spacing.xs))
-                    Text("导出中")
-                } else {
-                    Text("导出")
+        // ---- 单文件备份 ----
+        Text(
+            text = "单文件备份",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = Spacing.sm),
+        )
+        SettingsActionRow(
+            icon = Icons.Rounded.FileDownload,
+            title = "导出音乐库",
+            description = "导出全部专辑与分曲时间点为一个 JSON 备份文件",
+            action = {
+                Button(
+                    onClick = onExportSingleClick,
+                    enabled = !isExporting,
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = Spacing.md),
+                ) {
+                    if (isExporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("导出中")
+                    } else {
+                        Text("导出")
+                    }
                 }
-            }
-        }
+            },
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        // ---- 导入 / 恢复 ----
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.FileUpload,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "导入 / 恢复", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = "从备份文件恢复，或导入分享的专辑 / 分割点文件",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                )
-            }
-            OutlinedButton(
-                onClick = onImportClick,
-                shape = RoundedCornerShape(50),
-                contentPadding = PaddingValues(horizontal = Spacing.md),
-            ) {
-                Text("导入")
-            }
-        }
+        SettingsActionRow(
+            icon = Icons.Rounded.FileUpload,
+            title = "导入 / 恢复",
+            description = "从单文件备份恢复，或导入分享的专辑 / 分割点文件",
+            action = {
+                OutlinedButton(
+                    onClick = onImportSingleClick,
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = Spacing.md),
+                ) {
+                    Text("导入")
+                }
+            },
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+        // ---- 目录形态归档 ----
+        Text(
+            text = "目录归档（顶层 → 艺术家 → 专辑 → 分割）",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = Spacing.md),
+        )
+        Text(
+            text = "按「顶层 / 艺术家 / 专辑 / album.json + segments.json」目录结构导出，" +
+                "便于浏览、分享与跨设备恢复。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs),
+        )
+        SettingsActionRow(
+            icon = Icons.Rounded.Save,
+            title = "导出到文件夹",
+            description = "选择文件夹，按艺术家 / 专辑生成目录与 JSON 文件（同名文件覆盖）",
+            action = {
+                OutlinedButton(
+                    onClick = onExportTreeClick,
+                    enabled = !isExportingTree && !isImportingTree,
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm),
+                ) {
+                    if (isExportingTree) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("导出中")
+                    } else {
+                        Text("选择文件夹")
+                    }
+                }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        SettingsActionRow(
+            icon = Icons.Rounded.FolderOpen,
+            title = "从文件夹导入",
+            description = "选择导出的目录，递归读取 *.json 后按所选模式导入",
+            action = {
+                OutlinedButton(
+                    onClick = onImportTreeClick,
+                    enabled = !isExportingTree && !isImportingTree,
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm),
+                ) {
+                    if (isImportingTree) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("导入中")
+                    } else {
+                        Text("选择文件夹")
+                    }
+                }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
         // ---- 上次自动备份 ----
         Row(
             modifier = Modifier
@@ -661,6 +851,91 @@ private fun BackupRestoreCard(
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(bottom = Spacing.sm),
         )
+    }
+}
+
+/** 设置页条目统一水平内边距（页头 [BiliPageHeader] 自带 Spacing.lg）。 */
+@Composable
+private fun SettingsPadded(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg),
+    ) {
+        content()
+    }
+}
+
+/** 统一的「图标 + 标题 + 说明 + 操作按钮」设置行。 */
+@Composable
+private fun SettingsActionRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    action: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        action()
+    }
+}
+
+/** 目录导入模式单选项（AlertDialog 内）。 */
+@Composable
+private fun TreeImportModeOption(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    isDanger: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onSelect)
+            .padding(vertical = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDanger) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

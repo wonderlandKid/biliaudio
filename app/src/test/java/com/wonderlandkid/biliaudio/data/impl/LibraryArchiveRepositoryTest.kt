@@ -9,6 +9,8 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.ArchiveItemAction
 import com.wonderlandkid.biliaudio.data.model.ArchiveSegment
+import com.wonderlandkid.biliaudio.data.model.ArchiveSettings
+import com.wonderlandkid.biliaudio.data.model.ArchiveTreeEntry
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.model.BatchImportReport
 import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
@@ -268,6 +270,309 @@ class LibraryArchiveRepositoryTest {
     }
 
     // ------------------------------------------------------------------
+    // 目录形态归档（v0.6.0：根索引 + 艺术家/专辑/album.json + segments.json）
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `export tree creates root index and artist album hierarchy`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "专辑A"), tracks = tracks(1, 2, 2))
+        val settingsRepo = FakeSettingsRepository()
+        settingsRepo.setAudioQuality(AudioQualityPreference.HIGH)
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), settingsRepo, FakeAlbumCoverRepository(),
+        )
+
+        val entries = repo.exportTreeEntries()
+        val paths = entries.map { it.relativePath }
+
+        assertEquals("条目应按路径排序", paths.sorted(), paths)
+        assertEquals(3, entries.size)
+        assertTrue(entries.all { it.mimeType == "application/json" })
+        assertTrue("biliaudio-library.json" in paths)
+        assertTrue("UP主/专辑A/album.json" in paths)
+        assertTrue("UP主/专辑A/segments.json" in paths)
+
+        // 根索引：只含 settings，albums 为空
+        val root = parseTreeEntry(entries.single { it.relativePath == "biliaudio-library.json" })
+        assertTrue(root.albums.isEmpty())
+        assertEquals("HIGH", root.settings?.audioQuality)
+
+        // album.json：元信息，segments 为空
+        val albumMeta = parseTreeEntry(entries.single { it.relativePath == "UP主/专辑A/album.json" }).albums.single()
+        assertEquals("专辑A", albumMeta.title)
+        assertEquals("UP主", albumMeta.artist)
+        assertEquals("BV1GJ411x7h7", albumMeta.bvid)
+        assertTrue("album.json 不应包含 segments", albumMeta.segments.isEmpty())
+
+        // segments.json：仅分割点（可含 bvid/page）
+        val segments = parseTreeEntry(entries.single { it.relativePath == "UP主/专辑A/segments.json" }).albums.single()
+        assertEquals("BV1GJ411x7h7", segments.bvid)
+        assertEquals(2, segments.segments.size)
+        assertEquals(listOf(0L, 106_500L), segments.segments.map { it.startMs })
+    }
+
+    @Test
+    fun `export tree album json embeds custom cover base64`() = runBlocking {
+        val coverFile = java.io.File.createTempFile("biliaudio-tree-cover", ".jpg").apply { writeBytes(coverBytesFixture) }
+        try {
+            val albumRepo = FakeAlbumRepository()
+            albumRepo.seed(
+                album(1, "BV1GJ411x7h7", "封面专辑").copy(coverLocalPath = coverFile.absolutePath),
+                tracks = tracks(1, 1, 1),
+            )
+            val repo = LibraryArchiveRepositoryImpl(
+                null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+            )
+
+            val entries = repo.exportTreeEntries()
+            val albumMeta = parseTreeEntry(entries.single { it.relativePath.endsWith("/album.json") }).albums.single()
+            assertEquals(coverBase64(coverBytesFixture), albumMeta.coverBase64)
+
+            // segments 文件不重复携带封面
+            val segments = parseTreeEntry(entries.single { it.relativePath.endsWith("/segments.json") }).albums.single()
+            assertNull(segments.coverBase64)
+        } finally {
+            coverFile.delete()
+        }
+    }
+
+    @Test
+    fun `export tree sanitizes illegal path characters`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(
+            album(1, "BV1GJ411x7h7", "Best/Of: \"Fav\"*<>|?").copy(artist = "AC/DC\\Live: Band?"),
+            tracks = tracks(1, 1, 1),
+        )
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+
+        val entries = repo.exportTreeEntries().filter { it.relativePath != "biliaudio-library.json" }
+        assertEquals(2, entries.size)
+
+        val illegal = listOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
+        for (entry in entries) {
+            val parts = entry.relativePath.split('/')
+            assertEquals("路径层级应为 艺术家/专辑/文件：${entry.relativePath}", 3, parts.size)
+            parts.forEach { part ->
+                assertTrue("目录/文件名不能为空：${entry.relativePath}", part.isNotBlank())
+                assertFalse("不能包含非法字符：$part", part.any { it in illegal })
+                assertFalse("不能包含控制字符：$part", part.any { it.code < 0x20 })
+            }
+        }
+    }
+
+    @Test
+    fun `export tree uses fallback names and dedupes duplicate album dirs`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "").copy(artist = ""), tracks = tracks(1, 1, 1))
+        albumRepo.seed(album(2, "BV1uv411q7Mv", "").copy(artist = ""), tracks = tracks(2, 1, 1))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+
+        val dirs = repo.exportTreeEntries()
+            .filter { it.relativePath.endsWith("/album.json") }
+            .map { it.relativePath.substringBeforeLast('/') }
+            .sorted()
+
+        assertEquals(2, dirs.size)
+        assertEquals("重名目录必须去重，不能互相覆盖", 2, dirs.toSet().size)
+        assertTrue(dirs.all { it.startsWith("未知艺术家/未命名专辑") })
+    }
+
+    @Test
+    fun `export tree roundtrip imports metadata and segments`() = runBlocking {
+        // 源库：导出到目录形态
+        val sourceRepo = FakeAlbumRepository()
+        sourceRepo.seed(
+            album(1, "BV1GJ411x7h7", "新专辑名").copy(artist = "新艺术家"),
+            tracks = tracks(1, 3, 3),
+        )
+        val entries = LibraryArchiveRepositoryImpl(
+            null, sourceRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        ).exportTreeEntries()
+
+        // 目标库：同 bvid 的旧专辑
+        val targetRepo = FakeAlbumRepository()
+        targetRepo.seed(album(1, "BV1GJ411x7h7", "旧专辑名").copy(artist = "旧艺术家"), tracks = tracks(1, 1, 2))
+        val target = LibraryArchiveRepositoryImpl(
+            null, targetRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+
+        val report = target.importTreeEntries(entries, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        assertEquals(0, report.failedCount)
+        val updated = targetRepo.allAlbums().single()
+        assertEquals("新专辑名", updated.title)
+        assertEquals("新艺术家", updated.artist)
+        assertEquals(3, targetRepo.allTracks(updated.id).size)
+    }
+
+    @Test
+    fun `import tree merges album and segments files in same directory`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "旧标题"), tracks = tracks(1, 1, 2))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+        val entries = listOf(
+            treeJsonEntry("A/B/album.json", ArchiveAlbum(bvid = "BV1GJ411x7h7", title = "新标题", artist = "新艺术家")),
+            treeJsonEntry(
+                "A/B/segments.json",
+                ArchiveAlbum(
+                    bvid = "BV1GJ411x7h7",
+                    page = 1,
+                    segments = listOf(ArchiveSegment(startMs = 0, title = "一"), ArchiveSegment(startMs = 60_000, title = "二")),
+                ),
+            ),
+        )
+
+        val report = repo.importTreeEntries(entries, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        val updated = albumRepo.allAlbums().single()
+        assertEquals("新标题", updated.title)
+        assertEquals("新艺术家", updated.artist)
+        assertEquals(2, albumRepo.allTracks(updated.id).size)
+        assertEquals(listOf(0L, 60_000L), albumRepo.allTracks(updated.id).map { it.startMs })
+    }
+
+    @Test
+    fun `import tree segments only file updates tracks by bvid`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "保留标题"), tracks = tracks(1, 1, 2))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+        // 只有 segments.json、没有 album.json
+        val entries = listOf(
+            treeJsonEntry(
+                "某艺术家/某专辑/segments.json",
+                ArchiveAlbum(
+                    bvid = "BV1GJ411x7h7",
+                    page = 1,
+                    segments = listOf(
+                        ArchiveSegment(startMs = 0, title = "甲"),
+                        ArchiveSegment(startMs = 90_000, title = "乙"),
+                        ArchiveSegment(startMs = 150_000, title = "丙"),
+                    ),
+                ),
+            ),
+        )
+
+        val report = repo.importTreeEntries(entries, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        val album = albumRepo.allAlbums().single()
+        assertEquals("没有 album.json 时保留原元信息", "保留标题", album.title)
+        assertEquals(3, albumRepo.allTracks(album.id).size)
+        assertEquals(listOf(0L, 90_000L, 150_000L), albumRepo.allTracks(album.id).map { it.startMs })
+    }
+
+    @Test
+    fun `import tree applies root settings except segments only mode`() = runBlocking {
+        val rootEntry = treeRootEntry(
+            ArchiveSettings(audioQuality = AudioQualityPreference.LOW.name, darkTheme = true),
+        )
+        val segmentsEntry = treeJsonEntry(
+            "A/B/segments.json",
+            ArchiveAlbum(bvid = "BV1GJ411x7h7", page = 1, segments = listOf(ArchiveSegment(startMs = 0, title = "一"))),
+        )
+
+        // MERGE：应用根索引设置
+        val settingsRepo = FakeSettingsRepository()
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "专辑"), tracks = tracks(1, 1, 1))
+        LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), settingsRepo, FakeAlbumCoverRepository(),
+        ).importTreeEntries(listOf(rootEntry, segmentsEntry), ArchiveImportMode.MERGE)
+        assertEquals(AudioQualityPreference.LOW, settingsRepo.quality)
+        assertEquals(true, settingsRepo.darkTheme)
+
+        // SEGMENTS_ONLY：不应用设置（与单文件导入语义一致）
+        val settingsRepo2 = FakeSettingsRepository()
+        val albumRepo2 = FakeAlbumRepository()
+        albumRepo2.seed(album(1, "BV1GJ411x7h7", "专辑"), tracks = tracks(1, 1, 1))
+        LibraryArchiveRepositoryImpl(
+            null, albumRepo2, FakeBiliRepository(), settingsRepo2, FakeAlbumCoverRepository(),
+        ).importTreeEntries(listOf(rootEntry, segmentsEntry), ArchiveImportMode.SEGMENTS_ONLY)
+        assertEquals(AudioQualityPreference.AUTO, settingsRepo2.quality)
+        assertNull(settingsRepo2.darkTheme)
+    }
+
+    @Test
+    fun `import tree records parse errors and still imports valid directories`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "旧标题"), tracks = tracks(1, 1, 2))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+        val entries = listOf(
+            ArchiveTreeEntry("坏/目录/album.json", "{not-json".toByteArray(Charsets.UTF_8), "application/json"),
+            // 版本过高 → codec 拒绝
+            ArchiveTreeEntry(
+                "坏/目录/segments.json",
+                """{"format":"biliaudio-library","version":99,"albums":[]}""".toByteArray(Charsets.UTF_8),
+                "application/json",
+            ),
+            ArchiveTreeEntry("biliaudio-library.json", "{bad-root".toByteArray(Charsets.UTF_8), "application/json"),
+            treeJsonEntry("好/目录/album.json", ArchiveAlbum(bvid = "BV1GJ411x7h7", title = "新标题")),
+            treeJsonEntry(
+                "好/目录/segments.json",
+                ArchiveAlbum(bvid = "BV1GJ411x7h7", page = 1, segments = listOf(ArchiveSegment(startMs = 0, title = "一"))),
+            ),
+        )
+
+        val report = repo.importTreeEntries(entries, ArchiveImportMode.MERGE)
+
+        assertTrue("坏 JSON/坏根索引应记入 parseErrors", report.parseErrors.size >= 3)
+        assertEquals(1, report.updatedCount)
+        assertEquals("新标题", albumRepo.allAlbums().single().title)
+    }
+
+    @Test
+    fun `import tree without recognized files reports error`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "专辑"), tracks = tracks(1, 1, 1))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+
+        val report = repo.importTreeEntries(
+            listOf(
+                ArchiveTreeEntry("README.md", "说明".toByteArray(Charsets.UTF_8), "text/markdown"),
+                ArchiveTreeEntry(".DS_Store", byteArrayOf(1, 2, 3)),
+            ),
+            ArchiveImportMode.MERGE,
+        )
+
+        assertTrue(report.parseErrors.any { it.message.contains("未找到") })
+        assertTrue(report.items.isEmpty())
+        assertEquals(1, albumRepo.allAlbums().size)
+    }
+
+    @Test
+    fun `import tree replace does not wipe library when no valid albums`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "专辑"), tracks = tracks(1, 1, 1))
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+        )
+
+        val report = repo.importTreeEntries(
+            listOf(ArchiveTreeEntry("坏/album.json", "{broken".toByteArray(Charsets.UTF_8), "application/json")),
+            ArchiveImportMode.REPLACE,
+        )
+
+        assertEquals("没有有效专辑时不能清空用户数据", 1, albumRepo.allAlbums().size)
+        assertEquals(0, report.createdCount)
+        assertTrue(report.parseErrors.isNotEmpty())
+    }
+
+    // ------------------------------------------------------------------
     // 仅更新分割点
     // ------------------------------------------------------------------
 
@@ -404,6 +709,23 @@ class LibraryArchiveRepositoryTest {
 
     private fun archiveText(vararg albums: ArchiveAlbum): String =
         codec.encode(LibraryArchive.create(albums = albums.toList()))
+
+    /** 目录形态归档的单文件条目（JSON，UTF-8）。 */
+    private fun treeJsonEntry(path: String, vararg albums: ArchiveAlbum): ArchiveTreeEntry = ArchiveTreeEntry(
+        relativePath = path,
+        bytes = codec.encode(LibraryArchive.create(albums = albums.toList())).toByteArray(Charsets.UTF_8),
+        mimeType = "application/json",
+    )
+
+    /** 目录形态归档的根索引条目。 */
+    private fun treeRootEntry(settings: ArchiveSettings? = null): ArchiveTreeEntry = ArchiveTreeEntry(
+        relativePath = "biliaudio-library.json",
+        bytes = codec.encode(LibraryArchive.create(albums = emptyList(), settings = settings)).toByteArray(Charsets.UTF_8),
+        mimeType = "application/json",
+    )
+
+    private fun parseTreeEntry(entry: ArchiveTreeEntry): LibraryArchive =
+        codec.parse(entry.bytes.toString(Charsets.UTF_8)).archive
 
     private fun album(id: Long, bvid: String, title: String, playCount: Int = 0): Album = Album(
         id = id,

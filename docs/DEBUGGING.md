@@ -83,6 +83,25 @@
 - **数据库升级**：v0.5.0 Room v1→v2 仅 `ALTER TABLE albums ADD COLUMN coverLocalPath TEXT`，
   升级保留原有专辑/分曲（真机与模拟器均已实测）；升级失败日志中会出现 Room 异常，可直接看到 SQL 问题。
 
+## 3.5 归档目录形态（SAF）排障
+
+- 设置 → 备份与恢复 → 目录归档：
+  - 「导出到文件夹」用系统文件夹选择器；**选择后还会弹一次「允许访问文件」确认，需点 ALLOW**，
+    否则不会写入任何文件；
+  - Android 10+ 限制直接使用 Download 根目录（提示 Can't use this folder）→ 新建子文件夹再 USE THIS FOLDER；
+  - 导出目录结构：`biliaudio-library.json` + `<艺术家>/<专辑>/album.json` + `segments.json`；
+  - 导入时递归读取 `*.json`（深度≤8、≤3000 文件、单文件≤8MB），未知文件忽略；选父目录也可以；
+  - 导入模式：合并（默认）/ 仅更新分割点 / 覆盖全库（先自动备份；目录无有效专辑时拒绝清库）；
+  - 失败提示：空目录/无 json →「没有找到可导入的归档文件」；坏 JSON 会进 parseErrors 但不中断其它专辑。
+- 目录导入导出日志（tag `Archive`）：文件数、模式、耗时、created/updated/failed；UI 结果对话框也有统计。
+
+## 3.6 音乐库索引/艺术家
+
+- 分组基于 `android.icu.text.AlphabeticIndex`（中文拼音桶）；若发现中文分组不对，检查是否误调了
+  `setMaxLabelCount()`（ICU 77 会稀疏标签集，导致拼音错位，v0.6.0 已踩坑）；
+- B 站标题「【官方 MV】」等前缀会被跳过再分组；若新增前缀类型导致全落 `#`，在 `LetterIndex` 的装饰符集合里补充；
+- 艺术家封面取该艺术家第一张专辑封面（按仓库专辑顺序）；点艺术家进入详情页。
+
 ## 4. 构建 / IDE
 
 ### Android Studio 点 Run 报 `Activity class {com.example.bilibiliplayer/...} does not exist`

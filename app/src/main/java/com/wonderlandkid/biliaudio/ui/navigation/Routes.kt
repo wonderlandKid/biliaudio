@@ -9,6 +9,12 @@ object Routes {
     const val IMPORT_ARCHIVE = "import_archive"
     const val LOGIN = "login"
     const val DIAGNOSTICS = "diagnostics"
+
+    /** 艺术家详情：artistName 由 [artist] 生成（URL 编码）。 */
+    const val ARTIST = "artist/{artistName}"
+    const val ARG_ARTIST_NAME = "artistName"
+
+    fun artist(artistName: String): String = "artist/" + android.net.Uri.encode(artistName)
     const val PLAYER = "player"
     const val VIDEO = "video"
     const val SEARCH = "search"

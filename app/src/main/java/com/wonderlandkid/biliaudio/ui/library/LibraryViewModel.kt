@@ -15,13 +15,32 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 
+/** 艺术家名为空时的统一展示名（也用于分组）。 */
+internal const val UNKNOWN_ARTIST = "未知艺术家"
+
+/** 艺术家名规范化：去空白，空值统一为「未知艺术家」。 */
+internal fun String.normalizedArtistName(): String = trim().ifBlank { UNKNOWN_ARTIST }
+
 /** 音乐库 Tab。 */
-enum class LibraryTab { SONGS, ALBUMS }
+enum class LibraryTab { SONGS, ALBUMS, ARTISTS }
+
+/**
+ * 音乐库「艺术家」Tab 的聚合条目：从专辑列表聚合，封面默认取该艺术家第一张专辑。
+ */
+data class ArtistEntry(
+    val name: String,
+    /** 该艺术家在专辑列表中的第一张专辑（封面 / 跳转用） */
+    val firstAlbum: Album,
+    val albumCount: Int,
+    val songCount: Int,
+) {
+    val subtitle: String get() = "$albumCount 张专辑 · $songCount 首歌曲"
+}
 
 /** 音乐库 UI 状态。 */
 data class LibraryUiState(
@@ -30,6 +49,8 @@ data class LibraryUiState(
     val isLoading: Boolean = true,
     val songs: List<TrackWithAlbum> = emptyList(),
     val albums: List<Album> = emptyList(),
+    /** 从 [albums] 聚合出的艺术家（搜索时基于搜索结果） */
+    val artists: List<ArtistEntry> = emptyList(),
     /** 当前播放歌曲 id（用于列表高亮） */
     val currentTrackId: Long? = null,
     val isPlaying: Boolean = false,
@@ -37,18 +58,20 @@ data class LibraryUiState(
 ) {
     val isSearchActive: Boolean get() = query.isNotBlank()
 
-    val songsCountText: String
-        get() = if (isSearchActive) "找到 ${songs.size} 首歌曲" else "${songs.size} 首歌曲"
-
-    val albumsCountText: String
-        get() = if (isSearchActive) "找到 ${albums.size} 张专辑" else "${albums.size} 张专辑"
+    /** 页头副标题：搜索时显示「找到」数量。 */
+    val headerSubtitle: String
+        get() = if (isSearchActive) {
+            "找到 ${songs.size} 首歌曲 · ${albums.size} 张专辑"
+        } else {
+            "${songs.size} 首歌曲 · ${albums.size} 张专辑"
+        }
 }
 
 /**
  * 音乐库 ViewModel。
  *
  * 搜索走 [AlbumRepository.searchSongs] / [AlbumRepository.searchAlbums]（Room Flow 实时更新），
- * 并对输入做 ~280ms 防抖，避免逐字触发数据库查询。
+ * 并对输入做 ~280ms 防抖，避免逐字触发数据库查询；艺术家由专辑结果聚合而来。
  */
 class LibraryViewModel(
     private val albumRepository: AlbumRepository,
@@ -101,12 +124,15 @@ class LibraryViewModel(
         searchResults,
         playbackController.state,
     ) { query, tab, result, playback ->
+        val songs = result?.songs.orEmpty()
+        val albums = result?.albums.orEmpty()
         LibraryUiState(
             query = query,
             tab = tab,
             isLoading = result == null,
-            songs = result?.songs.orEmpty(),
-            albums = result?.albums.orEmpty(),
+            songs = songs,
+            albums = albums,
+            artists = buildArtists(albums = albums, songs = songs),
             currentTrackId = playback.currentTrack?.id,
             isPlaying = playback.isPlaying,
             errorMessage = result?.errorMessage,
@@ -147,6 +173,31 @@ class LibraryViewModel(
         if (songs.isNotEmpty()) {
             playbackController.playSongs(songs, 0)
         }
+    }
+
+    /**
+     * 从专辑聚合艺术家：
+     * - 艺术家名去空白，空 → [UNKNOWN_ARTIST]；
+     * - 封面 / 跳转用该艺术家在列表中的**第一张专辑**（保持仓库顺序，不随机）；
+     * - 歌曲数用当前歌曲列表（搜索时=搜索结果）统计。
+     */
+    private fun buildArtists(albums: List<Album>, songs: List<TrackWithAlbum>): List<ArtistEntry> {
+        if (albums.isEmpty()) return emptyList()
+        val songCountByArtist = HashMap<String, Int>()
+        for (song in songs) {
+            val name = song.album.artist.normalizedArtistName()
+            songCountByArtist[name] = (songCountByArtist[name] ?: 0) + 1
+        }
+        // groupBy 保持 encounter order：firstAlbum = 该艺术家第一张专辑（不随机）
+        return albums.groupBy { album -> album.artist.normalizedArtistName() }
+            .map { (name, artistAlbums) ->
+                ArtistEntry(
+                    name = name,
+                    firstAlbum = artistAlbums.first(),
+                    albumCount = artistAlbums.size,
+                    songCount = songCountByArtist[name] ?: 0,
+                )
+            }
     }
 
     private companion object {

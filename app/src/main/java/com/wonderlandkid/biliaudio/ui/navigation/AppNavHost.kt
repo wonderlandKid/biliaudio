@@ -1,5 +1,12 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,6 +15,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -25,6 +35,7 @@ import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportTab
+import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
@@ -55,6 +66,9 @@ fun AppNavHost() {
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
     val isImmersive = currentRoute in immersiveRoutes
 
+    // 迷你播放条收起状态：下滑收起、上滑/点击展开；打开播放页时恢复展开
+    var miniPlayerCollapsed by rememberSaveable { mutableStateOf(false) }
+
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
         Routes.LIBRARY -> MainTab.LIBRARY
@@ -80,7 +94,12 @@ fun AppNavHost() {
                 Column {
                     MiniPlayerBar(
                         state = playbackState,
-                        onOpenPlayer = { navController.navigate(Routes.PLAYER) },
+                        collapsed = miniPlayerCollapsed,
+                        onCollapsedChange = { miniPlayerCollapsed = it },
+                        onOpenPlayer = {
+                            miniPlayerCollapsed = false
+                            navController.navigate(Routes.PLAYER)
+                        },
                         onTogglePlay = { container.playbackController.togglePlayPause() },
                         onNext = { container.playbackController.next() },
                     )
@@ -103,9 +122,28 @@ fun AppNavHost() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding),
+            // 详情页统一「共享轴」横向转场：进入从右侧推入、返回向右退出（不再出现默认的缩放/淡出不一致）
+            enterTransition = {
+                slideInHorizontally(animationSpec = tween(320)) { it } + fadeIn(tween(220))
+            },
+            exitTransition = {
+                slideOutHorizontally(animationSpec = tween(320)) { -it / 4 } + fadeOut(tween(180))
+            },
+            popEnterTransition = {
+                slideInHorizontally(animationSpec = tween(320)) { -it / 4 } + fadeIn(tween(220))
+            },
+            popExitTransition = {
+                slideOutHorizontally(animationSpec = tween(280)) { it } + fadeOut(tween(200))
+            },
         ) {
             // ---------------- Tabs ----------------
-            composable(Routes.HOME) {
+            composable(
+                Routes.HOME,
+                enterTransition = { fadeIn(tween(180)) },
+                exitTransition = { fadeOut(tween(140)) },
+                popEnterTransition = { fadeIn(tween(180)) },
+                popExitTransition = { fadeOut(tween(140)) },
+            ) {
                 HomeScreen(
                     onOpenSearch = { switchTab(MainTab.LIBRARY) },
                     onOpenAlbum = { albumId ->
@@ -116,18 +154,46 @@ fun AppNavHost() {
                     onOpenLibrary = { switchTab(MainTab.LIBRARY) },
                 )
             }
-            composable(Routes.LIBRARY) {
+            composable(
+                Routes.LIBRARY,
+                enterTransition = { fadeIn(tween(180)) },
+                exitTransition = { fadeOut(tween(140)) },
+                popEnterTransition = { fadeIn(tween(180)) },
+                popExitTransition = { fadeOut(tween(140)) },
+            ) {
                 LibraryScreen(
                     onOpenAlbum = { albumId ->
                         navController.navigate(Routes.album(albumId))
                     },
+                    onOpenArtist = { artistName ->
+                        navController.navigate(Routes.artist(artistName))
+                    },
                 )
             }
-            composable(Routes.SETTINGS) {
+            composable(
+                Routes.SETTINGS,
+                enterTransition = { fadeIn(tween(180)) },
+                exitTransition = { fadeOut(tween(140)) },
+                popEnterTransition = { fadeIn(tween(180)) },
+                popExitTransition = { fadeOut(tween(140)) },
+            ) {
                 SettingsScreen(
                     onOpenLogin = { navController.navigate(Routes.LOGIN) },
                     onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                )
+            }
+
+            // ---------------- 艺术家 ----------------
+            composable(
+                route = Routes.ARTIST,
+                arguments = listOf(navArgument(Routes.ARG_ARTIST_NAME) { type = NavType.StringType }),
+            ) { entry ->
+                val artistName = entry.arguments?.getString(Routes.ARG_ARTIST_NAME).orEmpty()
+                ArtistDetailScreen(
+                    artistName = android.net.Uri.decode(artistName),
+                    onBack = { navController.popBackStack() },
+                    onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                 )
             }
 
@@ -195,14 +261,30 @@ fun AppNavHost() {
             }
 
             // ---------------- 播放 / 歌词页（沉浸式，页面自行处理 insets） ----------------
-            composable(Routes.PLAYER) {
+            composable(
+                Routes.PLAYER,
+                enterTransition = {
+                    slideInVertically(animationSpec = tween(340)) { it } + fadeIn(tween(180))
+                },
+                exitTransition = { fadeOut(tween(140)) },
+                popEnterTransition = { fadeIn(tween(160)) },
+                popExitTransition = {
+                    slideOutVertically(animationSpec = tween(300)) { it } + fadeOut(tween(180))
+                },
+            ) {
                 NowPlayingScreen(
                     onBack = { navController.popBackStack() },
                     onOpenVideo = { navController.navigate(Routes.VIDEO) },
                     onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                 )
             }
-            composable(Routes.VIDEO) {
+            composable(
+                Routes.VIDEO,
+                enterTransition = { fadeIn(tween(220)) },
+                exitTransition = { fadeOut(tween(160)) },
+                popEnterTransition = { fadeIn(tween(180)) },
+                popExitTransition = { fadeOut(tween(180)) },
+            ) {
                 VideoScreen(
                     onBack = { navController.popBackStack() },
                 )

@@ -269,3 +269,25 @@
   }
 }
 ```
+
+---
+
+## 11. 目录形态归档（v0.6.0，artist/album/segments）
+
+除单文件 `.biliaudio.json` 外，支持导出/导入目录树，便于浏览与手动编辑：
+
+```
+<用户选择的顶层目录>/
+├── biliaudio-library.json          # 根索引：format/version/exportedAt/settings；albums 为空
+├── <艺术家>/
+│   └── <专辑>/
+│       ├── album.json              # 单专辑归档：元信息 + coverBase64（segments 为空）
+│       └── segments.json           # 单专辑分割点：bvid/url/page + segments
+```
+
+- `album.json` / `segments.json` 均为合法 `biliaudio-library` JSON（可用单文件导入逻辑解析）；
+- 目录名会做安全化：去掉 `/\:*?"<>|` 与控制字符、首尾空白/点、限长 60 码点；空 → `未知艺术家` / `未命名专辑`；
+  同父目录重名（大小写不敏感）→ `名字 (2)` … `(99)` → `名字 (BV号)`；
+- 导入：按目录合并 album.json + segments.json；只有 segments 时按 bvid 匹配更新分曲；根索引 settings 按模式应用；
+  导入模式与单文件一致；**覆盖全库且目录无有效专辑时拒绝清库**（防误删）；
+- 文件内容示例与单文件一致，见上文单专辑/分割点章节。

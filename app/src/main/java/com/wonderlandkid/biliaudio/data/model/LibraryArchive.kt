@@ -146,3 +146,14 @@ data class ArchiveImportReport(
 
 /** 归档解析/校验失败（message 可直接展示给用户）。 */
 class ArchiveFormatException(message: String) : Exception(message)
+
+/**
+ * 目录形态归档中的单个文件（v0.6.0）：
+ * - relativePath 形如 `顶层/艺术家/专辑/album.json`，使用 `/` 分隔；
+ * - 二进制内容放 [bytes]（封面等），JSON 文本按 UTF-8 写入。
+ */
+data class ArchiveTreeEntry(
+    val relativePath: String,
+    val bytes: ByteArray,
+    val mimeType: String = "application/octet-stream",
+)
