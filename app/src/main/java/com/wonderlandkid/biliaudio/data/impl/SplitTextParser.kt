@@ -1,6 +1,7 @@
 package com.wonderlandkid.biliaudio.data.impl
 
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
 /**
@@ -127,8 +128,15 @@ object SplitTextParser {
                 if (parsed.timeFirst) timeFirstCount++ else timeLastCount++
             }
 
+        val sorted = segments.sortedBy { it.startMs }
+        Diag.log(
+            "Import",
+            "splitText parsed=${sorted.size} skipped=${skipped.size} " +
+                "timeFirst=$timeFirstCount timeLast=$timeLastCount " +
+                "first=${sorted.firstOrNull()?.startMs} last=${sorted.lastOrNull()?.startMs}",
+        )
         return Result(
-            segments = segments.sortedBy { it.startMs },
+            segments = sorted,
             skippedLines = skipped,
             timeFirstCount = timeFirstCount,
             timeLastCount = timeLastCount,

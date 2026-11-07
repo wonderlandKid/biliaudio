@@ -7,6 +7,7 @@ import com.wonderlandkid.biliaudio.data.net.BiliApi
 import com.wonderlandkid.biliaudio.data.net.StreamSelector
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
+import com.wonderlandkid.biliaudio.util.Diag
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -40,9 +41,14 @@ class MediaStreamResolverImpl(
         dropCacheIfSessionChanged()
         if (!forceRefresh && album.id > 0L) {
             val cached = cache[album.id]
-            if (cached != null && cached.cid == album.cid && isFresh(cached)) return cached.streams
+            if (cached != null && cached.cid == album.cid && isFresh(cached)) {
+                Diag.log(TAG, "resolve cache HIT album=${album.id} bvid=${album.bvid} cid=${album.cid}")
+                return cached.streams
+            }
         }
 
+        val startMs = System.currentTimeMillis()
+        Diag.log(TAG, "resolve START album=${album.id} bvid=${album.bvid} cid=${album.cid} force=$forceRefresh")
         val preference = settingsRepository.settings.value.audioQuality
         val playData = biliApi.playurl(album.bvid, album.cid, forceRefresh = forceRefresh)
         val dash = playData.dash
@@ -64,16 +70,25 @@ class MediaStreamResolverImpl(
         if (album.id > 0L) {
             cache[album.id] = CacheEntry(streams = streams, fetchedAtMs = now, cid = album.cid)
         }
+        Diag.log(
+            TAG,
+            "resolve DONE in ${System.currentTimeMillis() - startMs}ms " +
+                "audio=${audio.qualityId}(QLabel ${audio.label}) " +
+                "video=${video?.height ?: "-"}p id=${video?.qualityId ?: "-"} " +
+                "bw=${video?.bandwidth ?: "-"} codecs=${video?.codecs ?: "-"}",
+        )
         return streams
     }
 
     override fun invalidate(albumId: Long) {
         cache.remove(albumId)
+        Diag.log(TAG, "resolve invalidate album=$albumId")
     }
 
     /** 清空全部流缓存（登录/退出时由 AuthRepository 回调）。 */
     fun invalidateAll() {
         cache.clear()
+        Diag.log(TAG, "resolve invalidateAll")
     }
 
     private fun dropCacheIfSessionChanged() {
@@ -90,6 +105,8 @@ class MediaStreamResolverImpl(
     }
 
     companion object {
+        private const val TAG = "Resolver"
+
         /** 播放地址缓存时长（API_NOTES：URL 约 2 小时有效，缓存建议 ≤30 分钟）。 */
         const val CACHE_TTL_MS = 30 * 60 * 1000L
     }

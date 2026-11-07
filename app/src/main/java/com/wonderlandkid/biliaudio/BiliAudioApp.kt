@@ -8,6 +8,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import com.wonderlandkid.biliaudio.data.net.BiliConstants
 import com.wonderlandkid.biliaudio.di.AppContainer
+import com.wonderlandkid.biliaudio.util.Diag
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -35,6 +36,7 @@ class BiliAudioApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         container = AppContainer(this)
         container.warmUp()
+        Diag.log("App", "启动 " + Diag.deviceInfo(this))
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

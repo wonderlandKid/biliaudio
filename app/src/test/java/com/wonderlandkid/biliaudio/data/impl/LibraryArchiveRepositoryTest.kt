@@ -401,6 +401,8 @@ class LibraryArchiveRepositoryTest {
 
         override suspend fun markPlayed(albumId: Long, trackId: Long) = Unit
 
+        override suspend fun cleanupLegacyPlaceholderTracks(): Int = 0
+
         override fun searchSongs(query: String): Flow<List<TrackWithAlbum>> = songs
         override fun searchAlbums(query: String): Flow<List<Album>> = albumsFlow
 

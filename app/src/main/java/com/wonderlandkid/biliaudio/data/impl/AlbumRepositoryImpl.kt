@@ -17,11 +17,16 @@ import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+
+/** 诊断日志域标签（data 层导入链路）。 */
+private const val TAG = "Import"
 
 /**
  * 专辑 / 曲目库：Room 持久化 + 单条/批量导入。
@@ -130,6 +135,21 @@ class AlbumRepositoryImpl(
         albumDao.markPlayed(albumId, System.currentTimeMillis())
     }
 
+    override suspend fun cleanupLegacyPlaceholderTracks(): Int {
+        var removed = 0
+        albums.first().forEach { album ->
+            val tracks = getTracks(album.id)
+            if (isLegacyPlaceholder(album, tracks)) {
+                database.withTransaction { trackDao.deleteByAlbum(album.id) }
+                removed++
+                Diag.log(TAG, "cleanup legacy placeholder album=${album.id} bvid=${album.bvid} title=${album.title}")
+            }
+        }
+        if (removed > 0) Diag.log(TAG, "cleanup legacy placeholder tracks removed=$removed")
+        return removed
+    }
+
+
     override fun searchSongs(query: String): Flow<List<TrackWithAlbum>> {
         val trimmed = query.trim()
         return songs.map { list ->
@@ -166,6 +186,8 @@ class AlbumRepositoryImpl(
     override suspend fun importAlbum(request: AlbumImportRequest): ImportResult {
         val input = request.bvidOrUrl.trim()
         if (input.isEmpty()) return ImportResult.Failure(request.bvidOrUrl, "请输入 BV 号或视频链接")
+        val importStartMs = System.currentTimeMillis()
+        Diag.log(TAG, "import START input=$input mode=${request.mode} segments=${request.segments.size}")
 
         val info = try {
             biliRepository.previewVideo(input)
@@ -219,6 +241,11 @@ class AlbumRepositoryImpl(
         )
         return try {
             val albumId = saveAlbumWithTracks(album, tracks)
+            Diag.log(
+                TAG,
+                "import DONE input=$input bvid=${info.bvid} albums id=$albumId " +
+                    "tracks=${tracks.size} durationMs=$durationMs in ${System.currentTimeMillis() - importStartMs}ms",
+            )
             ImportResult.Success(albumId = albumId, albumTitle = albumTitle, trackCount = tracks.size)
         } catch (e: CancellationException) {
             throw e
@@ -229,6 +256,7 @@ class AlbumRepositoryImpl(
 
     override suspend fun importBatchText(text: String): BatchImportReport {
         val parsed = parser.parse(text)
+        Diag.log(TAG, "importBatch START items=${parsed.items.size} errors=${parsed.errors.size}")
         val results = mutableListOf<ImportResult>()
         for ((index, item) in parsed.items.withIndex()) {
             // 网络请求串行 + 间隔，避免 B 站风控（BiliApi 内部另有 300ms 节流）
@@ -275,4 +303,16 @@ class AlbumRepositoryImpl(
         /** 批量导入两条之间的额外等待（BiliApi 请求节流之外）。 */
         const val BATCH_IMPORT_INTERVAL_MS = 350L
     }
+}
+
+/**
+ * 判断是否为旧版「整张专辑占位曲」：
+ * 专辑下只有 1 条曲目、从 0 开始、覆盖到专辑结束、且标题等于专辑名。
+ */
+internal fun isLegacyPlaceholder(album: Album, tracks: List<Track>): Boolean {
+    if (tracks.size != 1) return false
+    val only = tracks.first()
+    return only.startMs == 0L &&
+        only.endMs >= album.durationMs &&
+        only.title.trim() == album.title.trim()
 }

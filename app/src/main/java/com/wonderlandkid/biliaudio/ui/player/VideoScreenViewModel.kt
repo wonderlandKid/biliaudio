@@ -1,18 +1,17 @@
 package com.wonderlandkid.biliaudio.ui.player
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.player.AlbumVideoController
-import com.wonderlandkid.biliaudio.player.AlbumVideoPlayer
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.player.PlaybackState
+import com.wonderlandkid.biliaudio.player.VideoPhase
 import com.wonderlandkid.biliaudio.player.VideoPlaybackState
 import com.wonderlandkid.biliaudio.player.VideoSync
-import kotlinx.coroutines.CoroutineScope
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -22,29 +21,27 @@ import kotlinx.coroutines.launch
  * 歌词（原视频）页 ViewModel。
  *
  * 职责：
- * 1. 持有第二路 [AlbumVideoPlayer]（与音频引擎完全独立），页面销毁时 release；
+ * 1. 持有第二路 [AlbumVideoController]（由 AppContainer.createVideoController 创建，与音频引擎完全独立），
+ *    页面销毁时 release；
  * 2. 每 [VideoSync.SYNC_INTERVAL_MS] 毫秒同步一次：
  *    - 音频切换专辑 → 重新准备视频流并按“专辑绝对进度”定位；
  *    - 播放/暂停联动；
- *    - 漂移超过 [VideoSync.DRIFT_THRESHOLD_MS] 才 seek（避免频繁打断视频缓冲）。
+ *    - **只有视频 phase == READY 时才做漂移校正**（缓冲/准备中不 seek，避免打断加载）；
+ *    - 漂移超过 [VideoSync.DRIFT_THRESHOLD_MS] 才 seek。
  *
  * 用 `appViewModel { container -> VideoScreenViewModel(...) }` 创建。
  */
 class VideoScreenViewModel(
     private val playbackController: PlaybackController,
     private val albumRepository: AlbumRepository,
-    streamResolver: MediaStreamResolver,
-    context: Context,
-    scope: CoroutineScope,
+    private val streamResolver: MediaStreamResolver,
+    private val videoController: AlbumVideoController,
 ) : ViewModel() {
-
-    private val videoController: AlbumVideoController =
-        AlbumVideoPlayer(context.applicationContext, streamResolver, scope)
 
     /** 音频播放状态（当前曲目 / 专辑绝对进度 / 播放中）。 */
     val audioState: StateFlow<PlaybackState> = playbackController.state
 
-    /** 视频播放状态（准备中 / 播放中 / 错误）。 */
+    /** 视频播放状态（phase / 清晰度 / 播放中 / 错误）。 */
     val videoState: StateFlow<VideoPlaybackState> = videoController.state
 
     /** 给 PlayerView 挂载的 ExoPlayer（视频播放器懒创建，未准备时为 null）。 */
@@ -83,10 +80,20 @@ class VideoScreenViewModel(
     /** 页面退到后台 / 被销毁时暂停视频（音频继续后台播放）。 */
     fun pauseVideo() = videoController.pause()
 
-    /** 视频流准备失败后手动重试。 */
+    /**
+     * 视频加载失败或加载过慢时手动重试：
+     * 丢弃旧的流缓存（地址过期/节点慢时重新解析更可能成功）并重新准备视频。
+     */
     fun retry() {
-        requestedAlbumId = null
         val albumId = audioState.value.currentAlbumId ?: return
+        if (prepareInFlight) return
+        Diag.log(
+            "Video",
+            "retry tapped album=$albumId phase=${videoState.value.phase} " +
+                "prepared=${videoState.value.isPrepared} error=${videoState.value.error}",
+        )
+        requestedAlbumId = null
+        streamResolver.invalidate(albumId)
         viewModelScope.launch {
             prepareAlbum(albumId, audioState.value)
         }
@@ -108,7 +115,8 @@ class VideoScreenViewModel(
             return
         }
         val video = videoState.value
-        if (!video.isPrepared || video.error != null) return
+        // 只有 READY 才参与同步：准备/缓冲阶段 seek 会打断加载，导致「转圈更久」
+        if (video.phase != VideoPhase.READY || video.error != null) return
 
         if (audio.isPlaying) {
             if (!video.isPlaying) videoController.play()

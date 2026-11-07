@@ -4,11 +4,17 @@ import androidx.media3.common.Player
 import com.wonderlandkid.biliaudio.data.model.Album
 import kotlinx.coroutines.flow.StateFlow
 
+/** 视频准备阶段（UI 用来展示「获取流 / 缓冲 / 首帧」等状态）。 */
+enum class VideoPhase { IDLE, RESOLVING, PREPARING, BUFFERING, READY, ERROR }
+
 data class VideoPlaybackState(
     val albumId: Long? = null,
     val isPrepared: Boolean = false,
     val isPlaying: Boolean = false,
     val error: String? = null,
+    val phase: VideoPhase = VideoPhase.IDLE,
+    /** 当前视频流分辨率（用于 UI 显示「480P」等） */
+    val videoHeight: Int? = null,
 )
 
 /**

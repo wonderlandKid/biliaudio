@@ -37,6 +37,15 @@ interface AlbumRepository {
     /** 记录播放（最近播放排序、播放次数）。 */
     suspend fun markPlayed(albumId: Long, trackId: Long)
 
+    /**
+     * 清理旧版本遗留的「整张专辑占位曲」：
+     * 旧版未分割导入会生成一条 title=专辑名、0→专辑总时长的单曲；
+     * 新版未分割专辑应显示 0 首（播放时虚拟整张），这里将其删除。
+     *
+     * @return 清理掉的占位曲数量
+     */
+    suspend fun cleanupLegacyPlaceholderTracks(): Int
+
     fun searchSongs(query: String): Flow<List<TrackWithAlbum>>
     fun searchAlbums(query: String): Flow<List<Album>>
 

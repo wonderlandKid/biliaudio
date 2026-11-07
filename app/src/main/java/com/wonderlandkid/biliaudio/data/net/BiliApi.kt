@@ -5,6 +5,7 @@ import com.wonderlandkid.biliaudio.data.model.BiliPage
 import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.data.model.BiliApiException
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.util.TimeUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -387,13 +388,15 @@ class BiliApi(
      */
     private suspend fun execute(request: Request): String {
         var lastError: Exception? = null
+        val path = request.url.encodedPath
+        val startMs = System.currentTimeMillis()
         for (attempt in 0 until MAX_ATTEMPTS) {
             throttle()
             try {
-                return withContext(Dispatchers.IO) {
+                val body = withContext(Dispatchers.IO) {
                     client.newCall(request).execute().use { response ->
                         cookieStore.parseAndStore(response.headers("Set-Cookie"))
-                        val body = response.body.string()
+                        val responseBody = response.body.string()
                         when {
                             response.code == 412 || response.code == 429 ->
                                 throw BiliApiException(
@@ -402,17 +405,21 @@ class BiliApi(
                                 )
                             !response.isSuccessful ->
                                 throw BiliApiException("网络请求失败（HTTP ${response.code}）", response.code)
-                            else -> body
+                            else -> responseBody
                         }
                     }
                 }
+                Diag.log(TAG, "GET $path attempt=$attempt HTTP=200 in ${System.currentTimeMillis() - startMs}ms")
+                return body
             } catch (e: CancellationException) {
                 throw e
             } catch (e: BiliApiException) {
                 lastError = e
+                Diag.log(TAG, "GET $path attempt=$attempt FAIL(${e.code ?: "-"}) in ${System.currentTimeMillis() - startMs}ms: ${e.message}")
                 if (attempt < MAX_ATTEMPTS - 1) delay(RETRY_DELAY_MS)
             } catch (e: IOException) {
                 lastError = e
+                Diag.log(TAG, "GET $path attempt=$attempt IO_ERROR in ${System.currentTimeMillis() - startMs}ms: ${e.message}")
                 if (attempt < MAX_ATTEMPTS - 1) delay(RETRY_DELAY_MS)
             }
         }
@@ -502,6 +509,8 @@ class BiliApi(
     }
 
     companion object {
+        private const val TAG = "Api"
+
         /** 两次 B 站 API 请求的最小间隔（防 -352/-412 风控）。 */
         private const val MIN_REQUEST_INTERVAL_MS = 300L
         private const val RETRY_DELAY_MS = 500L
@@ -518,8 +527,6 @@ class BiliApi(
 
         /** UI 可展示的搜索不可用提示。 */
         const val SEARCH_UNAVAILABLE_MESSAGE = "搜索被 B 站风控或接口异常，请稍后重试"
-
-        private const val TAG = "BiliApi"
 
         /** B 站错误码 → 可直接展示的中文文案。 */
         fun errorMessage(code: Int, serverMessage: String? = null): String {

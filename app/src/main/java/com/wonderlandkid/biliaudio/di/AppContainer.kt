@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.wonderlandkid.biliaudio.util.Diag
 
 /**
  * 应用级依赖容器（手写 DI，避免额外框架）。
@@ -102,6 +103,9 @@ class AppContainer(context: Context) {
     fun warmUp() {
         appScope.launch {
             runCatching { authRepository.refresh() }
+            // 清理旧版本遗留的「整张专辑占位曲」（新版未分割专辑应显示 0 首）
+            runCatching { albumRepository.cleanupLegacyPlaceholderTracks() }
+                .onSuccess { removed -> if (removed > 0) Diag.log("App", "legacy placeholder cleaned=$removed") }
         }
     }
 }

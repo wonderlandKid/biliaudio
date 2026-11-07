@@ -20,6 +20,7 @@ import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -180,6 +181,17 @@ class PlaybackEngine private constructor(
     /** 最近一次记录“播放中”的曲目，避免同一首歌重复累加播放次数。 */
     private var lastRecordedTrackId: Long? = null
 
+    // ---- 诊断计时（Diag tag = "Play"，避免噪音：每首歌切换最多 2~3 行） ----
+
+    /** 当前曲目开始时间（切歌时重置）。 */
+    private var itemStartedAtMs = 0L
+
+    /** 当前曲目是否已记录过音频 READY。 */
+    private var itemReadyLogged = false
+
+    /** 前台播放服务是否已拉起过（避免重复日志）。 */
+    private var serviceStartLogged = false
+
     init {
         player.addListener(PlayerEvents())
         startProgressTicker()
@@ -189,6 +201,7 @@ class PlaybackEngine private constructor(
 
     override fun playAlbum(albumId: Long, startTrackIndex: Int) {
         launchOperation {
+            Diag.log(TAG, "playAlbum album=$albumId startIndex=$startTrackIndex")
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
             // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
@@ -221,6 +234,7 @@ class PlaybackEngine private constructor(
 
     override fun playTrack(albumId: Long, trackId: Long) {
         launchOperation {
+            Diag.log(TAG, "playTrack album=$albumId track=$trackId")
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
             // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
@@ -245,6 +259,11 @@ class PlaybackEngine private constructor(
 
     override fun playSongs(songs: List<TrackWithAlbum>, startIndex: Int) {
         launchOperation {
+            Diag.log(
+                TAG,
+                "playSongs songs=${songs.size} startIndex=$startIndex " +
+                    "albums=${songs.map { it.album.id }.distinct().size}",
+            )
             require(songs.isNotEmpty()) { "没有可播放的歌曲" }
             val safeStartIndex = startIndex.coerceIn(0, songs.lastIndex)
             val entries = PlaybackMapping.buildQueueEntries(songs)
@@ -450,13 +469,20 @@ class PlaybackEngine private constructor(
         }
 
     private suspend fun resolveStream(album: Album, forceRefresh: Boolean = false): ResolvedStreams {
+        val startMs = System.currentTimeMillis()
         val stream = streamResolver.resolve(album, forceRefresh)
+        val costMs = System.currentTimeMillis() - startMs
         if (stream.audioUrl.isBlank()) {
             throw IllegalStateException(PlayerErrorMessages.AUDIO_STREAM_UNAVAILABLE)
         }
         albumCache[album.id] = album
         // 记录该流需要的请求头（音频；视频地址留给歌词页自己的播放器使用）
         streamHeadersByUrl[stream.audioUrl] = MediaHttp.mergeHeaders(stream.headers)
+        Diag.log(
+            TAG,
+            "resolve album=${album.id} in ${costMs}ms audio=${stream.audioQualityLabel}" +
+                "(${stream.audioQualityId}) video=${stream.videoHeight?.let { "${it}p" } ?: "-"} force=$forceRefresh",
+        )
         return stream
     }
 
@@ -500,6 +526,8 @@ class PlaybackEngine private constructor(
         queueEntries = entries
         retriedForCurrentItem = false
         lastRecordedTrackId = null
+        itemStartedAtMs = System.currentTimeMillis()
+        itemReadyLogged = false
         player.setMediaItems(items, safeIndex, safePosition)
         player.prepare()
         player.play()
@@ -518,6 +546,11 @@ class PlaybackEngine private constructor(
             albumDurationMs = entry.albumDurationMs,
             repeatMode = player.repeatMode.toAppRepeatMode(),
             shuffle = player.shuffleModeEnabled,
+        )
+        Diag.log(
+            TAG,
+            "startQueue album=${entry.albumId} tracks=${entries.size} startIndex=$safeIndex " +
+                "startPos=${safePosition}ms albumMs=${entry.albumDurationMs} clips=${clipSummary(specs)}",
         )
         recordPlayed(entry)
         ensureServiceStarted()
@@ -577,14 +610,27 @@ class PlaybackEngine private constructor(
     }
 
     private fun ensureServiceStarted() {
+        if (!serviceStartLogged) {
+            serviceStartLogged = true
+            Diag.log(TAG, "startForegroundService → PlaybackService（开始播放/后台播放）")
+        }
         runCatching { PlaybackService.ensureStarted(appContext) }
-            .onFailure { Log.w(TAG, "拉起播放服务失败", it) }
+            .onFailure {
+                Diag.log(TAG, "startForegroundService FAILED: ${it.javaClass.simpleName}: ${it.message}", it)
+                Log.w(TAG, "拉起播放服务失败", it)
+            }
     }
 
     // ------------------------------------------------------------------ 错误与重试
 
     private fun onPlaybackError(error: PlaybackException) {
         Log.w(TAG, "播放出错：${error.errorCodeName}(${error.errorCode})", error)
+        Diag.log(
+            TAG,
+            "player ERROR code=${error.errorCode} name=${error.errorCodeName} " +
+                "index=${_state.value.currentIndex} retried=$retriedForCurrentItem: ${error.message}",
+            error,
+        )
         if (!retriedForCurrentItem && queueEntries.isNotEmpty()) {
             // 地址过期最常见：强制刷新当前专辑的流，恢复本次曲内位置后继续播放（仅一次）
             retriedForCurrentItem = true
@@ -607,6 +653,11 @@ class PlaybackEngine private constructor(
         val albumId = snapshot.currentAlbumId ?: return
         val resumeIndex = snapshot.currentIndex
         val resumePositionMs = snapshot.positionMs
+        val retryStartedAtMs = System.currentTimeMillis()
+        Diag.log(
+            TAG,
+            "forceRefresh retry START album=$albumId resumeIndex=$resumeIndex resumePos=${resumePositionMs}ms",
+        )
         operationJob?.cancel()
         operationJob = scope.launch {
             try {
@@ -634,11 +685,23 @@ class PlaybackEngine private constructor(
                 }
                 player.prepare()
                 player.play()
+                itemStartedAtMs = System.currentTimeMillis()
+                itemReadyLogged = false
                 _state.update { it.copy(isLoading = true, error = null) }
+                Diag.log(
+                    TAG,
+                    "forceRefresh retry DONE album=$albumId in ${System.currentTimeMillis() - retryStartedAtMs}ms",
+                )
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
                 Log.w(TAG, "强制刷新播放流失败", error)
+                Diag.log(
+                    TAG,
+                    "forceRefresh retry FAILED album=$albumId in ${System.currentTimeMillis() - retryStartedAtMs}ms: " +
+                        "${error.javaClass.simpleName}: ${error.message}",
+                    error,
+                )
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -656,9 +719,21 @@ class PlaybackEngine private constructor(
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             retriedForCurrentItem = false
+            itemStartedAtMs = System.currentTimeMillis()
+            itemReadyLogged = false
             publishCurrentItem()
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
                 recordPlayed(queueEntries.getOrNull(player.currentMediaItemIndex))
+                // 播放列表首次装载已由 startQueue 记录，这里只记录真正的切歌（自动/手动/跳转）
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
+                    val index = player.currentMediaItemIndex
+                    val entry = queueEntries.getOrNull(index)
+                    Diag.log(
+                        TAG,
+                        "transition index=$index trackId=${entry?.track?.id} " +
+                            "clip=${entry?.track?.startMs}-${entry?.track?.endMs} reason=$reason",
+                    )
+                }
             }
         }
 
@@ -674,7 +749,17 @@ class PlaybackEngine private constructor(
                     isPlaying = player.isPlaying,
                 )
             }
-            if (playbackState == Player.STATE_READY) publishProgress()
+            if (playbackState == Player.STATE_READY) {
+                publishProgress()
+                if (!itemReadyLogged) {
+                    itemReadyLogged = true
+                    Diag.log(
+                        TAG,
+                        "audio READY index=${player.currentMediaItemIndex} " +
+                            "in ${System.currentTimeMillis() - itemStartedAtMs}ms",
+                    )
+                }
+            }
         }
 
         override fun onIsLoadingChanged(isLoading: Boolean) {
@@ -730,4 +815,11 @@ private fun RepeatMode.nextRepeatMode(): RepeatMode = when (this) {
     RepeatMode.OFF -> RepeatMode.ALL
     RepeatMode.ALL -> RepeatMode.ONE
     RepeatMode.ONE -> RepeatMode.OFF
+}
+
+/** 诊断用：把队列的分曲裁剪区间压成一行（最多展示 6 个，避免长专辑刷屏）。 */
+private fun clipSummary(specs: List<TrackPlaySpec>, maxItems: Int = 6): String {
+    if (specs.isEmpty()) return "[]"
+    val shown = specs.take(maxItems).joinToString(",") { spec -> "${spec.clipStartMs}-${spec.clipEndMs}" }
+    return if (specs.size > maxItems) "[$shown,…+${specs.size - maxItems}]" else "[$shown]"
 }

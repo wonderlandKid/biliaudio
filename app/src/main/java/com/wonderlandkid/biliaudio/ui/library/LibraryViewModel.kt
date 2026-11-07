@@ -130,15 +130,18 @@ class LibraryViewModel(
         tabFlow.value = tab
     }
 
-    /** 播放列表第 [index] 首（队列 = 当前搜索/全部歌曲列表）。 */
+    /**
+     * 点击单曲：只播放这首歌**所属的专辑**（队列 = 该专辑分曲，从选中曲开始）。
+     *
+     * 注意与 [playAllSongs] 区分：点击单曲不会把整个音乐库变成播放列表；
+     * 只有显式点「播放全部歌曲」才会以当前歌曲列表作为队列。
+     */
     fun playSong(index: Int) {
-        val songs = uiState.value.songs
-        if (index in songs.indices) {
-            playbackController.playSongs(songs, index)
-        }
+        val song = uiState.value.songs.getOrNull(index) ?: return
+        playbackController.playTrack(albumId = song.album.id, trackId = song.track.id)
     }
 
-    /** 播放当前歌曲列表全部（从第一首开始）。 */
+    /** 播放当前歌曲列表全部（从第一首开始，显式行为）。 */
     fun playAllSongs() {
         val songs = uiState.value.songs
         if (songs.isNotEmpty()) {

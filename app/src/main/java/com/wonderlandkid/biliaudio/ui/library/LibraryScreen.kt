@@ -212,7 +212,7 @@ private fun SongsList(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(Spacing.xs))
-                        Text("播放全部")
+                        Text("播放全部歌曲")
                     }
                 }
             }

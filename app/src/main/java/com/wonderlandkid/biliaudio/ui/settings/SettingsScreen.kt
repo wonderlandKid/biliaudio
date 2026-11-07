@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.History
@@ -61,6 +63,9 @@ import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.util.Diag
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,11 +79,13 @@ import java.util.Locale
  *
  * @param onOpenLogin 未登录时点击「去登录」的回调（由导航层打开扫码登录页）
  * @param onOpenBackupImport 点击「导入 / 恢复」的回调（由导航层打开导入页的「归档导入」Tab）
+ * @param onOpenDiagnostics 点击「诊断日志」的回调（由导航层打开诊断日志页）
  */
 @Composable
 fun SettingsScreen(
     onOpenLogin: () -> Unit,
     onOpenBackupImport: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel: SettingsViewModel = appViewModel { container ->
@@ -109,6 +116,14 @@ fun SettingsScreen(
     // 从导入页返回时可能刚产生自动备份，重新读取一次
     LaunchedEffect(Unit) {
         viewModel.refreshLastAutoBackup()
+    }
+    // 诊断日志行数（设置页入口展示用，定期刷新）
+    var diagLineCount by remember { mutableStateOf(Diag.lineCount()) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            diagLineCount = Diag.lineCount()
+            delay(2000)
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -158,6 +173,13 @@ fun SettingsScreen(
                     lastAutoBackupAt = lastAutoBackupAt,
                     onExportClick = { exportLauncher.launch(defaultBackupFileName()) },
                     onImportClick = onOpenBackupImport,
+                )
+            }
+            item { SectionTitle("诊断与维护") }
+            item {
+                DiagnosticsEntryCard(
+                    lineCount = diagLineCount,
+                    onClick = onOpenDiagnostics,
                 )
             }
             item { SectionTitle("关于") }
@@ -649,3 +671,54 @@ private fun defaultBackupFileName(): String =
 /** 自动备份时间展示：yyyy-MM-dd HH:mm */
 private fun formatBackupTime(timestamp: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+// ---------------------------------------------------------------------------
+// 诊断与维护
+// ---------------------------------------------------------------------------
+
+/** 「诊断日志」入口卡片：显示最近日志行数，点击进入诊断日志页。 */
+@Composable
+private fun DiagnosticsEntryCard(
+    lineCount: Int,
+    onClick: () -> Unit,
+) {
+    SettingsCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.BugReport,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "诊断日志", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "查看 / 复制 / 导出运行日志，帮助定位播放、缓冲、导入问题",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = "$lineCount 行",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}

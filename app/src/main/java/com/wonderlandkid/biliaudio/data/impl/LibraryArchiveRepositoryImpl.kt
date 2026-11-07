@@ -18,6 +18,7 @@ import com.wonderlandkid.biliaudio.data.model.LibraryArchive
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.net.BiliUrlParser
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -62,7 +63,9 @@ class LibraryArchiveRepositoryImpl(
     // 导出
     // ------------------------------------------------------------------
 
-    override suspend fun exportAllJson(): String = codec.encode(buildLibraryArchive())
+    override suspend fun exportAllJson(): String = codec.encode(buildLibraryArchive()).also { json ->
+        Diag.log(TAG, "archive export all size=${json.length}B")
+    }
 
     override suspend fun exportAlbumJson(albumId: Long): String? {
         val album = albumRepository.getAlbum(albumId) ?: return null
@@ -127,7 +130,9 @@ class LibraryArchiveRepositoryImpl(
     // ------------------------------------------------------------------
 
     override suspend fun importArchive(text: String, mode: ArchiveImportMode): ArchiveImportReport {
+        val startMs = System.currentTimeMillis()
         val parsed = codec.parse(text)
+        Diag.log(TAG, "archive import START mode=$mode albums=${parsed.archive.albums.size} recognized=${parsed.recognizedAs}")
         var backupFilePath: String? = null
 
         if (mode == ArchiveImportMode.REPLACE) {
@@ -145,12 +150,19 @@ class LibraryArchiveRepositoryImpl(
         for (archiveAlbum in parsed.archive.albums) {
             results += importOne(archiveAlbum, mode)
         }
-        return ArchiveImportReport(
+        val report = ArchiveImportReport(
             mode = mode,
             items = results,
             parseErrors = parsed.errors,
             backupFilePath = backupFilePath,
         )
+        Diag.log(
+            TAG,
+            "archive import DONE mode=$mode created=${report.createdCount} updated=${report.updatedCount} " +
+                "segmentsUpdated=${report.segmentsUpdatedCount} skipped=${report.skippedCount} " +
+                "failed=${report.failedCount} backup=${backupFilePath ?: "-"} in ${System.currentTimeMillis() - startMs}ms",
+        )
+        return report
     }
 
     private suspend fun importOne(archiveAlbum: ArchiveAlbum, mode: ArchiveImportMode): ArchiveItemResult {
@@ -357,3 +369,5 @@ class LibraryArchiveRepositoryImpl(
     private fun timestampForFile(): String =
         SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
 }
+
+private const val TAG = "Archive"
