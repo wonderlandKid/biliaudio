@@ -44,6 +44,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -212,6 +213,14 @@ fun SettingsScreen(
                 }
             }
             item { SettingsPadded { SectionTitle("诊断与维护") } }
+            item {
+                SettingsPadded {
+                    DiagnosticsToggleCard(
+                        enabled = settings.diagnosticLogsEnabled,
+                        onCheckedChange = viewModel::setDiagnosticLogsEnabled,
+                    )
+                }
+            }
             item {
                 SettingsPadded {
                     DiagnosticsEntryCard(
@@ -950,6 +959,48 @@ private fun formatBackupTime(timestamp: Long): String =
 // ---------------------------------------------------------------------------
 // 诊断与维护
 // ---------------------------------------------------------------------------
+
+/** 「维测日志」开关：关闭后 Diag 不再记录/打印（立即生效并持久化）。 */
+@Composable
+private fun DiagnosticsToggleCard(
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    SettingsCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.BugReport,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "维测日志",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = if (enabled) {
+                        "开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
+                    } else {
+                        "已关闭：不再记录/打印诊断日志（历史日志仍可查看/导出）"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onCheckedChange,
+            )
+        }
+    }
+}
 
 /** 「诊断日志」入口卡片：显示最近日志行数，点击进入诊断日志页。 */
 @Composable

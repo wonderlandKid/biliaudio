@@ -38,6 +38,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.AlbumCard
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
+import com.wonderlandkid.biliaudio.ui.components.SearchBarEntry
 import com.wonderlandkid.biliaudio.ui.components.AlbumCompactRow
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.ListBottomSpacer
@@ -184,32 +185,13 @@ private fun HomeHeader(
     }
 }
 
-/** 只作为入口的搜索框（点击后跳转搜索页）。 */
+/** 搜索入口：与音乐库/搜索页共用同一视觉组件（点击跳转音乐库搜索）。 */
 @Composable
 private fun SearchEntry(onClick: () -> Unit) {
-    Surface(
+    SearchBarEntry(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(percent = 50),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md + 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(Modifier.width(Spacing.md))
-            Text(
-                text = "搜索歌曲、专辑、艺术家",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-        }
-    }
+        placeholder = "搜索歌曲、专辑、艺术家",
+    )
 }
 
 /** 未登录提示条：点击去扫码登录。 */

@@ -1,11 +1,14 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
@@ -32,6 +35,7 @@ import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
 import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
 import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
+import com.wonderlandkid.biliaudio.ui.components.PageEnterAnimation
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportTab
@@ -139,12 +143,15 @@ fun AppNavHost() {
             // ---------------- Tabs ----------------
             composable(
                 Routes.HOME,
-                enterTransition = { fadeIn(tween(180)) },
-                exitTransition = { fadeOut(tween(140)) },
-                popEnterTransition = { fadeIn(tween(180)) },
-                popExitTransition = { fadeOut(tween(140)) },
+                // 注意：Tab 新页不要从 alpha=0 淡入——旧页会被先移除，淡入期间会闪白。
+                // 用「轻微缩放进入」既有动效又不出现空白。
+                enterTransition = { scaleIn(initialScale = 0.97f, animationSpec = tween(180)) },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { scaleIn(initialScale = 0.98f, animationSpec = tween(160)) },
+                popExitTransition = { ExitTransition.None },
             ) {
-                HomeScreen(
+                PageEnterAnimation {
+                    HomeScreen(
                     onOpenSearch = { switchTab(MainTab.LIBRARY) },
                     onOpenAlbum = { albumId ->
                         navController.navigate(Routes.album(albumId))
@@ -152,36 +159,45 @@ fun AppNavHost() {
                     onOpenLogin = { navController.navigate(Routes.LOGIN) },
                     onOpenImport = { navController.navigate(Routes.IMPORT) },
                     onOpenLibrary = { switchTab(MainTab.LIBRARY) },
-                )
+                    )
+                }
             }
             composable(
                 Routes.LIBRARY,
-                enterTransition = { fadeIn(tween(180)) },
-                exitTransition = { fadeOut(tween(140)) },
-                popEnterTransition = { fadeIn(tween(180)) },
-                popExitTransition = { fadeOut(tween(140)) },
+                // 注意：Tab 新页不要从 alpha=0 淡入——旧页会被先移除，淡入期间会闪白。
+                // 用「轻微缩放进入」既有动效又不出现空白。
+                enterTransition = { scaleIn(initialScale = 0.97f, animationSpec = tween(180)) },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { scaleIn(initialScale = 0.98f, animationSpec = tween(160)) },
+                popExitTransition = { ExitTransition.None },
             ) {
-                LibraryScreen(
-                    onOpenAlbum = { albumId ->
-                        navController.navigate(Routes.album(albumId))
-                    },
-                    onOpenArtist = { artistName ->
-                        navController.navigate(Routes.artist(artistName))
-                    },
-                )
+                PageEnterAnimation {
+                    LibraryScreen(
+                        onOpenAlbum = { albumId ->
+                            navController.navigate(Routes.album(albumId))
+                        },
+                        onOpenArtist = { artistName ->
+                            navController.navigate(Routes.artist(artistName))
+                        },
+                    )
+                }
             }
             composable(
                 Routes.SETTINGS,
-                enterTransition = { fadeIn(tween(180)) },
-                exitTransition = { fadeOut(tween(140)) },
-                popEnterTransition = { fadeIn(tween(180)) },
-                popExitTransition = { fadeOut(tween(140)) },
+                // 注意：Tab 新页不要从 alpha=0 淡入——旧页会被先移除，淡入期间会闪白。
+                // 用「轻微缩放进入」既有动效又不出现空白。
+                enterTransition = { scaleIn(initialScale = 0.97f, animationSpec = tween(180)) },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { scaleIn(initialScale = 0.98f, animationSpec = tween(160)) },
+                popExitTransition = { ExitTransition.None },
             ) {
-                SettingsScreen(
-                    onOpenLogin = { navController.navigate(Routes.LOGIN) },
-                    onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
-                    onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
-                )
+                PageEnterAnimation {
+                    SettingsScreen(
+                        onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                        onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
+                        onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                    )
+                }
             }
 
             // ---------------- 艺术家 ----------------

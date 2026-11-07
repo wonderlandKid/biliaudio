@@ -132,6 +132,9 @@ interface SettingsRepository {
     val settings: StateFlow<AppSettings>
     suspend fun setAudioQuality(preference: AudioQualityPreference)
     suspend fun setDarkTheme(dark: Boolean?)
+
+    /** 维测日志开关：关闭后不再记录/打印诊断日志。 */
+    suspend fun setDiagnosticLogsEnabled(enabled: Boolean)
 }
 
 /** 解析 B 站播放流（带缓存、按需刷新过期地址）。 */

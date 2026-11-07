@@ -209,3 +209,40 @@
 
 - 新增 tag：`Library`（索引/分组异常崩溃日志）、`Cover`/`Archive` 已有；目录导入导出在 `Archive` tag 记录文件数/模式/耗时。
 - 转场/手势不额外打日志（纯 UI），避免噪音。
+
+---
+
+## D19 列表滚动性能规范（v0.6.1）
+
+- **日期**：2026-11-08
+- **背景**：音乐库歌曲列表上下滑明显卡顿；定位到两类问题：
+  1) `LibraryViewModel.uiState` 直接 combine `playbackController.state`，播放进度每 250ms tick 都会重建 uiState，
+     重新执行艺术家聚合（AlphabeticIndex 分组/排序/大量对象分配）——滚动时主线程抖动；
+  2) `LibraryScreen` 父作用域读取 `activeLabel`（derivedStateOf 首可见 item），跨字母时整个列表 section 重组。
+- **决策**：
+  - 播放状态一律先 `map { PlaybackHighlight(trackId, isPlaying) }.distinctUntilChanged()` 再参与 combine；
+    重计算（分组/排序/聚合）只在数据变化阶段做（`searchResults.map { LibraryData(...) }`）；
+  - 派生滚动状态（索引栏高亮）用 provider/State 在组件内部读取，父级不订阅；
+  - Lazy 列表项加 `contentType`（header/song/album/artist），key 使用稳定业务 id；回调 lambda 用 remember 稳定引用。
+- **验证**：gfxinfo 90/95/99th 37/44/59→32/35/46ms，Slow UI thread −60%，Missed Vsync 2→0；
+  模拟 250ms tick 下 uiState 重建 ≥30 → 0 次（headless 软渲染绝对值仅作相对参考）。
+
+## D20 搜索框视觉统一（v0.6.1）
+
+- **决策**：全 App 搜索输入统一为 `SearchField`（pill 胶囊、无边框、surfaceVariant 半透明底、搜索图标、清空按钮、高度 52dp）；
+  只作入口的场景用 `SearchBarEntry`（同一视觉，点击跳转）；发现页/音乐库/搜索页三处必须一致，
+  不要再手写 `OutlinedTextField` 或自绘搜索条。
+
+## D21 Tab 切换过渡：禁止 alpha=0 淡入（v0.6.1）
+
+- **背景**：v0.6.0 的 Tab 淡入出现「切页瞬间整页空白」——旧页先被移除，新页 alpha=0 淡入期间只剩白色背景。
+- **决策**：Tab 路由 `exitTransition = ExitTransition.None`（旧页保持），新页 `scaleIn(0.97→1)` **不淡入**；
+  `PageEnterAnimation` 只做 8dp 上浮（不改变 alpha）；加载态文案显示「正在加载音乐库…」而不是 0 数量。
+  详情页仍用横向共享轴、播放页底部上滑、歌词页淡入。
+
+## D22 维测日志开关（v0.6.1）
+
+- **决策**：`AppSettings.diagnosticLogsEnabled`（默认 true）持久化到 SharedPreferences；
+  `SettingsRepository.setDiagnosticLogsEnabled` 更新 Flow；App 启动时同步 `Diag.enabled`，
+  设置页切换立即生效（关闭前记最后一条，重新开启时记一条）；关闭后 `Diag.log` 直接返回，不写内存/Logcat；
+  历史日志保留可查看/导出。设置 → 诊断与维护 →「维测日志」Switch 控制。

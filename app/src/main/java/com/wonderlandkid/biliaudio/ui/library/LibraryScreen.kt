@@ -36,7 +36,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -229,8 +228,12 @@ private fun SongsTab(
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
     val prefixItems = 1 // 顶部「全部歌曲 / 播放全部歌曲」行
-    val activeLabel by remember(sections) {
-        derivedStateOf { sections.labelAt(listState.firstVisibleItemIndex, prefixItems) }
+    // 索引栏点击 → 滚动到分组；remember 稳定引用，避免父级重组时反复创建
+    val onSelectLetter = remember(sections, listState) {
+        { label: String ->
+            scope.launch { listState.animateScrollToItem(sections.scrollTargetFor(label, prefixItems)) }
+            Unit
+        }
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
@@ -268,10 +271,17 @@ private fun SongsTab(
                 }
             }
             sections.forEach { section ->
-                stickyHeader(key = "songs_letter_${section.label}") {
+                stickyHeader(
+                    key = "songs_letter_${section.label}",
+                    contentType = "letterHeader",
+                ) {
                     LetterHeader(label = section.label, count = section.items.size)
                 }
-                itemsIndexed(section.items, key = { _, song -> song.track.id }) { _, song ->
+                itemsIndexed(
+                    items = section.items,
+                    key = { _, song -> song.track.id },
+                    contentType = { _, _ -> "song" },
+                ) { _, song ->
                     SongRow(
                         song = song,
                         onClick = { onPlaySong(indexById[song.track.id] ?: 0) },
@@ -284,12 +294,9 @@ private fun SongsTab(
         if (showIndexBar) {
             AlphabetIndexBar(
                 labels = LetterIndex.ALL_LABELS,
-                activeLabel = activeLabel,
-                onSelect = { label ->
-                    scope.launch {
-                        listState.animateScrollToItem(sections.scrollTargetFor(label, prefixItems))
-                    }
-                },
+                onSelect = onSelectLetter,
+                // 在索引栏内部读取首位可见下标 → 只在索引栏内部重组
+                activeLabelProvider = { sections.labelAt(listState.firstVisibleItemIndex, prefixItems) },
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(top = Spacing.sm, bottom = Spacing.lg),
@@ -333,8 +340,11 @@ private fun AlbumsTab(
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
-    val activeLabel by remember(sections) {
-        derivedStateOf { sections.labelAt(gridState.firstVisibleItemIndex) }
+    val onSelectLetter = remember(sections, gridState) {
+        { label: String ->
+            scope.launch { gridState.animateScrollToItem(sections.scrollTargetFor(label)) }
+            Unit
+        }
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
@@ -357,6 +367,7 @@ private fun AlbumsTab(
                 item(
                     key = "albums_letter_${section.label}",
                     span = { GridItemSpan(maxLineSpan) },
+                    contentType = "letterHeader",
                 ) {
                     LetterHeader(
                         label = section.label,
@@ -364,7 +375,11 @@ private fun AlbumsTab(
                         horizontalPadding = 0.dp,
                     )
                 }
-                gridItems(section.items, key = { album -> album.id }) { album ->
+                gridItems(
+                    items = section.items,
+                    key = { album -> album.id },
+                    contentType = { "album" },
+                ) { album ->
                     AlbumCard(
                         album = album,
                         onClick = { onOpenAlbum(album.id) },
@@ -375,12 +390,8 @@ private fun AlbumsTab(
         if (showIndexBar) {
             AlphabetIndexBar(
                 labels = LetterIndex.ALL_LABELS,
-                activeLabel = activeLabel,
-                onSelect = { label ->
-                    scope.launch {
-                        gridState.animateScrollToItem(sections.scrollTargetFor(label))
-                    }
-                },
+                onSelect = onSelectLetter,
+                activeLabelProvider = { sections.labelAt(gridState.firstVisibleItemIndex) },
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(top = Spacing.sm, bottom = Spacing.lg),
@@ -425,8 +436,11 @@ private fun ArtistsTab(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
-    val activeLabel by remember(sections) {
-        derivedStateOf { sections.labelAt(listState.firstVisibleItemIndex) }
+    val onSelectLetter = remember(sections, listState) {
+        { label: String ->
+            scope.launch { listState.animateScrollToItem(sections.scrollTargetFor(label)) }
+            Unit
+        }
     }
 
     Row(modifier = Modifier.fillMaxSize()) {
@@ -438,10 +452,17 @@ private fun ArtistsTab(
             contentPadding = PaddingValues(bottom = Spacing.lg),
         ) {
             sections.forEach { section ->
-                stickyHeader(key = "artists_letter_${section.label}") {
+                stickyHeader(
+                    key = "artists_letter_${section.label}",
+                    contentType = "letterHeader",
+                ) {
                     LetterHeader(label = section.label, count = section.items.size)
                 }
-                items(section.items, key = { artist -> artist.name }) { artist ->
+                items(
+                    items = section.items,
+                    key = { artist -> artist.name },
+                    contentType = { "artist" },
+                ) { artist ->
                     ArtistRow(artist = artist, onClick = { onOpenArtist(artist.name) })
                 }
             }
@@ -449,12 +470,8 @@ private fun ArtistsTab(
         if (showIndexBar) {
             AlphabetIndexBar(
                 labels = LetterIndex.ALL_LABELS,
-                activeLabel = activeLabel,
-                onSelect = { label ->
-                    scope.launch {
-                        listState.animateScrollToItem(sections.scrollTargetFor(label))
-                    }
-                },
+                onSelect = onSelectLetter,
+                activeLabelProvider = { sections.labelAt(listState.firstVisibleItemIndex) },
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(top = Spacing.sm, bottom = Spacing.lg),

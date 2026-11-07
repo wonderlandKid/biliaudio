@@ -15,6 +15,7 @@ import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -295,6 +296,23 @@ class SettingsViewModel(
 
     private fun messageOf(t: Throwable): String =
         t.message?.takeIf { it.isNotBlank() } ?: "未知错误"
+
+    /** 维测日志开关（立即生效并持久化）。 */
+    fun setDiagnosticLogsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                // 关闭前先记一条，便于回溯是谁关的；本身也遵守开关
+                if (!enabled) Diag.log("App", "diagnostic logs disabled by user")
+                settingsRepository.setDiagnosticLogsEnabled(enabled)
+                Diag.enabled = enabled
+                if (enabled) Diag.log("App", "diagnostic logs enabled by user")
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _messages.tryEmit("保存维测日志设置失败：${t.message ?: "未知错误"}")
+            }
+        }
+    }
 
     fun setAudioQuality(preference: AudioQualityPreference) {
         viewModelScope.launch {

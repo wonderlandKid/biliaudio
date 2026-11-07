@@ -1,5 +1,25 @@
 # 版本记录
 
+## v0.6.1（2026-11-08 · tag `v0.6.1`）
+
+**性能/一致性/过渡/日志开关修复**
+
+- **音乐库滚动卡顿修复**：
+  - `LibraryViewModel` 把播放状态压成 `PlaybackHighlight(trackId, isPlaying).distinctUntilChanged()` 再 combine，
+    播放进度 tick 不再重建 uiState；艺术家聚合只在搜索/数据库变化时计算一次；
+  - 索引栏 `activeLabel` 改为 `activeLabelProvider` 在组件内部读取，跨字母不再整列表 section 重组；
+  - 三个 Tab 的 Lazy items 增加 `contentType`，key 保持稳定；ArtistDetail 同步优化；
+  - 模拟器 gfxinfo 对比：90/95/99th 37/44/59ms → 32/35/46ms，Slow UI thread −60%，Missed Vsync 2→0
+    （headless 软渲染绝对值仅作相对参考）。
+- **搜索框 UI 统一**：`SearchField` 重做为 pill 样式（无边框胶囊、surfaceVariant 半透明底、搜索图标、清空按钮），
+  新增 `SearchBarEntry` 供发现页使用；发现/音乐库/搜索页三处视觉完全一致。
+- **Tab 切换过渡修复**：旧页先移除导致新页淡入期间闪白 → Tab 改为「轻微缩放进入 + 旧页无动画退出」，
+  并新增 `PageEnterAnimation`（内容 8dp 上浮 220ms），切页不再出现空白帧；加载态标题显示「正在加载音乐库…」。
+- **维测日志开关**：设置 → 诊断与维护 →「维测日志」Switch；关闭后 `Diag` 不再记录/打印（立即生效、持久化、
+  历史日志仍可查看/导出）；重启后保持关闭状态。真机/模拟器已双向验证。
+- 新增 `AppSettings.diagnosticLogsEnabled` 与 `SettingsRepository.setDiagnosticLogsEnabled`；测试 fake 同步更新。
+- 单测保持 152 全绿。
+
 ## v0.6.0（2026-11-08 · tag `v0.6.0`）
 
 **UI 调整：页头/转场/迷你条手势/音乐库三分栏索引/归档目录结构**

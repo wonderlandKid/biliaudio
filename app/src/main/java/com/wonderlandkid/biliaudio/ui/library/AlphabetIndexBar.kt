@@ -37,21 +37,24 @@ private val BUBBLE_SIZE = 52.dp
  * 右侧「# A B C …」快速索引栏。
  *
  * - 竖排展示 [labels]，点按 / 上下拖动都可以选中；
- * - 选中项（[activeLabel]，通常来自列表当前滚动位置）用主题色高亮；
+ * - 选中项（[activeLabelProvider] 返回的当前分组标签）用主题色高亮；
  * - 拖动时在索引栏左侧显示大字气泡，松手消失；
  * - 仅在非搜索状态且列表非空时由调用方显示。
  *
  * @param onSelect 选中标签回调（调用方负责滚动列表到对应分组）
+ * @param activeLabelProvider 当前高亮字母的读取回调：**在索引栏内部读取**，
+ *        避免父作用域（Lazy 列表所在 composable）因滚动跨字母而重组整个列表。
  */
 @Composable
 fun AlphabetIndexBar(
     labels: List<String>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
-    activeLabel: String? = null,
+    activeLabelProvider: () -> String? = { null },
 ) {
     if (labels.isEmpty()) return
     var bubbleLabel by remember(labels) { mutableStateOf<String?>(null) }
+    val activeLabel = activeLabelProvider()
     val hapticFeedback = LocalHapticFeedback.current
 
     Box(modifier = modifier.width(BAR_WIDTH)) {

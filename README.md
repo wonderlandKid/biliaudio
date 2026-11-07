@@ -63,6 +63,10 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 | --- | --- | --- |
 | ![mini](docs/screenshots/v06_mini_collapsed.png) | ![dirimport](docs/screenshots/v06_dir_import_result.png) | ![settings](docs/screenshots/v06_settings.png) |
 
+| 搜索框统一（发现/音乐库一致） | 维测日志开关 |
+| --- | --- |
+| ![search](docs/screenshots/v061_search_unified.png) | ![diag](docs/screenshots/v061_diag_toggle.png) |
+
 更多截图见 [`docs/screenshots/`](docs/screenshots/)。
 
 ## 技术栈
@@ -228,7 +232,8 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 
 ## 诊断日志
 
-设置 → 诊断与维护 → 诊断日志：可查看 / 复制 / 导出最近的运行日志（播放、视频缓冲、导入、B 站接口耗时等），
+设置 → 诊断与维护 →「维测日志」开关（默认开启；关闭后不再记录/打印，历史日志仍可查看）；
+点「诊断日志」可查看 / 复制 / 导出最近的运行日志（播放、视频缓冲、导入、B 站接口耗时等），
 反馈问题时把日志发我即可定位；也可在真机用 `adb logcat -s BiliDiag` 查看（日志不含账号 Cookie 等敏感信息）。
 
 ## 常见问题

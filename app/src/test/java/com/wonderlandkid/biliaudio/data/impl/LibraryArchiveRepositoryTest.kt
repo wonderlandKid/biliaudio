@@ -770,6 +770,10 @@ class LibraryArchiveRepositoryTest {
             _settings.value = _settings.value.copy(audioQuality = preference)
         }
 
+        override suspend fun setDiagnosticLogsEnabled(enabled: Boolean) {
+            _settings.value = _settings.value.copy(diagnosticLogsEnabled = enabled)
+        }
+
         override suspend fun setDarkTheme(dark: Boolean?) {
             darkTheme = dark
             _settings.value = _settings.value.copy(darkTheme = dark)

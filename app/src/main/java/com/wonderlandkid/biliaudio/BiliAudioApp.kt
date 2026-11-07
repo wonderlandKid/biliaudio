@@ -36,6 +36,7 @@ class BiliAudioApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         container = AppContainer(this)
         container.warmUp()
+        Diag.enabled = container.settingsRepository.settings.value.diagnosticLogsEnabled
         Diag.log("App", "启动 " + Diag.deviceInfo(this))
     }
 

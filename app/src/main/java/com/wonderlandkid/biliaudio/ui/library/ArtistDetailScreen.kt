@@ -129,7 +129,11 @@ private fun ArtistDetailContent(
         item(key = "albumsHeader") {
             SectionHeader(title = "专辑", subtitle = "${state.albums.size} 张")
         }
-        items(albumRows, key = { row -> "artistAlbumRow_${row.first().id}" }) { row ->
+        items(
+            items = albumRows,
+            key = { row -> "artistAlbumRow_${row.first().id}" },
+            contentType = { "albumRow" },
+        ) { row ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,7 +163,11 @@ private fun ArtistDetailContent(
                 )
             }
         } else {
-            itemsIndexed(state.songs, key = { _, song -> song.track.id }) { index, song ->
+            itemsIndexed(
+                items = state.songs,
+                key = { _, song -> song.track.id },
+                contentType = { _, _ -> "song" },
+            ) { index, song ->
                 TrackRow(
                     title = song.track.title,
                     subtitle = "${song.album.title} · ${TimeUtils.formatDuration(song.track.durationMs)}",

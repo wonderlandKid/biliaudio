@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -89,14 +91,18 @@ class ArtistDetailViewModel(
 
     private fun observePlayback() {
         viewModelScope.launch {
-            playbackController.state.collect { playback ->
-                _uiState.update {
-                    it.copy(
-                        currentTrackId = playback.currentTrack?.id,
-                        isPlaying = playback.isPlaying,
-                    )
+            // 只关心「当前曲目 / 是否播放」，过滤掉 250ms 的播放进度 tick，避免列表滚动时反复重组
+            playbackController.state
+                .map { playback -> PlaybackHighlight(trackId = playback.currentTrack?.id, isPlaying = playback.isPlaying) }
+                .distinctUntilChanged()
+                .collect { highlight ->
+                    _uiState.update {
+                        it.copy(
+                            currentTrackId = highlight.trackId,
+                            isPlaying = highlight.isPlaying,
+                        )
+                    }
                 }
-            }
         }
     }
 

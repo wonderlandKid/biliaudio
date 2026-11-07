@@ -28,6 +28,11 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         _settings.update { it.copy(audioQuality = preference) }
     }
 
+    override suspend fun setDiagnosticLogsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DIAGNOSTIC_LOGS, enabled).apply()
+        _settings.update { it.copy(diagnosticLogsEnabled = enabled) }
+    }
+
     override suspend fun setDarkTheme(dark: Boolean?) {
         val editor = prefs.edit()
         when (dark) {
@@ -45,12 +50,18 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
             ?: AudioQualityPreference.AUTO
         // 未设置过 → null（跟随系统）
         val dark = if (prefs.contains(KEY_DARK_THEME)) prefs.getBoolean(KEY_DARK_THEME, false) else null
-        return AppSettings(audioQuality = quality, darkTheme = dark)
+        val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, true)
+        return AppSettings(
+            audioQuality = quality,
+            darkTheme = dark,
+            diagnosticLogsEnabled = diagnosticLogs,
+        )
     }
 
     private companion object {
         const val PREFS_NAME = "biliaudio_settings"
         const val KEY_AUDIO_QUALITY = "audio_quality"
         const val KEY_DARK_THEME = "dark_theme"
+        const val KEY_DIAGNOSTIC_LOGS = "diagnostic_logs_enabled"
     }
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -42,6 +43,18 @@ data class ArtistEntry(
     val subtitle: String get() = "$albumCount 张专辑 · $songCount 首歌曲"
 }
 
+/**
+ * 播放高亮（列表只需要这两个字段）。
+ *
+ * 播放位置每 250ms tick 一次，若直接把 `PlaybackController.state` 塞进 combine，
+ * 会让整页状态流每 tick 重建（含艺术家聚合、大量对象分配）→ 滚动卡顿。
+ * 这里 map + distinctUntilChanged，只在「切歌 / 播放暂停状态变化」时更新 UI。
+ */
+internal data class PlaybackHighlight(
+    val trackId: Long?,
+    val isPlaying: Boolean,
+)
+
 /** 音乐库 UI 状态。 */
 data class LibraryUiState(
     val query: String = "",
@@ -60,10 +73,11 @@ data class LibraryUiState(
 
     /** 页头副标题：搜索时显示「找到」数量。 */
     val headerSubtitle: String
-        get() = if (isSearchActive) {
-            "找到 ${songs.size} 首歌曲 · ${albums.size} 张专辑"
-        } else {
-            "${songs.size} 首歌曲 · ${albums.size} 张专辑"
+        get() = when {
+            // 首次加载/切页瞬间避免显示「0 首歌曲」的空态错觉
+            isLoading -> "正在加载音乐库…"
+            isSearchActive -> "找到 ${songs.size} 首歌曲 · ${albums.size} 张专辑"
+            else -> "${songs.size} 首歌曲 · ${albums.size} 张专辑"
         }
 }
 
@@ -118,24 +132,52 @@ class LibraryViewModel(
         .map<SearchResult, SearchResult?> { result -> result }
         .onStart { emit(null) }
 
+    /**
+     * 库数据（歌曲 / 专辑 / 艺术家）：只在搜索词变化或数据库变化时构建一次。
+     *
+     * 艺术家聚合同样在这里完成（AlphabeticIndex 分组不便宜），播放进度 tick 不会触发。
+     */
+    private data class LibraryData(
+        val songs: List<TrackWithAlbum>,
+        val albums: List<Album>,
+        val artists: List<ArtistEntry>,
+        val errorMessage: String? = null,
+    )
+
+    private val libraryData: Flow<LibraryData?> = searchResults.map { result ->
+        if (result == null) {
+            null
+        } else {
+            LibraryData(
+                songs = result.songs,
+                albums = result.albums,
+                artists = buildArtists(albums = result.albums, songs = result.songs),
+                errorMessage = result.errorMessage,
+            )
+        }
+    }
+
+    /** 播放状态 → 列表高亮（每 250ms 的位置 tick 被 distinctUntilChanged 过滤掉）。 */
+    private val playbackHighlight: Flow<PlaybackHighlight> = playbackController.state
+        .map { playback -> PlaybackHighlight(trackId = playback.currentTrack?.id, isPlaying = playback.isPlaying) }
+        .distinctUntilChanged()
+
     val uiState: StateFlow<LibraryUiState> = combine(
         queryFlow,
         tabFlow,
-        searchResults,
-        playbackController.state,
-    ) { query, tab, result, playback ->
-        val songs = result?.songs.orEmpty()
-        val albums = result?.albums.orEmpty()
+        libraryData,
+        playbackHighlight,
+    ) { query, tab, data, highlight ->
         LibraryUiState(
             query = query,
             tab = tab,
-            isLoading = result == null,
-            songs = songs,
-            albums = albums,
-            artists = buildArtists(albums = albums, songs = songs),
-            currentTrackId = playback.currentTrack?.id,
-            isPlaying = playback.isPlaying,
-            errorMessage = result?.errorMessage,
+            isLoading = data == null,
+            songs = data?.songs.orEmpty(),
+            albums = data?.albums.orEmpty(),
+            artists = data?.artists.orEmpty(),
+            currentTrackId = highlight.trackId,
+            isPlaying = highlight.isPlaying,
+            errorMessage = data?.errorMessage,
         )
     }.stateIn(
         scope = viewModelScope,
