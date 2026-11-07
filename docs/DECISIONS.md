@@ -246,3 +246,36 @@
   `SettingsRepository.setDiagnosticLogsEnabled` 更新 Flow；App 启动时同步 `Diag.enabled`，
   设置页切换立即生效（关闭前记最后一条，重新开启时记一条）；关闭后 `Diag.log` 直接返回，不写内存/Logcat；
   历史日志保留可查看/导出。设置 → 诊断与维护 →「维测日志」Switch 控制。
+
+---
+
+## D23 全局动效系统按 Material Design 3 Motion 规范重写（v0.6.2）
+
+- **日期**：2026-11-08
+- **背景**：此前转场为手写拼凑（Tab 用 ExitTransition.None + scale，详情页用自定义 slide），
+  出现 Tab 两页不透明叠影、切页空白/闪白、动画风格不统一等问题。用户要求「先查标准再重写」。
+- **调研（官方规范）**：
+  - Material Design 3 – Easing and duration tokens
+    （https://m3.material.io/styles/motion/easing-and-duration/tokens-specs）：
+    Emphasized / EmphasizedDecelerate / EmphasizedAccelerate 曲线；duration short2=100、short4=200、medium2=300、long2=500；
+  - Material Design 3 – Transition patterns
+    （https://m3.material.io/styles/motion/transitions/transition-patterns）：
+    Top level = **Fade through**（旧页先淡出、新页再淡入，用于无强关联的顶级目的地）；
+    有层级/方向关系的页面 = **Shared axis**；
+  - Material Design 3 – Motion physics overview/specs
+    （https://m3.material.io/styles/motion/overview/how-it-works、/overview/specs）：
+    M3 Expressive 引入弹簧 token（spatial/effects，standard/expressive 两套方案），
+    推荐可交互尺寸/位置动画用 spring；本机 androidx material3 1.5 源码 `StandardMotionTokens`：
+    default spatial damping=0.9 / stiffness=700，effects damping=1.0 / stiffness=1600；
+  - Material Motion – Fade through / Shared axis 具体时序
+    （https://m2.material.io/design/motion/choreography.html、
+    https://blog.stylingandroid.com/material-motion-shared-axis/）：
+    fade through：旧页 100ms 淡出，新页 200ms 淡入（延迟 100ms）并 92%→100%；
+    shared axis：两页同向平移 30dp，旧页淡出 100ms、新页淡入 200ms（延迟 100ms），共 300ms。
+- **决策**：
+  - 所有动效 token 收敛到 `ui/theme/Motion.kt`（`BiliMotion`），页面不得再写散落时长/曲线；
+  - 顶级 Tab 用 Fade through；层级页面用 Shared axis X；播放页 Shared axis Y；沉浸覆盖层用 Fade；
+  - 禁止「页面内再叠一层进入淡入动画」（删除 PageEnterAnimation），一次导航只表达一次转场；
+  - 可交互尺寸变化（迷你条收起/展开）用 M3 spatial 弹簧；
+  - 动画仅使用 alpha/translation/scale（GPU 友好），并依赖 Compose 对系统「动画时长缩放/移除动画」设置的处理。
+- **验证**：模拟器录屏逐帧检查 Tab/详情/播放页转场无叠影、无长时间空白；单测 152 全绿。

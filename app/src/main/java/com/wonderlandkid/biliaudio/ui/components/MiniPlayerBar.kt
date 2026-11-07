@@ -3,6 +3,8 @@ package com.wonderlandkid.biliaudio.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -40,8 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.player.PlaybackState
+import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 /**
@@ -69,10 +73,14 @@ fun MiniPlayerBar(
     modifier: Modifier = Modifier,
 ) {
     val track = state.currentTrack
+    // M3 Expressive motion physics：尺寸变化走官方 Standard spatial 弹簧
+    val sizeSpring = BiliMotion.standardSpatialSpring<IntSize>()
     AnimatedVisibility(
         visible = track != null,
-        enter = slideInVertically(animationSpec = tween(220)) { it / 2 },
-        exit = slideOutVertically(animationSpec = tween(180)) { it / 2 },
+        enter = slideInVertically(animationSpec = tween(BiliMotion.Short4)) { it / 2 } +
+            fadeIn(animationSpec = tween(BiliMotion.Short4)),
+        exit = slideOutVertically(animationSpec = tween(BiliMotion.Short2)) { it / 2 } +
+            fadeOut(animationSpec = tween(BiliMotion.Short2)),
         modifier = modifier,
     ) {
         if (track == null) return@AnimatedVisibility
@@ -106,7 +114,7 @@ fun MiniPlayerBar(
 
         Surface(
             modifier = baseModifier
-                .animateContentSize()
+                .animateContentSize(animationSpec = sizeSpring)
                 .then(
                     if (collapsed) {
                         Modifier

@@ -1,5 +1,24 @@
 # 版本记录
 
+## v0.6.2（2026-11-08 · tag `v0.6.2`）
+
+**全局动效重写（依据 Material Design 3 Motion 官方规范）**
+
+- 新增 `ui/theme/Motion.kt` 动效 token：
+  - M3 Easing：Emphasized / EmphasizedDecelerate / EmphasizedAccelerate / Standard；
+  - M3 Duration：short2=100ms、short4=200ms、medium2=300ms；
+  - M3 Expressive motion physics 弹簧 token（按 androidx StandardMotionTokens / ExpressiveMotionTokens
+    数值本地实现，material3 1.5 的 MotionScheme API 尚为 internal）：default spatial ⌀0.9/stiffness 700 等。
+- 转场按 Material transition patterns 重写：
+  - 顶级 Tab = **Fade through**：旧页 100ms 淡出 → 新页延后 100ms 以 200ms 淡入 + 92%→100% 放大（共 300ms），
+    严格分段、无两页同时清晰叠影（修复 v0.6.1 的 Tab 叠影/空白问题）；
+  - 层级页面（专辑/分曲/艺术家/导入/登录/设置子页）= **Shared axis X**：30dp 平移 + 100ms 淡出 / 200ms 淡入（延迟 100ms）；
+  - 播放页 = **Shared axis Y**（从迷你条向上展开，30dp）；歌词页 = **Fade**；
+  - 迷你播放条收起/展开 = M3 spatial 弹簧（damping 0.9 / stiffness 700）+ 淡入淡出。
+- 移除 v0.6.0 的 `PageEnterAnimation`（非 Material 规范、与导航转场叠加造成双重动画/闪白）。
+- 性能：AppNavHost 不再直接订阅播放状态，`MiniPlayerHost` 内部订阅，250ms 进度 tick 不再触发导航壳/当前页重组。
+- 单测保持 152 全绿；文档记录动效规范来源与选择理由。
+
 ## v0.6.1（2026-11-08 · tag `v0.6.1`）
 
 **性能/一致性/过渡/日志开关修复**

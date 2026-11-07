@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.6.1）
+# 项目现状与交接（v0.6.2）
 
-> 最后更新：2026-11-08 · 版本 v0.6.1 · tag `v0.6.1`（release commit 以 `git rev-parse v0.6.1` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.6.2 · tag `v0.6.2`（release commit 以 `git rev-parse v0.6.2` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -68,6 +68,7 @@
 - **v0.5.0** 自定义专辑封面（本地上传/网易云搜索/恢复B站/归档内嵌）、歌词页加载体验修复（封面占位、单次延迟提示、校正节流）
 - **v0.6.0** 三主页面统一页头/导航转场重做、迷你播放条上/下手势、音乐库三分栏+#A-Z索引+艺术家详情、归档目录形态（顶层/艺术家/专辑/分割）
 - **v0.6.1** 音乐库滚动性能修复（播放 tick/索引栏/列表 contentType）、搜索框 UI 统一、Tab 切换闪白修复、维测日志开关
+- **v0.6.2** 全局动效按 Material Design 3 Motion 规范重写：BiliMotion token、Fade through/Shared axis X/Y/Fade、M3 弹簧、移除页面内叠加动画；导航壳播放状态订阅隔离
 
 ## 5. 最近验证状态（截至 v0.4.0）
 
@@ -92,6 +93,11 @@
   - 迷你条：上滑→播放页（底部上滑转场）、下滑→收起细条、点击/上滑→展开，截图确认；
   - 专辑详情进入/返回为横向推入/退出，无缩放；
   - 设置页目录导出到 SAF 文件夹成功生成 `biliaudio-library.json` + `Fallious/.../album.json+segments.json` + `索尼音乐中国/...`；从文件夹导入（合并）结果「新建 0 · 更新 2 · 分曲更新 0 · 跳过 0 · 失败 0」。
+- v0.6.2 模拟器验证（录屏逐帧，截图 `docs/screenshots/v062_motion_*.png`）：
+  - Tab 切换为 Material Fade through（旧页淡出→新页 92%→100% 淡入），无两页不透明叠影；
+  - 详情页为 Shared axis X（30dp 平移 + 100/200ms 淡入淡出），无长时间整页空白；
+  - 播放页 Shared axis Y、歌词页 Fade；迷你条收起/展开为 M3 spatial 弹簧；
+  - 移除 PageEnterAnimation，避免导航转场与页面内动画叠加；AppNavHost 不再订阅播放状态（性能）。
 - v0.6.1 模拟器验证：
   - 发现/音乐库搜索框视觉一致（pill 胶囊、同高度/图标/占位，截图对比）；
   - Tab 切换录屏逐帧：旧页+新页重叠过渡，无全白空白帧；PageEnterAnimation 只做上浮不淡入（避免 alpha=0 闪白）；
@@ -136,8 +142,8 @@
 - **列表性能**：播放状态必须 `map{PlaybackHighlight}.distinctUntilChanged()` 后再 combine；
   Lazy 列表用 contentType + 稳定 key；索引栏高亮在组件内部读取（provider），父级不读滚动派生状态。
 - **搜索框**：统一 `SearchField`（pill 胶囊）；发现页用 `SearchBarEntry`（同一视觉、点击跳转）。
-- **Tab 转场**：旧页 ExitTransition.None、新页 scaleIn（禁止 alpha=0 淡入，避免闪白）；
-  `PageEnterAnimation` 仅做 8dp 上浮不淡入。
+- **动效（v0.6.2）**：全部 token 在 `ui/theme/Motion.kt`；顶级 Tab = Fade through、层级页面 = Shared axis X、
+  播放页 = Shared axis Y、沉浸页 = Fade；尺寸变化用 M3 spatial 弹簧；禁止页面内叠加自定义进入动画。
 - **归档双形态**：单文件 `.biliaudio.json`（分享/旧备份）与目录树（顶层/艺术家/专辑/album.json+segments.json，
   可浏览可编辑；REPLACE 有防误删保护）。
 - **视觉**：Material 3 扁平、大圆角、动态色板；**禁止液态玻璃/毛玻璃**。

@@ -104,6 +104,16 @@
 - B 站标题「【官方 MV】」等前缀会被跳过再分组；若新增前缀类型导致全落 `#`，在 `LetterIndex` 的装饰符集合里补充；
 - 艺术家封面取该艺术家第一张专辑封面（按仓库专辑顺序）；点艺术家进入详情页。
 
+## 3.7 动效（转场）排障
+
+- 所有转场 token 在 `ui/theme/Motion.kt`（BiliMotion），转场实现集中在 `ui/navigation/AppNavHost.kt`；
+  页面内不要写散落的 `tween(...)` 进入动画（v0.6.2 已移除 PageEnterAnimation，避免双重动画/闪白）。
+- 页面类型选择标准（Material Motion）：顶级 Tab=fade through；有层级关系页面=shared axis X；
+  上下展开（播放页）=shared axis Y；沉浸覆盖层=fade；可交互尺寸变化=spring（M3 standard spatial）。
+- 若切页出现「两页同时清晰叠影」：通常是旧页 exit 用了 None 或与新页 alpha 未分段/重叠过多；
+  若出现整页空白：检查是否只让新页从 alpha=0 淡入而旧页已先移除（v0.6.1 的问题），当前实现保留了 50~60ms 交叉重叠。
+- 系统「动画时长缩放/移除动画」由 Compose 平台层处理；若整机动画被关闭，转场会接近瞬时完成，属预期。
+
 ## 4. 构建 / IDE
 
 ### Android Studio 点 Run 报 `Activity class {com.example.bilibiliplayer/...} does not exist`
