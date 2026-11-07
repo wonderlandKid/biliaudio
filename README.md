@@ -124,3 +124,27 @@ docs/           # 设计文档、B站接口笔记、导入格式、截图
 ## 说明
 
 本项目为个人学习自用工具，仅用于播放用户自己可访问的 B 站内容；B 站内容版权归原作者及平台所有，请勿用于商业用途或大规模抓取。
+
+## 常见问题
+
+### Android Studio 点 Run 报 `Activity class {com.example.bilibiliplayer/...} does not exist`
+
+原因：这是 Android Studio 的 **Gradle 模型缓存过期**，不是 App 代码问题。项目最初由向导创建时
+`applicationId` 是 `com.example.bilibiliplayer`，后来改成了 `com.wonderlandkid.biliaudio`，
+而 IDE 的自动同步被关闭，仍用旧包名拼启动命令，于是报「Activity 不存在」（但 APK 部署本身是成功的）。
+
+修复（任选其一）：
+
+1. **File → Sync Project with Gradle Files**（大象图标），等同步完成后再 Run；
+2. 若仍报旧包名：Run → Edit Configurations… → 选中 `app` → General → Launch Options
+   选 **Default Activity**（或 Specified Activity 填 `com.wonderlandkid.biliaudio.MainActivity`）→ Apply；
+3. 还不行：File → Invalidate Caches / Restart…；或删掉该 Run Configuration 重新创建；
+4. 建议开启自动同步：Settings → Build, Execution, Deployment → Build Tools → Gradle →
+   Auto-import / Reload project after changes 设为 **Any changes**。
+
+命令行验证（不经过 IDE，最直接）：
+
+```bash
+adb install -r dist/biliaudio-v0.1.0-debug.apk
+adb shell am start -n com.wonderlandkid.biliaudio/.MainActivity
+```
