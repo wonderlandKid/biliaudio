@@ -5,6 +5,7 @@ import com.wonderlandkid.biliaudio.data.db.AppDatabase
 import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.net.BiliApi
@@ -12,6 +13,7 @@ import com.wonderlandkid.biliaudio.data.net.CookieStore
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
+import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
 import com.wonderlandkid.biliaudio.player.AlbumVideoController
@@ -63,6 +65,14 @@ class AppContainer(context: Context) {
         cookieStore = cookieStore,
         scope = appScope,
         onSessionChanged = { streamResolverImpl.invalidateAll() },
+    )
+
+    /** 音乐库归档（导出备份 / 导入恢复），见 docs/LIBRARY_ARCHIVE.md */
+    val libraryArchiveRepository: LibraryArchiveRepository = LibraryArchiveRepositoryImpl(
+        context = appContext,
+        albumRepository = albumRepository,
+        biliRepository = biliRepository,
+        settingsRepository = settingsRepository,
     )
 
     // ---------------- 播放层 ----------------

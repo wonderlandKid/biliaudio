@@ -125,6 +125,7 @@ fun AppNavHost() {
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                    onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
                 )
             }
 
@@ -169,6 +170,16 @@ fun AppNavHost() {
                         navController.navigate(Routes.album(albumId))
                     },
                     initialTab = ImportTab.SEARCH,
+                )
+            }
+            composable(Routes.IMPORT_ARCHIVE) {
+                ImportScreen(
+                    onBack = { navController.popBackStack() },
+                    onImported = { albumId ->
+                        navController.popBackStack()
+                        navController.navigate(Routes.album(albumId))
+                    },
+                    initialTab = ImportTab.BATCH,
                 )
             }
             composable(Routes.LOGIN) {

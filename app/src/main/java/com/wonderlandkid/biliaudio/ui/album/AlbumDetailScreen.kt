@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.album
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,9 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -86,6 +89,8 @@ fun AlbumDetailScreen(
             albumRepository = container.albumRepository,
             biliRepository = container.biliRepository,
             playbackController = container.playbackController,
+            libraryArchiveRepository = container.libraryArchiveRepository,
+            appContext = container.appContext,
         )
     },
 ) {
@@ -93,6 +98,12 @@ fun AlbumDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // 导出专辑文件：系统文件选择器（CreateDocument，默认文件名 <专辑名>-biliaudio.json）
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) viewModel.exportAlbumTo(uri)
+    }
 
     // 删除成功后自动返回上一页
     LaunchedEffect(state.deleted) {
@@ -113,6 +124,7 @@ fun AlbumDetailScreen(
         topBar = {
             AlbumDetailTopBar(
                 isRefreshing = state.isRefreshing,
+                isExporting = state.isExporting,
                 menuEnabled = state.album != null,
                 onBack = onBack,
                 onMenuClick = { menuExpanded = true },
@@ -121,6 +133,10 @@ fun AlbumDetailScreen(
                 onRefresh = {
                     menuExpanded = false
                     viewModel.refreshVideoInfo()
+                },
+                onExport = {
+                    menuExpanded = false
+                    state.album?.let { album -> exportLauncher.launch(buildExportFileName(album.title)) }
                 },
                 onDelete = {
                     menuExpanded = false
@@ -172,23 +188,25 @@ fun AlbumDetailScreen(
 @Composable
 private fun AlbumDetailTopBar(
     isRefreshing: Boolean,
+    isExporting: Boolean,
     menuEnabled: Boolean,
     onBack: () -> Unit,
     onMenuClick: () -> Unit,
     menuExpanded: Boolean,
     onMenuDismiss: () -> Unit,
     onRefresh: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
     TopAppBar(
         title = {},
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
             }
         },
         actions = {
-            if (isRefreshing) {
+            if (isRefreshing || isExporting) {
                 CircularProgressIndicator(
                     modifier = Modifier
                         .padding(end = Spacing.sm)
@@ -205,6 +223,12 @@ private fun AlbumDetailTopBar(
                     leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
                     enabled = menuEnabled && !isRefreshing,
                     onClick = onRefresh,
+                )
+                DropdownMenuItem(
+                    text = { Text("导出专辑文件") },
+                    leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+                    enabled = menuEnabled && !isExporting,
+                    onClick = onExport,
                 )
                 DropdownMenuItem(
                     text = { Text("删除专辑", color = MaterialTheme.colorScheme.error) },
@@ -420,4 +444,35 @@ private fun DeleteAlbumDialog(
             TextButton(onClick = onDismiss, enabled = !deleting) { Text("取消") }
         },
     )
+}
+
+// ---------------------------------------------------------------------------
+// 导出文件工具
+// ---------------------------------------------------------------------------
+
+/** SAF 默认文件名里专辑名部分的最大长度。 */
+private const val MAX_EXPORT_TITLE_LENGTH = 60
+
+/** 文件系统非法字符：`/ \ : * ? " < > |` + 不可见控制字符。 */
+private val ILLEGAL_FILE_NAME_CHARS = Regex("""[\\/:*?"<>|\u0000-\u001F]""")
+
+/** 连续空白（含换行/制表），文件名里压缩成单个空格。 */
+private val FILE_NAME_WHITESPACE = Regex("""\s+""")
+
+/**
+ * 生成 SAF 默认文件名：`<安全化专辑名>-biliaudio.json`。
+ *
+ * 去掉文件系统非法字符、压缩空白，标题部分最长 [MAX_EXPORT_TITLE_LENGTH] 个字符；
+ * 标题为空时回退为 "album"。
+ */
+private fun buildExportFileName(albumTitle: String): String {
+    val sanitized = albumTitle
+        .replace(ILLEGAL_FILE_NAME_CHARS, "")
+        .replace(FILE_NAME_WHITESPACE, " ")
+        .trim()
+        .trim('.')
+        .take(MAX_EXPORT_TITLE_LENGTH)
+        .trim()
+        .ifBlank { "album" }
+    return "$sanitized-biliaudio.json"
 }

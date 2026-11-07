@@ -30,8 +30,10 @@ import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,7 +54,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
@@ -96,12 +101,15 @@ fun ImportScreen(
         ImportViewModel(
             albumRepository = container.albumRepository,
             biliRepository = container.biliRepository,
+            libraryArchiveRepository = container.libraryArchiveRepository,
             appContext = container.appContext,
         )
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
+    // 「覆盖全库」模式的二次确认弹窗
+    var showReplaceConfirm by remember { mutableStateOf(false) }
 
     // 初始 Tab（Routes.SEARCH 复用本页时直接落在搜索 Tab）
     LaunchedEffect(initialTab) { viewModel.selectTab(initialTab) }
@@ -115,7 +123,7 @@ fun ImportScreen(
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) viewModel.loadBatchFile(uri)
+        if (uri != null) viewModel.loadArchiveFile(uri)
     }
 
     Scaffold(
@@ -156,15 +164,30 @@ fun ImportScreen(
                         onReset = viewModel::resetBvImport,
                     )
 
-                    ImportTab.BATCH -> BatchImportTab(
-                        state = state,
-                        onTextChange = viewModel::updateBatchText,
+                    ImportTab.BATCH -> ArchiveImportTab(
+                        state = state.archive,
+                        sampleSegmentJson = viewModel.sampleSegmentJson,
+                        onModeSelect = { mode ->
+                            if (mode == ArchiveImportMode.REPLACE &&
+                                state.archive.mode != ArchiveImportMode.REPLACE
+                            ) {
+                                // 覆盖全库：先弹二次确认，确认后才真正切换模式
+                                showReplaceConfirm = true
+                            } else {
+                                viewModel.setArchiveMode(mode)
+                            }
+                        },
+                        onTextChange = viewModel::updateArchiveText,
                         onPickFile = { filePicker.launch(arrayOf("*/*")) },
-                        onClear = viewModel::clearBatch,
+                        onPreview = {
+                            focusManager.clearFocus()
+                            viewModel.previewArchive()
+                        },
                         onImport = {
                             focusManager.clearFocus()
-                            viewModel.runBatchImport()
+                            viewModel.importArchive()
                         },
+                        onClear = viewModel::clearArchive,
                     )
 
                     ImportTab.SEARCH -> SearchImportTab(
@@ -227,6 +250,34 @@ fun ImportScreen(
                 }
             }
         }
+    }
+
+    // 「覆盖全库」二次确认：说明会先自动备份，避免误清空本地库
+    if (showReplaceConfirm) {
+        AlertDialog(
+            onDismissRequest = { showReplaceConfirm = false },
+            title = { Text("覆盖全库？") },
+            text = {
+                Text(
+                    "覆盖全库会先把当前音乐库自动备份到应用私有目录，" +
+                        "然后清空本地库并导入此文件。\n\n" +
+                        "自动备份保留最近 10 份；如需长期保留，建议先在「设置 → 备份与恢复」导出音乐库。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showReplaceConfirm = false
+                        viewModel.setArchiveMode(ArchiveImportMode.REPLACE)
+                    },
+                ) {
+                    Text("覆盖全库", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
+            },
+        )
     }
 }
 
@@ -446,31 +497,58 @@ private fun BvImportTab(
 }
 
 // ---------------------------------------------------------------------------
-// Tab 内容：批量导入
+// Tab 内容：归档 / 批量导入
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun BatchImportTab(
-    state: ImportUiState,
+private fun ArchiveImportTab(
+    state: ArchiveImportState,
+    sampleSegmentJson: String,
+    onModeSelect: (ArchiveImportMode) -> Unit,
     onTextChange: (String) -> Unit,
     onPickFile: () -> Unit,
-    onClear: () -> Unit,
+    onPreview: () -> Unit,
     onImport: () -> Unit,
+    onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val report = state.batchReport
-    val lineCount = remember(state.batchText) {
-        state.batchText.lines().count { it.isNotBlank() }
+    val preview = state.preview
+    val report = state.report
+    val lineCount = remember(state.text) {
+        state.text.lines().count { it.isNotBlank() }
     }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = ImportListPadding,
         verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
-        // ---- 格式说明与示例 ----
-        item { BatchFormatGuide() }
+        // ---- 标题 ----
+        item {
+            Column(
+                modifier = Modifier.padding(horizontal = Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
+                Text(text = "归档 / 批量导入", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = "支持整库备份恢复、单张专辑分享、评论区分割点文件；" +
+                        "也兼容旧的 JSON 数组 / CSV / 文本块。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
-        // ---- 输入区 ----
+        // ---- 导入模式（「覆盖全库」的二次确认在页面层弹窗） ----
+        item {
+            ArchiveModeSelector(mode = state.mode, onSelect = onModeSelect)
+        }
+
+        // ---- 格式说明（归档 JSON 为主，旧格式折叠） ----
+        item {
+            ArchiveFormatGuide(sampleSegmentJson = sampleSegmentJson)
+        }
+
+        // ---- 输入区：粘贴 / 文件读取 ----
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -484,16 +562,18 @@ private fun BatchImportTab(
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
-                        text = "粘贴导入内容",
+                        text = "粘贴归档内容",
                         style = MaterialTheme.typography.titleMedium,
                     )
                     OutlinedTextField(
-                        value = state.batchText,
+                        value = state.text,
                         onValueChange = onTextChange,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 180.dp),
-                        placeholder = { Text("在这里粘贴 JSON 数组 / CSV / 文本块…") },
+                        placeholder = {
+                            Text("粘贴 .biliaudio.json 归档内容；也支持旧的 JSON 数组 / CSV / 文本块…")
+                        },
                         minLines = 8,
                         maxLines = 14,
                         shape = RoundedCornerShape(14.dp),
@@ -527,7 +607,7 @@ private fun BatchImportTab(
                         }
                         TextButton(
                             onClick = onClear,
-                            enabled = state.batchText.isNotBlank() || report != null,
+                            enabled = state.text.isNotBlank() || preview != null || report != null,
                         ) {
                             Text("清空")
                         }
@@ -540,9 +620,9 @@ private fun BatchImportTab(
                             )
                         }
                     }
-                    if (state.batchFileName != null) {
+                    if (state.fileName != null) {
                         Text(
-                            text = "已读取：${state.batchFileName}",
+                            text = "已读取：${state.fileName}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
@@ -550,49 +630,172 @@ private fun BatchImportTab(
                         )
                     }
                     Button(
-                        onClick = onImport,
+                        onClick = onPreview,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        enabled = !state.isBatchImporting && state.batchText.isNotBlank(),
+                        enabled = state.canPreview,
                         shape = RoundedCornerShape(16.dp),
                     ) {
-                        if (state.isBatchImporting) {
+                        if (state.isPreviewing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                             Spacer(Modifier.width(Spacing.sm))
-                            Text("正在导入…（条目较多时需要一段时间）")
+                            Text("解析中…")
                         } else {
-                            Text("开始批量导入")
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(Spacing.sm))
+                            Text("解析预览")
                         }
                     }
                 }
             }
         }
 
-        // ---- 错误 ----
-        val batchError = state.batchError
-        if (batchError != null) {
-            item { ImportErrorCard(message = batchError, title = "批量导入失败") }
+        // ---- 解析中 / 解析预览失败 ----
+        if (state.isPreviewing) {
+            item { ImportLoadingCard("正在解析归档文件…") }
         }
-
-        // ---- 结果 ----
-        if (report != null) {
+        val previewError = state.previewError
+        if (previewError != null) {
             item {
-                Text(
-                    text = "导入结果",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = Spacing.xs),
+                ImportErrorCard(
+                    message = previewError,
+                    title = "解析预览失败",
+                    onRetry = onPreview,
                 )
             }
-            item { BatchResultSection(report = report) }
-        } else if (!state.isBatchImporting) {
+        }
+
+        // ---- 预览：格式/统计 + 逐条计划动作 + 解析错误 + 开始导入 ----
+        if (preview != null) {
+            item { ArchivePreviewCard(preview) }
+            if (preview.items.isNotEmpty()) {
+                item { ArchiveSubHeader("计划动作（${preview.items.size} 项）") }
+                itemsIndexed(
+                    items = preview.items,
+                    key = { index, item -> "preview_${item.bvid}_${item.page}_$index" },
+                ) { _, item ->
+                    ArchivePreviewItemRow(item)
+                }
+            }
+            if (preview.parseErrors.isNotEmpty()) {
+                item {
+                    ArchiveSubHeader(
+                        text = "解析失败的条目（${preview.parseErrors.size}）",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                itemsIndexed(
+                    items = preview.parseErrors,
+                    key = { index, _ -> "preview_error_$index" },
+                ) { _, error ->
+                    ArchiveParseErrorRow(error)
+                }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    if (state.mode == ArchiveImportMode.REPLACE) {
+                        Text(
+                            text = "将先自动备份当前音乐库，再清空本地库并导入。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Button(
+                        onClick = onImport,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        enabled = state.canImport,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = if (state.mode == ArchiveImportMode.REPLACE) {
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            )
+                        } else {
+                            ButtonDefaults.buttonColors()
+                        },
+                    ) {
+                        if (state.isImporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = if (state.mode == ArchiveImportMode.REPLACE) {
+                                    MaterialTheme.colorScheme.onError
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimary
+                                },
+                            )
+                            Spacer(Modifier.width(Spacing.sm))
+                            Text("正在导入…")
+                        } else {
+                            Text(
+                                text = if (state.mode == ArchiveImportMode.REPLACE) {
+                                    "覆盖全库并导入"
+                                } else {
+                                    "开始导入"
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- 导入失败 ----
+        val importError = state.importError
+        if (importError != null) {
+            item {
+                ImportErrorCard(
+                    message = importError,
+                    title = "导入失败",
+                    onRetry = onImport,
+                )
+            }
+        }
+
+        // ---- 导入结果报告 ----
+        if (report != null) {
+            item { ArchiveImportReportCard(report) }
+            if (report.items.isNotEmpty()) {
+                item { ArchiveSubHeader("逐条结果（${report.items.size} 项）") }
+                itemsIndexed(
+                    items = report.items,
+                    key = { index, item -> "report_${item.bvid}_${item.page}_$index" },
+                ) { _, item ->
+                    ArchiveItemResultRow(item)
+                }
+            }
+            if (report.parseErrors.isNotEmpty()) {
+                item {
+                    ArchiveSubHeader(
+                        text = "解析失败的条目（${report.parseErrors.size}）",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                itemsIndexed(
+                    items = report.parseErrors,
+                    key = { index, _ -> "report_error_$index" },
+                ) { _, error ->
+                    ArchiveParseErrorRow(error)
+                }
+            }
+        } else if (preview == null && !state.isPreviewing && !state.isImporting &&
+            previewError == null && importError == null
+        ) {
             item {
                 Text(
-                    text = "导入结果会显示在这里：绿色为成功（专辑名 · 曲目数），红色为失败（原始输入 + 原因）。",
+                    text = "步骤：选择导入模式 → 粘贴或选择归档文件 → 解析预览 → 开始导入。" +
+                        "导入完成后会在这里显示逐条结果。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = Spacing.xs),
@@ -600,6 +803,20 @@ private fun BatchImportTab(
             }
         }
     }
+}
+
+/** Tab 内小节标题。 */
+@Composable
+private fun ArchiveSubHeader(
+    text: String,
+    color: Color? = null,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = color ?: MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(horizontal = Spacing.xs),
+    )
 }
 
 // ---------------------------------------------------------------------------

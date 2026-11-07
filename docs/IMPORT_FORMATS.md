@@ -1,5 +1,10 @@
 # 批量导入格式规范（v1，数据层解析器与导入页文案共用）
 
+> **注意**：v0.2.0 起推荐使用统一的「音乐库归档格式」（docs/LIBRARY_ARCHIVE.md），
+> 一个文件同时承载专辑、分曲与备份；本文件定义的 JSON 数组 / CSV / 文本块仍然兼容，
+> 作为「快捷导入 / 旧格式」继续支持，解析结果会统一归一化为归档模型后入库。
+
+
 导入接口：`AlbumRepository.importBatchText(text: String): BatchImportReport`
 解析器：`data/impl/BatchImportParser`（data teammate 实现，本文件是唯一格式依据）
 

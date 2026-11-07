@@ -12,6 +12,8 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 - 🎵 **按歌曲播放**：专辑音频流连续播放，播放列表 = 当前专辑的分割点，点哪首播哪首；后台播放 + 媒体通知 + 锁屏控制
 - 🎬 **歌词页 = 原视频**：播放 B 站原视频，与音频进度同步，支持全屏 / 非全屏两种模式
 - 🔎 **可搜索的音乐库**：歌曲 / 专辑搜索，按艺术家、专辑名检索
+- 💾 **音乐库归档**：整库备份 / 单专辑分享 / 评论区分割点文件统一为 `.biliaudio.json`，
+  导入导出、合并且覆盖前自动备份；旧 CSV/文本块格式继续兼容
 - 🎨 **Material 3 扁平设计**：封面大图、大圆角卡片、动态色板，无液态玻璃
 
 ## 界面截图
@@ -23,6 +25,10 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 | 分曲编辑 | 搜索导入 | 深色主题 |
 | --- | --- | --- |
 | ![split](docs/screenshots/real_19_split_editor.png) | ![search](docs/screenshots/final_02_search.png) | ![dark](docs/screenshots/real_35_home_dark.png) |
+
+| 备份与恢复 | 归档导入预览 | 覆盖全库报告 |
+| --- | --- | --- |
+| ![backup](docs/screenshots/archive_01_settings.png) | ![preview](docs/screenshots/archive_04_preview.png) | ![report](docs/screenshots/archive_09_replace_report.png) |
 
 | 专辑详情（底部迷你播放条） | 歌词页全屏 | 批量导入 |
 | --- | --- | --- |
@@ -78,9 +84,33 @@ scripts/screenshot.sh home 8
 4. **播放**：专辑页「播放全部」，或音乐库点歌；底部迷你播放条 → 正在播放页（播放列表面板 = 当前专辑分曲）。
 5. **歌词页**：正在播放页 →「看歌词视频」，观看 B 站原视频（与音频同步），右上角可切换全屏。
 
-### 批量导入格式
+### 音乐库归档文件（推荐）
 
-自动识别 JSON 数组 / CSV / 文本块，详见 [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md)。
+一个 `.biliaudio.json` 文件同时承载「整库备份 / 单专辑分享 / 分割点文件」，格式与导入模式见
+[docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md)。最小分割点文件示例：
+
+```json
+{
+  "format": "biliaudio-library",
+  "version": 1,
+  "albums": [
+    {
+      "bvid": "BV1GJ411x7h7",
+      "segments": [
+        { "start": "00:00", "name": "曲目一" },
+        { "start": "03:21", "name": "曲目二" }
+      ]
+    }
+  ]
+}
+```
+
+导入模式：**合并导入**（默认）/ 仅更新分割点 / 覆盖全库（自动备份后可回滚）。
+设置页「备份与恢复」可导出整库；专辑详情菜单可导出单张专辑。
+
+### 兼容旧批量导入格式
+
+仍自动识别旧 JSON 数组 / CSV / 文本块，详见 [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md)。
 
 ```text
 BV1GJ411x7h7 专辑名
@@ -118,7 +148,7 @@ app/src/main/java/com/wonderlandkid/biliaudio
 ├── ui/         # Compose 界面：发现/音乐库/专辑/分曲编辑/导入/登录/设置/播放器/歌词页
 ├── di/         # 手写 DI 容器
 └── util/
-docs/           # 设计文档、B站接口笔记、导入格式、截图
+docs/           # 设计文档、B站接口笔记、导入/归档格式、截图、示例文件
 ```
 
 ## 说明

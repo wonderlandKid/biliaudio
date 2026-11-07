@@ -5,8 +5,12 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveCodec
 import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
-import com.wonderlandkid.biliaudio.data.model.BatchImportReport
+import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportReport
+import com.wonderlandkid.biliaudio.data.model.ArchivePreview
 import com.wonderlandkid.biliaudio.data.model.BiliApiException
 import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
@@ -14,6 +18,7 @@ import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
+import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,7 +36,9 @@ import java.io.IOException
 /** 导入页的三个 Tab。 */
 enum class ImportTab(val label: String) {
     BV("BV 号导入"),
-    BATCH("批量导入"),
+
+    /** 「归档 / 批量导入」：归档 JSON（推荐）+ 兼容旧批量格式。 */
+    BATCH("归档导入"),
     SEARCH("搜索导入"),
 }
 
@@ -61,18 +68,45 @@ data class VideoImportState(
         get() = info != null && !isParsing && !isImporting && importedAlbumId == null
 }
 
+/**
+ * 「归档 / 批量导入」Tab 状态。
+ *
+ * 流程：输入文本 / 选择文件 → 选导入模式 → 解析预览（不写库，展示计划动作）
+ * → 开始导入 → 逐条结果报告。
+ */
+data class ArchiveImportState(
+    /** 导入模式，默认合并导入 */
+    val mode: ArchiveImportMode = ArchiveImportMode.MERGE,
+    /** 粘贴或从文件读取的归档文本 */
+    val text: String = "",
+    /** 从文件读取时的文件名（仅展示用） */
+    val fileName: String? = null,
+    val isReadingFile: Boolean = false,
+    val isPreviewing: Boolean = false,
+    /** 解析预览结果（不写库） */
+    val preview: ArchivePreview? = null,
+    val previewError: String? = null,
+    val isImporting: Boolean = false,
+    /** 导入结果报告 */
+    val report: ArchiveImportReport? = null,
+    val importError: String? = null,
+) {
+    /** 有内容且无进行中的任务才能解析预览 */
+    val canPreview: Boolean
+        get() = text.isNotBlank() && !isReadingFile && !isPreviewing && !isImporting
+
+    /** 必须先解析预览、确认计划动作后才能执行导入 */
+    val canImport: Boolean
+        get() = preview != null && !isPreviewing && !isImporting && previewError == null
+}
+
 /** 导入页整体 UI 状态。 */
 data class ImportUiState(
     val selectedTab: ImportTab = ImportTab.BV,
     // ---- BV 号导入 ----
     val bv: VideoImportState = VideoImportState(),
-    // ---- 批量导入 ----
-    val batchText: String = "",
-    val batchFileName: String? = null,
-    val isReadingFile: Boolean = false,
-    val isBatchImporting: Boolean = false,
-    val batchReport: BatchImportReport? = null,
-    val batchError: String? = null,
+    // ---- 归档 / 批量导入 ----
+    val archive: ArchiveImportState = ArchiveImportState(),
     // ---- 搜索导入 ----
     val searchQuery: String = "",
     val isSearching: Boolean = false,
@@ -87,7 +121,7 @@ data class ImportUiState(
 /**
  * 导入页 ViewModel：
  * - BV 号 / 视频链接 → [BiliRepository.previewVideo] 解析预览 → [AlbumRepository.importAlbum]；
- * - 批量文本 → [AlbumRepository.importBatchText]；
+ * - 归档 / 批量文本 → [LibraryArchiveRepository.preview] 预览 → [LibraryArchiveRepository.importArchive]；
  * - 关键词搜索 → [BiliRepository.searchVideos] → 预览 → 导入。
  *
  * 依赖从 [com.wonderlandkid.biliaudio.di.AppContainer] 注入（通过 appViewModel {}）。
@@ -95,6 +129,7 @@ data class ImportUiState(
 class ImportViewModel(
     private val albumRepository: AlbumRepository,
     private val biliRepository: BiliRepository,
+    private val libraryArchiveRepository: LibraryArchiveRepository,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -104,6 +139,15 @@ class ImportViewModel(
     /** 一次性提示（Snackbar 用），避免把瞬时事件塞进持久状态。 */
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    /**
+     * 最小分割点归档示例（由数据层 Codec 生成，保证与解析器完全一致）。
+     * 供「支持的格式」卡片展示，懒加载避免无谓构造。
+     */
+    val sampleSegmentJson: String by lazy {
+        runCatching { LibraryArchiveCodec().sampleSegmentJson() }
+            .getOrDefault("")
+    }
 
     // ------------------------------------------------------------------
     // Tab
@@ -234,21 +278,65 @@ class ImportViewModel(
     }
 
     // ------------------------------------------------------------------
-    // 批量导入
+    // 归档 / 批量导入
     // ------------------------------------------------------------------
 
-    fun updateBatchText(text: String) {
-        _uiState.update { it.copy(batchText = text, batchError = null) }
+    /** 切换导入模式；模式影响预览的计划动作，因此清空旧预览与报告。 */
+    fun setArchiveMode(mode: ArchiveImportMode) {
+        _uiState.update { state ->
+            if (state.archive.mode == mode) {
+                state
+            } else {
+                state.copy(
+                    archive = state.archive.copy(
+                        mode = mode,
+                        preview = null,
+                        previewError = null,
+                        report = null,
+                        importError = null,
+                    ),
+                )
+            }
+        }
     }
 
-    /** 读取用户通过 OpenDocument 选择的 txt/json 等文本文件。 */
-    fun loadBatchFile(uri: Uri) {
-        _uiState.update { it.copy(isReadingFile = true, batchError = null) }
+    /** 文本变化：清空旧预览/报告/文件名（内容已与预览不对应）。 */
+    fun updateArchiveText(text: String) {
+        _uiState.update { state ->
+            state.copy(
+                archive = state.archive.copy(
+                    text = text,
+                    fileName = null,
+                    preview = null,
+                    previewError = null,
+                    report = null,
+                    importError = null,
+                ),
+            )
+        }
+    }
+
+    /** 读取用户通过 OpenDocument 选择的归档文件（json/txt）。 */
+    fun loadArchiveFile(uri: Uri) {
+        _uiState.update {
+            it.copy(
+                archive = it.archive.copy(isReadingFile = true, previewError = null, importError = null),
+            )
+        }
         viewModelScope.launch {
             try {
-                val (fileName, text) = readBatchTextFile(uri)
+                val (fileName, text) = readTextFile(uri, MAX_ARCHIVE_FILE_BYTES)
                 _uiState.update {
-                    it.copy(isReadingFile = false, batchFileName = fileName, batchText = text)
+                    it.copy(
+                        archive = it.archive.copy(
+                            isReadingFile = false,
+                            fileName = fileName,
+                            text = text,
+                            preview = null,
+                            previewError = null,
+                            report = null,
+                        ),
+                    )
                 }
                 _messages.tryEmit("已读取文件：$fileName")
             } catch (ce: CancellationException) {
@@ -259,46 +347,113 @@ class ImportViewModel(
                     is SecurityException -> "没有文件访问权限"
                     else -> t.message?.takeIf { it.isNotBlank() } ?: "未知错误"
                 }
+                _uiState.update { it.copy(archive = it.archive.copy(isReadingFile = false)) }
+                _messages.tryEmit("读取文件失败：$reason")
+            }
+        }
+    }
+
+    /** 清空归档输入与结果（保留当前导入模式）。 */
+    fun clearArchive() {
+        _uiState.update {
+            it.copy(archive = ArchiveImportState(mode = it.archive.mode))
+        }
+    }
+
+    /** 解析归档文本并预览计划动作（不写库）。 */
+    fun previewArchive() {
+        val state = _uiState.value.archive
+        val text = state.text
+        if (text.isBlank()) {
+            _uiState.update {
+                it.copy(archive = it.archive.copy(previewError = "请先粘贴归档内容，或从文件读取"))
+            }
+            return
+        }
+        if (state.isPreviewing) return
+        _uiState.update {
+            it.copy(
+                archive = it.archive.copy(
+                    isPreviewing = true,
+                    preview = null,
+                    previewError = null,
+                    report = null,
+                    importError = null,
+                ),
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val preview = withContext(Dispatchers.IO) {
+                    libraryArchiveRepository.preview(text, state.mode)
+                }
                 _uiState.update {
-                    it.copy(isReadingFile = false, batchError = "读取文件失败：$reason")
+                    it.copy(archive = it.archive.copy(isPreviewing = false, preview = preview))
+                }
+                if (preview.parseErrors.isNotEmpty()) {
+                    _messages.tryEmit("预览完成：${preview.parseErrors.size} 条条目解析失败，详见下方列表")
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        archive = it.archive.copy(
+                            isPreviewing = false,
+                            previewError = archiveErrorMessage(t),
+                        ),
+                    )
                 }
             }
         }
     }
 
-    fun clearBatch() {
-        _uiState.update {
-            it.copy(
-                batchText = "",
-                batchFileName = null,
-                batchReport = null,
-                batchError = null,
-            )
-        }
-    }
-
-    /** 执行批量导入，结果（成功/失败原因）写入 batchReport。 */
-    fun runBatchImport() {
-        val text = _uiState.value.batchText.trim()
-        if (text.isEmpty()) {
-            _uiState.update { it.copy(batchError = "请先粘贴批量导入内容，或从文件读取") }
+    /** 按当前模式执行归档导入（REPLACE 的二次确认由 UI 在选模式时完成）。 */
+    fun importArchive() {
+        val state = _uiState.value.archive
+        if (state.text.isBlank()) {
+            _uiState.update {
+                it.copy(archive = it.archive.copy(importError = "请先粘贴归档内容，或从文件读取"))
+            }
             return
         }
-        if (_uiState.value.isBatchImporting) return
-        _uiState.update { it.copy(isBatchImporting = true, batchError = null, batchReport = null) }
+        if (state.preview == null) {
+            _uiState.update {
+                it.copy(archive = it.archive.copy(importError = "请先解析预览，确认导入计划后再开始导入"))
+            }
+            return
+        }
+        if (state.isImporting) return
+        _uiState.update {
+            it.copy(archive = it.archive.copy(isImporting = true, importError = null, report = null))
+        }
         viewModelScope.launch {
             try {
-                // 大文本解析可能耗时，切到 IO，避免卡主线程
-                val report = withContext(Dispatchers.IO) { albumRepository.importBatchText(text) }
-                _uiState.update { it.copy(isBatchImporting = false, batchReport = report) }
-                _messages.tryEmit(
-                    "批量导入完成：成功 ${report.successCount} 张，失败 ${report.failureCount} 条",
-                )
+                val report = withContext(Dispatchers.IO) {
+                    libraryArchiveRepository.importArchive(state.text, state.mode)
+                }
+                // 预览的计划动作已执行完毕，清空避免与报告混淆
+                _uiState.update {
+                    it.copy(
+                        archive = it.archive.copy(
+                            isImporting = false,
+                            report = report,
+                            preview = null,
+                            previewError = null,
+                        ),
+                    )
+                }
+                _messages.tryEmit(archiveReportSummary(report))
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
                 _uiState.update {
-                    it.copy(isBatchImporting = false, batchError = friendlyError(t))
+                    it.copy(
+                        archive = it.archive.copy(
+                            isImporting = false,
+                            importError = archiveErrorMessage(t),
+                        ),
+                    )
                 }
             }
         }
@@ -400,7 +555,6 @@ class ImportViewModel(
         updateSearchPreview { it.copy(isImporting = true, importError = null) }
         viewModelScope.launch {
             try {
-                // 防御性切 IO：即使实现层未自行切线程，也不会阻塞主线程
                 val result = withContext(Dispatchers.IO) {
                     albumRepository.importAlbum(
                         AlbumImportRequest(
@@ -457,10 +611,10 @@ class ImportViewModel(
     }
 
     /**
-     * 读取文本文件（限制 500 KB，UTF-8）。
+     * 读取文本文件（UTF-8，带体积上限）。
      * 返回 (文件名, 文本内容)；异常信息为中文，可直接展示。
      */
-    private suspend fun readBatchTextFile(uri: Uri): Pair<String, String> =
+    private suspend fun readTextFile(uri: Uri, maxBytes: Int): Pair<String, String> =
         withContext(Dispatchers.IO) {
             val resolver = appContext.contentResolver
             val displayName = runCatching {
@@ -476,8 +630,8 @@ class ImportViewModel(
                     val read = input.read(buffer)
                     if (read < 0) break
                     total += read
-                    if (total > MAX_BATCH_FILE_BYTES) {
-                        throw IOException("文件超过 500 KB 限制")
+                    if (total > maxBytes) {
+                        throw IOException("文件过大（超过 ${maxBytes / 1024 / 1024} MB）")
                     }
                     output.write(buffer, 0, read)
                 }
@@ -490,6 +644,8 @@ class ImportViewModel(
 
     /** 把底层异常转换为用户可读的中文提示。 */
     private fun friendlyError(t: Throwable): String = when (t) {
+        is ArchiveFormatException -> t.message?.takeIf { it.isNotBlank() } ?: "归档文件格式不正确"
+
         is BiliApiException -> t.message?.takeIf { it.isNotBlank() }
             ?: "B 站接口错误${t.code?.let { "（code $it）" } ?: ""}"
 
@@ -498,7 +654,31 @@ class ImportViewModel(
         else -> t.message?.takeIf { it.isNotBlank() } ?: "操作失败，请稍后重试"
     }
 
+    /** 归档预览/导入的异常提示（ArchiveFormatException 的 message 可直接展示）。 */
+    private fun archiveErrorMessage(t: Throwable): String = when (t) {
+        is ArchiveFormatException -> t.message?.takeIf { it.isNotBlank() } ?: "归档文件格式不正确"
+        else -> friendlyError(t)
+    }
+
+    /** 归档导入完成后的 Snackbar 摘要。 */
+    private fun archiveReportSummary(report: ArchiveImportReport): String {
+        val base = buildString {
+            append("归档导入完成：")
+            append("新建 ${report.createdCount}")
+            append(" / 更新 ${report.updatedCount}")
+            append(" / 分曲更新 ${report.segmentsUpdatedCount}")
+            append(" / 跳过 ${report.skippedCount}")
+            append(" / 失败 ${report.failedCount}")
+        }
+        return if (report.mode == ArchiveImportMode.REPLACE) {
+            if (report.backupFilePath != null) "$base（覆盖前已自动备份）" else "$base（自动备份失败，请谨慎操作）"
+        } else {
+            base
+        }
+    }
+
     private companion object {
-        const val MAX_BATCH_FILE_BYTES = 500 * 1024
+        /** 归档文件大小上限：比 Codec 的 5 MB 校验略宽，让 Codec 给出更准确的提示。 */
+        const val MAX_ARCHIVE_FILE_BYTES = 8 * 1024 * 1024
     }
 }

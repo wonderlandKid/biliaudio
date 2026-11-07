@@ -5,6 +5,8 @@ object Routes {
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val IMPORT = "import"
+    /** 导入页的「归档 / 批量导入」Tab（从备份恢复入口进入） */
+    const val IMPORT_ARCHIVE = "import_archive"
     const val LOGIN = "login"
     const val PLAYER = "player"
     const val VIDEO = "video"

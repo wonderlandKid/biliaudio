@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.imports
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,13 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,14 +41,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.wonderlandkid.biliaudio.data.model.BatchImportReport
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
+import com.wonderlandkid.biliaudio.data.model.ArchiveImportReport
+import com.wonderlandkid.biliaudio.data.model.ArchiveItemAction
+import com.wonderlandkid.biliaudio.data.model.ArchiveItemResult
+import com.wonderlandkid.biliaudio.data.model.ArchiveParseError
+import com.wonderlandkid.biliaudio.data.model.ArchivePreview
+import com.wonderlandkid.biliaudio.data.model.ArchivePreviewItem
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
-import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -58,7 +66,7 @@ import java.util.Locale
 // 通用小部件
 // ---------------------------------------------------------------------------
 
-/** 圆角信息胶囊（时长 / 分 P 数 / BV 号）。 */
+/** 圆角信息胶囊（时长 / 分 P 数 / BV 号 / 统计）。 */
 @Composable
 fun InfoPill(
     text: String,
@@ -80,7 +88,7 @@ fun InfoPill(
     }
 }
 
-/** 加载态卡片（解析/搜索/导入中）。 */
+/** 加载态卡片（解析/预览/导入中）。 */
 @Composable
 fun ImportLoadingCard(
     text: String,
@@ -158,6 +166,37 @@ fun ImportErrorCard(
                     Text("重试")
                 }
             }
+        }
+    }
+}
+
+/** 示例代码块：小号等宽字体 + 横向滚动，避免中文/字段被软换行拆碎。 */
+@Composable
+fun CodeBlock(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        ) {
+            Text(
+                text = text,
+                modifier = Modifier.padding(Spacing.md),
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                ),
+                softWrap = false,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -377,19 +416,128 @@ private fun ImportSuccessPanel(
 }
 
 // ---------------------------------------------------------------------------
-// 批量导入：格式说明 + 结果列表
+// 归档 / 批量导入：模式选择 / 格式说明 / 预览 / 结果
 // ---------------------------------------------------------------------------
 
-private enum class BatchFormatExample(val label: String) {
-    JSON("JSON 数组"),
-    CSV("CSV"),
-    TEXT("文本块"),
+/** 导入模式文案。 */
+fun archiveModeLabel(mode: ArchiveImportMode): String = when (mode) {
+    ArchiveImportMode.MERGE -> "合并导入"
+    ArchiveImportMode.SEGMENTS_ONLY -> "仅更新分割点"
+    ArchiveImportMode.REPLACE -> "覆盖全库"
 }
 
-/** 批量导入格式说明卡片（文案与 docs/IMPORT_FORMATS.md 保持一致）。 */
+private fun archiveModeDescription(mode: ArchiveImportMode): String = when (mode) {
+    ArchiveImportMode.MERGE ->
+        "按 BV 号 + 分 P 匹配：不存在则新建，已存在则更新元信息与分曲（保留播放次数）。"
+
+    ArchiveImportMode.SEGMENTS_ONLY ->
+        "只替换已存在专辑的分曲时间点；不新建专辑，也不修改标题/艺术家等元信息。"
+
+    ArchiveImportMode.REPLACE ->
+        "先自动备份当前音乐库，再清空本地库并导入此文件；操作不可撤销，请谨慎选择。"
+}
+
+/** 导入模式单选（胶囊分段按钮 + 危险项样式）。 */
 @Composable
-fun BatchFormatGuide(modifier: Modifier = Modifier) {
-    var selected by remember { mutableStateOf(BatchFormatExample.JSON) }
+fun ArchiveModeSelector(
+    mode: ArchiveImportMode,
+    onSelect: (ArchiveImportMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Dimens.cardCorner),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Text(text = "导入模式", style = MaterialTheme.typography.titleMedium)
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    ArchiveImportMode.entries.forEach { candidate ->
+                        val selected = candidate == mode
+                        val isDanger = candidate == ArchiveImportMode.REPLACE
+                        val container = when {
+                            selected && isDanger -> MaterialTheme.colorScheme.errorContainer
+                            selected -> MaterialTheme.colorScheme.surface
+                            else -> Color.Transparent
+                        }
+                        val content = when {
+                            selected && isDanger -> MaterialTheme.colorScheme.error
+                            selected -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(50))
+                                .background(container)
+                                .clickable { onSelect(candidate) }
+                                .padding(horizontal = Spacing.xs, vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = archiveModeLabel(candidate),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = content,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+            Text(
+                text = archiveModeDescription(mode),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (mode == ArchiveImportMode.REPLACE) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = "覆盖前会自动备份当前音乐库到应用私有目录；如需保留数据，建议先「导出音乐库」。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 「支持的格式」卡片：
+ * 主推归档 JSON（核心字段 + 最小分割点示例，示例由数据层 Codec 生成），
+ * 旧 JSON 数组 / CSV / 文本块折叠在「兼容旧格式」里。
+ */
+@Composable
+fun ArchiveFormatGuide(
+    sampleSegmentJson: String,
+    modifier: Modifier = Modifier,
+) {
+    var showSample by remember { mutableStateOf(false) }
+    var showLegacy by remember { mutableStateOf(false) }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Dimens.cardCorner),
@@ -401,195 +549,276 @@ fun BatchFormatGuide(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
+            Text(text = "支持的格式", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "支持的格式",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "自动识别 JSON 数组 / CSV / 文本块，按 BV 号解析视频；" +
-                    "已存在同一 BV 的专辑会覆盖更新（保留播放次数）。",
+                text = "推荐归档 JSON（*.biliaudio.json）：一个文件承载「专辑 + 分曲时间点」，" +
+                    "可做整库备份、单张专辑分享、评论区分割点文件；导入时自动识别格式。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                BatchFormatExample.entries.forEach { format ->
-                    FilterChip(
-                        selected = format == selected,
-                        onClick = { selected = format },
-                        label = { Text(format.label) },
-                        shape = RoundedCornerShape(50),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                        ),
-                    )
+            Text(
+                text = "核心字段：format=\"biliaudio-library\"、version、albums[]" +
+                    "（每项 bvid 或 url、page、title / artist 可选、segments[]）。" +
+                    "分曲时间点二选一：startMs（毫秒整数）或 start（00:00 / 00:45 / 01:02:03.500）。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                TextButton(onClick = { showSample = !showSample }) {
+                    Text(if (showSample) "收起示例" else "查看最小分割点示例")
+                }
+                TextButton(onClick = { showLegacy = !showLegacy }) {
+                    Text(if (showLegacy) "收起旧格式" else "兼容旧格式")
                 }
             }
-            // 示例代码块：小号等宽字体 + 横向滚动，避免中文/字段被软换行拆碎
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                ) {
+            if (showSample) {
+                CodeBlock(text = sampleSegmentJson.ifBlank { "（示例生成失败，请参考 docs/LIBRARY_ARCHIVE.md）" })
+            }
+            if (showLegacy) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
-                        text = when (selected) {
-                            BatchFormatExample.JSON -> JSON_EXAMPLE
-                            BatchFormatExample.CSV -> CSV_EXAMPLE
-                            BatchFormatExample.TEXT -> TEXT_EXAMPLE
-                        },
-                        modifier = Modifier.padding(Spacing.md),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp,
-                        ),
-                        softWrap = false,
+                        text = "旧「快捷导入」格式仍可粘贴或选择文件，系统自动识别为 legacy-batch：",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    CodeBlock(
+                        text = "JSON 数组：[{\"bvid\":\"BV1GJ411x7h7\",\"title\":\"专辑名\"," +
+                            "\"segments\":[{\"start\":\"00:00\",\"name\":\"曲目一\"}]}]\n" +
+                            "CSV：每行 BV号,专辑名,艺术家,时间点,歌名（同一 BV 多行自动合并）\n" +
+                            "文本块：第一行「BV号 专辑名」，后续缩进行「mm:ss 歌名」，空行分隔专辑",
+                    )
                 }
             }
+        }
+    }
+}
+
+/** 预览卡片头：识别格式、专辑数、分曲数、是否含设置。 */
+@Composable
+fun ArchivePreviewCard(
+    preview: ArchivePreview,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Dimens.cardCorner),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = "解析预览",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                InfoPill(
+                    text = when (preview.recognizedAs) {
+                        "biliaudio-library" -> "归档格式 v1"
+                        "legacy-batch" -> "兼容旧格式"
+                        else -> preview.recognizedAs
+                    },
+                )
+            }
             Text(
-                text = when (selected) {
-                    BatchFormatExample.JSON ->
-                        "JSON：每个数组项一张专辑；title / artist 可省略（默认取视频标题与 UP 主）；" +
-                            "segments 可省略（整段视频作为一首歌）；多 P 自动分曲即将支持（当前版本按整段视频导入）；" +
-                            "也支持用 \"url\" 代替 \"bvid\"。"
+                text = "以下为计划动作，尚未写入数据库；确认无误后点「开始导入」。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                InfoPill("专辑 ${preview.albumCount}")
+                InfoPill("分曲 ${preview.trackCount}")
+                InfoPill(if (preview.hasSettings) "含设置" else "无设置")
+            }
+        }
+    }
+}
 
-                    BatchFormatExample.CSV ->
-                        "CSV：每行一首歌，固定 5 列「BV号,专辑名,艺术家,时间点,歌名」；" +
-                            "专辑名 / 艺术家可留空，同一 BV 的多行会自动合并成一张专辑；" +
-                            "首行是表头（含 bvid / BV）时自动跳过。"
-
-                    BatchFormatExample.TEXT ->
-                        "文本块：以 BV 号 / av 号 / 链接开头且不缩进的行开始一张新专辑，行尾可跟专辑名；" +
-                            "其后缩进行为分曲「时间点 歌名」；专辑之间用空行分隔。"
+/** 单条预览项：标题 / BV 号 / 分曲数 / 计划动作徽章 / note。 */
+@Composable
+fun ArchivePreviewItemRow(
+    item: ArchivePreviewItem,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md - 2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = item.title.ifBlank { item.bvid.ifBlank { "（未识别条目）" } },
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                ArchiveActionBadge(item.plannedAction)
+            }
+            Text(
+                text = buildString {
+                    if (item.bvid.isNotBlank()) append(item.bvid)
+                    if (item.page > 1) {
+                        if (isNotEmpty()) append(" · ")
+                        append("第 ${item.page} 页")
+                    }
+                    if (isNotEmpty()) append(" · ")
+                    append("${item.segmentCount} 个分曲")
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = "时间点支持：秒数（83）、mm:ss（01:23）、mm:ss.SSS（01:23.500）、hh:mm:ss（1:02:03）。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
+            if (!item.note.isNullOrBlank()) {
+                Text(
+                    text = item.note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
     }
 }
 
-private const val JSON_EXAMPLE = """[
-  {
-    "bvid": "BV1GJ411x7h7",
-    "title": "专辑名（可选）",
-    "artist": "艺术家（可选）",
-    "segments": [
-      { "start": "00:00",
-        "name": "曲目一" },
-      { "start": "03:21",
-        "name": "曲目二" },
-      { "start": "07:45.500",
-        "name": "曲目三" }
-    ]
-  }
-]"""
-
-private const val CSV_EXAMPLE = """BV1GJ411x7h7,专辑名,艺术家,00:00,曲目一
-BV1GJ411x7h7,专辑名,艺术家,03:21,曲目二
-BV1uv411q7Mv,另一张专辑,,00:00,第一首"""
-
-private const val TEXT_EXAMPLE = """BV1GJ411x7h7 专辑名
-  00:00 曲目一
-  03:21 曲目二
-
-BV1uv411q7Mv 另一张专辑
-  00:00 第一首"""
-
-/** 批量导入结果列表：顶部成功/失败统计卡片 + 每条结果（成功专辑名·曲目数 / 失败输入+原因）。 */
+/** 导入结果卡片头：模式 + 统计（新建/更新/分曲更新/跳过/失败）+ 覆盖模式自动备份路径。 */
 @Composable
-fun BatchResultSection(
-    report: BatchImportReport,
+fun ArchiveImportReportCard(
+    report: ArchiveImportReport,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Card(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        shape = RoundedCornerShape(Dimens.cardCorner),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
     ) {
-        // ---- 统计 ----
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        Column(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BatchStat(label = "成功", value = report.successCount, isError = false)
-                Spacer(Modifier.width(Spacing.xl))
-                BatchStat(label = "失败", value = report.failureCount, isError = true)
-                Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(Spacing.sm))
                 Text(
-                    text = "共 ${report.results.size} 条",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "导入完成",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
                 )
+                InfoPill(archiveModeLabel(report.mode))
             }
-        }
-        // ---- 明细 ----
-        report.results.forEach { result ->
-            when (result) {
-                is ImportResult.Success -> BatchResultRow(
-                    title = result.albumTitle,
-                    subtitle = "已导入 · ${result.trackCount} 首",
-                    isError = false,
+            // 统计
+            Row(modifier = Modifier.fillMaxWidth()) {
+                ArchiveStatColumn("新建", report.createdCount, MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+                ArchiveStatColumn("更新", report.updatedCount, MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
+                ArchiveStatColumn(
+                    "分曲更新",
+                    report.segmentsUpdatedCount,
+                    MaterialTheme.colorScheme.secondary,
+                    Modifier.weight(1f),
                 )
-
-                is ImportResult.Failure -> BatchResultRow(
-                    title = result.input.ifBlank { "（未识别条目）" },
-                    subtitle = result.message,
-                    isError = true,
+                ArchiveStatColumn(
+                    "跳过",
+                    report.skippedCount,
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    Modifier.weight(1f),
                 )
+                ArchiveStatColumn("失败", report.failedCount, MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            }
+            // 覆盖全库：自动备份路径提示
+            if (report.mode == ArchiveImportMode.REPLACE) {
+                val backupPath = report.backupFilePath
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (backupPath != null) {
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                    } else {
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                    },
+                ) {
+                    Column(
+                        modifier = Modifier.padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
+                    ) {
+                        Text(
+                            text = if (backupPath != null) {
+                                "覆盖前已自动备份当前音乐库"
+                            } else {
+                                "覆盖前自动备份失败"
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                            color = if (backupPath != null) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            },
+                        )
+                        if (backupPath != null) {
+                            Text(
+                                text = backupPath,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "如需回滚，可在「归档导入」里选择该备份文件并使用「覆盖全库」恢复。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                            )
+                        } else {
+                            Text(
+                                text = "未能创建自动备份（可能没有存储空间）。若未手动导出备份，请勿继续依赖旧数据。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+/** 单条导入结果行：动作徽章 + 专辑信息 + 中文原因。 */
 @Composable
-private fun BatchStat(label: String, value: Int, isError: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Black,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(Spacing.xs))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun BatchResultRow(
-    title: String,
-    subtitle: String,
-    isError: Boolean,
+fun ArchiveItemResultRow(
+    result: ArchiveItemResult,
+    modifier: Modifier = Modifier,
 ) {
+    val isFailed = result.action == ArchiveItemAction.FAILED
+    val isSkipped = result.action == ArchiveItemAction.SKIPPED
+    val container = when {
+        isFailed -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+        isSkipped -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+    }
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = if (isError) {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-        } else {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-        },
+        color = container,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md),
@@ -597,12 +826,16 @@ private fun BatchResultRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Icon(
-                imageVector = if (isError) Icons.Rounded.ErrorOutline else Icons.Rounded.CheckCircle,
+                imageVector = when {
+                    isFailed -> Icons.Rounded.ErrorOutline
+                    isSkipped -> Icons.Rounded.Info
+                    else -> Icons.Rounded.CheckCircle
+                },
                 contentDescription = null,
-                tint = if (isError) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
+                tint = when {
+                    isFailed -> MaterialTheme.colorScheme.error
+                    isSkipped -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.primary
                 },
                 modifier = Modifier
                     .padding(top = 1.dp)
@@ -610,24 +843,165 @@ private fun BatchResultRow(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = result.title.ifBlank { result.bvid },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    ArchiveActionBadge(result.action)
+                    Text(
+                        text = buildString {
+                            if (result.bvid.isNotBlank()) append(result.bvid)
+                            if (result.page > 1) {
+                                if (isNotEmpty()) append(" · ")
+                                append("第 ${result.page} 页")
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (!result.message.isNullOrBlank()) {
+                    Text(
+                        text = result.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isFailed) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 解析错误行（旧格式中无法识别的单条条目）。 */
+@Composable
+fun ArchiveParseErrorRow(
+    error: ArchiveParseError,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .padding(top = 1.dp)
+                    .size(16.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isError) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 2,
+                    text = error.source.ifBlank { "未知条目" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = error.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
         }
+    }
+}
+
+/** 计划动作 / 导入结果徽章。 */
+@Composable
+fun ArchiveActionBadge(
+    action: ArchiveItemAction,
+    modifier: Modifier = Modifier,
+) {
+    val (label, container, content) = when (action) {
+        ArchiveItemAction.CREATED -> Triple(
+            "新建",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+
+        ArchiveItemAction.UPDATED -> Triple(
+            "更新",
+            MaterialTheme.colorScheme.tertiaryContainer,
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+
+        ArchiveItemAction.SEGMENTS_UPDATED -> Triple(
+            "仅更新分曲",
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+
+        ArchiveItemAction.SKIPPED -> Triple(
+            "跳过",
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        ArchiveItemAction.FAILED -> Triple(
+            "失败",
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(50),
+        color = container,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = content,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun ArchiveStatColumn(
+    label: String,
+    value: Int,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Black,
+            color = color,
+            maxLines = 1,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 
@@ -717,7 +1091,7 @@ fun formatPlayCount(count: Int): String = when {
 private fun trimTrailingZero(value: Double): String =
     String.format(Locale.US, "%.1f", value).removeSuffix(".0")
 
-// 供 LazyColumn 使用的小工具（避免 import 顺序问题，集中导出 padding）。
+// 供 LazyColumn 使用的小工具（集中导出 padding）。
 internal val ImportListPadding = PaddingValues(
     start = Spacing.lg,
     end = Spacing.lg,

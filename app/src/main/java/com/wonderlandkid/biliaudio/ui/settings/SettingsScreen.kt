@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -56,6 +61,9 @@ import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 设置页（底部导航 Tab）：
@@ -65,26 +73,42 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
  * - 关于：版本号（BuildConfig.VERSION_NAME）、应用说明、B 站内容版权说明。
  *
  * @param onOpenLogin 未登录时点击「去登录」的回调（由导航层打开扫码登录页）
+ * @param onOpenBackupImport 点击「导入 / 恢复」的回调（由导航层打开导入页的「归档导入」Tab）
  */
 @Composable
 fun SettingsScreen(
     onOpenLogin: () -> Unit,
+    onOpenBackupImport: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel: SettingsViewModel = appViewModel { container ->
         SettingsViewModel(
             settingsRepository = container.settingsRepository,
             authRepository = container.authRepository,
+            libraryArchiveRepository = container.libraryArchiveRepository,
+            appContext = container.appContext,
         )
     }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
+    val lastAutoBackupAt by viewModel.lastAutoBackupAt.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    // 导出音乐库：SAF 选择保存位置（默认文件名带时间戳）
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) viewModel.exportLibrary(uri)
+    }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { message -> snackbarHostState.showSnackbar(message) }
+    }
+    // 从导入页返回时可能刚产生自动备份，重新读取一次
+    LaunchedEffect(Unit) {
+        viewModel.refreshLastAutoBackup()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -125,6 +149,15 @@ fun SettingsScreen(
                 DarkThemeCard(
                     darkTheme = settings.darkTheme,
                     onSelect = viewModel::setDarkTheme,
+                )
+            }
+            item { SectionTitle("备份与恢复") }
+            item {
+                BackupRestoreCard(
+                    isExporting = isExporting,
+                    lastAutoBackupAt = lastAutoBackupAt,
+                    onExportClick = { exportLauncher.launch(defaultBackupFileName()) },
+                    onImportClick = onOpenBackupImport,
                 )
             }
             item { SectionTitle("关于") }
@@ -485,3 +518,134 @@ private fun AboutCard() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// 备份与恢复
+// ---------------------------------------------------------------------------
+
+/** 备份与恢复卡片：导出音乐库 / 导入恢复 / 上次自动备份时间。 */
+@Composable
+private fun BackupRestoreCard(
+    isExporting: Boolean,
+    lastAutoBackupAt: Long?,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
+) {
+    SettingsCard {
+        // ---- 导出音乐库 ----
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.FileDownload,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "导出音乐库", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "导出全部专辑与分曲时间点为 JSON 备份文件",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+            Button(
+                onClick = onExportClick,
+                enabled = !isExporting,
+                shape = RoundedCornerShape(50),
+                contentPadding = PaddingValues(horizontal = Spacing.md),
+            ) {
+                if (isExporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("导出中")
+                } else {
+                    Text("导出")
+                }
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        // ---- 导入 / 恢复 ----
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.FileUpload,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "导入 / 恢复", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "从备份文件恢复，或导入分享的专辑 / 分割点文件",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+            OutlinedButton(
+                onClick = onImportClick,
+                shape = RoundedCornerShape(50),
+                contentPadding = PaddingValues(horizontal = Spacing.md),
+            ) {
+                Text("导入")
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        // ---- 上次自动备份 ----
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "上次自动备份",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = lastAutoBackupAt?.let { formatBackupTime(it) } ?: "暂无自动备份",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        Text(
+            text = "「覆盖全库」导入前会自动备份当前音乐库，自动备份保留最近 10 份。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(bottom = Spacing.sm),
+        )
+    }
+}
+
+/** 默认导出文件名：biliaudio-library-yyyyMMdd-HHmm.json */
+private fun defaultBackupFileName(): String =
+    "biliaudio-library-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())}.json"
+
+/** 自动备份时间展示：yyyy-MM-dd HH:mm */
+private fun formatBackupTime(timestamp: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
