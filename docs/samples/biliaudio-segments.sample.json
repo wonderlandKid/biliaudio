@@ -1,0 +1,15 @@
+{
+  "format": "biliaudio-library",
+  "version": 1,
+  "albums": [
+    {
+      "bvid": "BV1GJ411x7h7",
+      "page": 1,
+      "segments": [
+        { "start": "00:00", "name": "Never Gonna Give You Up" },
+        { "start": "00:45", "name": "Whenever You Need Somebody" },
+        { "start": "02:00", "name": "Together Forever" }
+      ]
+    }
+  ]
+}
