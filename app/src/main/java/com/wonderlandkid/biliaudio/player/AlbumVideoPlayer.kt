@@ -95,6 +95,7 @@ class AlbumVideoPlayer(
     private var currentVideoHost: String? = null
 
     private var bufferingLogged = false
+    private var rebufferLogged = false
     private var readyLogged = false
     private var firstFrameLogged = false
     private var playingLogged = false
@@ -109,6 +110,7 @@ class AlbumVideoPlayer(
         resolveElapsedMs = 0L
         currentVideoHost = null
         bufferingLogged = false
+        rebufferLogged = false
         readyLogged = false
         firstFrameLogged = false
         playingLogged = false
@@ -280,6 +282,10 @@ class AlbumVideoPlayer(
                             TAG,
                             "BUFFERING after ${elapsedMs}ms (resolve=${resolveElapsedMs}ms host=$currentVideoHost)",
                         )
+                    } else if (readyLogged && !rebufferLogged) {
+                        // READY 之后又进入缓冲：这是「封面/缓冲提示再闪一次」的直接原因，记录一次便于定位
+                        rebufferLogged = true
+                        Diag.log(TAG, "BUFFERING again after READY (re-buffer) at ${elapsedMs}ms")
                     }
                     _state.update {
                         if (it.albumId != null && it.phase != VideoPhase.ERROR) {

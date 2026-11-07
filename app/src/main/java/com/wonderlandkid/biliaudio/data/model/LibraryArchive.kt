@@ -61,6 +61,8 @@ data class ArchiveAlbum(
     val title: String? = null,
     val artist: String? = null,
     val coverUrl: String? = null,
+    /** 内嵌自定义封面（JPEG base64；用于备份/分享后恢复本地封面，可选） */
+    val coverBase64: String? = null,
     val durationMs: Long? = null,
     val createdAt: Long? = null,
     val lastPlayedAt: Long? = null,

@@ -58,8 +58,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.player.PlaybackState
 import com.wonderlandkid.biliaudio.player.RepeatMode
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
-import com.wonderlandkid.biliaudio.ui.components.SquareCover
+import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -252,8 +253,9 @@ private fun NowPlayingBody(
             contentAlignment = Alignment.Center,
         ) {
             val coverSize = minOf(maxWidth * 0.82f, maxHeight)
-            SquareCover(
-                url = entry?.coverUrl,
+            // 封面优先用本机自定义封面（coverLocalPath），否则回退 B 站远程图
+            CoverImage(
+                url = entry?.coverModel(),
                 modifier = Modifier.size(coverSize),
                 cornerRadius = 22.dp,
             )

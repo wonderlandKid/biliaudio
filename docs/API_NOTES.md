@@ -138,3 +138,18 @@ GET https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video&k
 - 搜索接口返回 title 含 HTML 标签与实体（`&amp;` 等），需清洗。
 - 用户上传内容可能被 UP 主删除/设为私密 → view/playurl 返回非 0 code，导入和播放都要给明确错误提示（如 "视频不存在或已失效"）。
 - 请求过快可能触发风控（412 / -352），给接口加统一 1 次重试 + 限速（如 300ms 间隔）即可。
+
+## 网易云音乐封面搜索（自定义封面用，非 B 站接口）
+
+参考 `~/Music/pipeline/lib/netease.py` 的可用端点；v0.5.0 实测可用，均为**非官方接口**：
+
+| 用途 | 请求 |
+| --- | --- |
+| 搜索专辑 | `GET https://music.163.com/api/search/get?s=<关键词>&type=10&limit=20` |
+| 专辑详情（备用） | `GET https://interface3.music.163.com/api/v1/album/<albumId>` |
+| 图片 | 搜索结果 `picUrl` 直接 GET（`http` 升级为 `https`；可加 `?param=300y300` 取缩略图） |
+
+- 请求头：桌面 UA + `Referer: https://music.163.com` 即可，无需登录/Cookie/签名。
+- 搜索响应：`result.albums[]`，字段 `id / name / picUrl / artists[].name`。
+- 注意：接口没有稳定性承诺；失败时 App 静默降级为空结果（只影响在线搜封面）；
+  不要下载超大图（App 限制 8MB，保存时长边缩到 ≤1080 再 JPEG 压缩）。

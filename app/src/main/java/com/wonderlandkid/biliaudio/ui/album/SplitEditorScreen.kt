@@ -64,6 +64,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
+import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.SectionHeader
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -293,7 +294,8 @@ private fun AlbumSummaryCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             CoverImage(
-                url = album.coverUrl,
+                // 支持用户自定义本地封面（album.coverModel() 优先本地 File，回退 B 站 URL）
+                url = album.coverModel(),
                 modifier = Modifier.size(56.dp),
                 cornerRadius = 14.dp,
             )

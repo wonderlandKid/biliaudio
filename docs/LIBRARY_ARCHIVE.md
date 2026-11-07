@@ -54,6 +54,11 @@
 }
 ```
 
+> 自定义封面（v0.5.0）：专辑设置了「自定义封面」时，导出会在对应 `albums[]` 里额外带
+> `"coverBase64": "<JPEG 的 base64（无换行）>"`；导入时解码并保存为本地封面文件、写入专辑
+> `coverLocalPath`。原专辑没有自定义封面（就用 B 站 `coverUrl`）时该字段不出现；
+> 单张封面原始字节超过 2 MB 时导出会省略，避免备份文件过大。
+
 ### 2.2 单张专辑文件
 
 同一结构，`albums` 只含一项。手动编写时可省略所有可选字段：
@@ -98,7 +103,8 @@
 | `albums[].cid` | ❌ | 视频流 id，导入时可从 B 站重新解析，不信任文件值 |
 | `albums[].title` | 新建时❌* | 省略则用 B 站视频标题 |
 | `albums[].artist` | 新建时❌* | 省略则用 UP 主名 |
-| `albums[].coverUrl` | ❌ | 省略则用视频封面；仅接受 http/https |
+| `albums[].coverUrl` | ❌ | 省略则用视频封面；仅接受 http/https（B 站远程封面） |
+| `albums[].coverBase64` | ❌ | 自定义封面（JPEG base64，无换行，原始字节 ≤2 MB）；导入时解码保存为本地封面，非法/空值忽略且不影响其他字段；导出时仅当专辑有自定义封面才写入 |
 | `albums[].durationMs` | 新建时❌* | 省略则用 view 接口时长 |
 | `albums[].createdAt/lastPlayedAt/playCount` | ❌ | 用户数据，恢复时尽量保留 |
 | `albums[].segments[]` | ❌ | 为空 = 未分割（整段按一首虚拟播放）；最多 500 条 |
@@ -113,13 +119,15 @@
 - 分曲 `startMs` 严格递增且 < `durationMs`；越界/重复直接报错并指出第几项。
 - `bvid` 必须匹配 `^BV[0-9A-Za-z]{10}$`（或合法 `av`/链接经解析后符合）。
 - 标题长度 ≤ 200；URL 仅 http/https。
+- `coverBase64` 不参与必填校验：空白/非法 base64 会被忽略（该专辑仍正常导入，只是封面回退到 `coverUrl`）；
+  仅当专辑有自定义封面时才会导出，且原始图片字节 >2 MB 不写入（`MAX_INLINE_COVER_BYTES`）。
 - 导入全程在 IO 线程；批量请求 B 站时串行 + 限速（复用现有 BiliApi 节流）。
 
 ## 3. 导入语义（三种模式）
 
 | 模式 | 适用场景 | 行为 |
 | --- | --- | --- |
-| **合并导入**（默认） | 整库备份恢复、日常导入 | `bvid+page` 匹配：不存在 → 新建；存在 → 更新元数据与分曲；可选保留 `playCount/lastPlayedAt`（默认保留较大值） |
+| **合并导入**（默认） | 整库备份恢复、日常导入 | `bvid+page` 匹配：不存在 → 新建；存在 → 更新元数据与分曲（含 `coverBase64` 自定义封面）；可选保留 `playCount/lastPlayedAt`（默认保留较大值） |
 | **仅更新分割点** | 评论区分割点文件 | 只替换已存在专辑的 `segments`，不新建、不改元数据；匹配不到 → 跳过并报告 |
 | **覆盖全库** | 迁移/回滚到备份 | 清空本地库后导入（**先自动导出当前库到私有目录作为回滚点**，UI 二次确认） |
 
@@ -233,6 +241,7 @@
           "title": { "type": "string", "maxLength": 200 },
           "artist": { "type": "string", "maxLength": 200 },
           "coverUrl": { "type": "string", "pattern": "^https?://" },
+          "coverBase64": { "type": "string", "contentEncoding": "base64" },
           "durationMs": { "type": "integer", "minimum": 1 },
           "createdAt": { "type": "integer" },
           "lastPlayedAt": { "type": "integer" },

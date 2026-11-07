@@ -72,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.CoverPickerSheet
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.SearchField
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
@@ -102,6 +103,7 @@ fun ImportScreen(
             albumRepository = container.albumRepository,
             biliRepository = container.biliRepository,
             libraryArchiveRepository = container.libraryArchiveRepository,
+            albumCoverRepository = container.albumCoverRepository,
             appContext = container.appContext,
         )
     }
@@ -110,6 +112,8 @@ fun ImportScreen(
     val focusManager = LocalFocusManager.current
     // 「覆盖全库」模式的二次确认弹窗
     var showReplaceConfirm by remember { mutableStateOf(false) }
+    // 封面选择弹层当前服务于哪个预览（null = 关闭）
+    var coverPickerTarget by remember { mutableStateOf<CoverPickerTarget?>(null) }
 
     // 初始 Tab（Routes.SEARCH 复用本页时直接落在搜索 Tab）
     LaunchedEffect(initialTab) { viewModel.selectTab(initialTab) }
@@ -160,6 +164,7 @@ fun ImportScreen(
                         onAlbumTitleChange = viewModel::updateBvAlbumTitle,
                         onArtistChange = viewModel::updateBvArtist,
                         onSplitTextChange = viewModel::updateBvSplitText,
+                        onChangeCover = { coverPickerTarget = CoverPickerTarget.BV },
                         onImport = viewModel::importBv,
                         onOpenAlbum = onImported,
                         onReset = viewModel::resetBvImport,
@@ -239,6 +244,7 @@ fun ImportScreen(
                         onAlbumTitleChange = viewModel::updateSearchPreviewTitle,
                         onArtistChange = viewModel::updateSearchPreviewArtist,
                         onSplitTextChange = viewModel::updateSearchPreviewSplitText,
+                        onChangeCover = { coverPickerTarget = CoverPickerTarget.SEARCH },
                         onImport = viewModel::importSearchPreview,
                         onOpenAlbum = { albumId ->
                             viewModel.dismissSearchPreview()
@@ -251,6 +257,34 @@ fun ImportScreen(
                     else -> Unit
                 }
             }
+        }
+    }
+
+    // 封面选择弹层（共享组件 CoverPickerSheet）：BV 预览 / 搜索预览共用
+    val coverTarget = coverPickerTarget
+    if (coverTarget != null) {
+        val videoState = when (coverTarget) {
+            CoverPickerTarget.BV -> state.bv
+            CoverPickerTarget.SEARCH -> state.searchPreview
+        }
+        if (videoState != null && videoState.info != null) {
+            CoverPickerSheet(
+                visible = true,
+                title = "更换专辑封面",
+                defaultQuery = listOf(videoState.albumTitle, videoState.artist)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" "),
+                currentCoverModel = videoState.pendingCoverModel,
+                allowRestoreBilibili = false,
+                onDismiss = { coverPickerTarget = null },
+                onPick = { pick ->
+                    when (coverTarget) {
+                        CoverPickerTarget.BV -> viewModel.updateBvPendingCover(pick)
+                        CoverPickerTarget.SEARCH -> viewModel.updateSearchPreviewPendingCover(pick)
+                    }
+                    coverPickerTarget = null
+                },
+            )
         }
     }
 
@@ -369,6 +403,7 @@ private fun BvImportTab(
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onSplitTextChange: (String) -> Unit,
+    onChangeCover: () -> Unit,
     onImport: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onReset: () -> Unit,
@@ -472,6 +507,7 @@ private fun BvImportTab(
                     onAlbumTitleChange = onAlbumTitleChange,
                     onArtistChange = onArtistChange,
                     onSplitTextChange = onSplitTextChange,
+                    onChangeCover = onChangeCover,
                     onImport = onImport,
                     onOpenAlbum = onOpenAlbum,
                     onReset = onReset,
@@ -903,3 +939,6 @@ private fun SearchImportTab(
         }
     }
 }
+
+/** 封面选择弹层当前服务于哪个预览。 */
+private enum class CoverPickerTarget { BV, SEARCH }

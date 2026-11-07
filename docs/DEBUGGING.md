@@ -15,7 +15,8 @@
 | `Api` | B 站接口请求（path、HTTP、耗时、重试/风控） |
 | `Resolver` | 播放流解析：缓存命中、音频/视频清晰度/码率、CDN host、耗时 |
 | `Play` | 音频播放引擎：playAlbum/Track/Songs、队列与裁剪映射、READY、错误重试、前台服务 |
-| `Video` | 歌词页视频：resolve、prepare、BUFFERING/READY、首帧、解码器（硬/软）、分片加载、错误 |
+| `Video` | 歌词页视频：resolve、prepare、BUFFERING/READY、首帧、解码器（硬/软）、分片加载、错误、封面占位/覆盖层显隐、漂移校正 seek |
+| `Cover` | 自定义封面：网易云搜索、图片下载/保存、DB 更新（albumId/path） |
 | `Import` | 专辑导入（BV/批量/文本）输入、条目数、耗时、失败原因；分割点文本解析统计 |
 | `Archive` | 归档导入/导出（模式、条目统计、自动备份路径） |
 
@@ -34,11 +35,35 @@
 5. `player ERROR`：日志含 exoplayer 错误码与 host，可重试；持续失败检查 Referer/UA/Cookie 是否带全
    （引擎有默认头，登录态变化会自动清流缓存）。
 
-**已做的优化**（v0.4.0）：视频分辨率封顶 720P、同分辨率优先 AVC；直接 `setMediaItem(item, startPosition)`
-省去 prepare 后 seek；未 READY 不做漂移校正；加载覆盖层显示阶段与等待秒数，>8s 提示可重试。
+**已做的优化**（v0.4.0 → v0.5.0）：
+- 视频分辨率封顶 720P、同分辨率优先 AVC；`setMediaItem(item, startPosition)` 省 prepare 后 seek；
+- 未出首帧用**专辑封面占位**（不再黑屏），加载提示延迟 500ms 且只显示一次；<500ms 快速加载无任何提示；
+- 禁用 PlayerView 自带 spinner；
+- 音画漂移阈值 800ms / 最小校正间隔 3s / READY 后 1.2s 宽限；READY 后中途 re-buffer 不再弹加载提示；
+- 慢加载 >8s 提示可重试（重试会作废旧流地址重新解析，可能换 CDN 节点）。
+
+**v0.5.0 真机基线**（Xiaomi / 硬件解码 / 720P）：`prepare START` → `resolve DONE in 0~2ms` →
+`first frame RENDERED after 289~341ms` → `READY` → `coverPlaceholder HIDE`；快速加载**无 overlay SHOW**。
+若日志出现 `overlay SHOW ... elapsed=504ms` 说明确实超过 500ms，再按上面 1-5 排查。
+若出现 `BUFFERING again after READY (re-buffer)` 且用户觉得顿一下，可调大 `READY_DRIFT_GRACE_MS`
+（VideoScreenViewModel，当前 1.2s）。
 
 > 参考数据（模拟器、未登录 480P）：resolve 缓存命中 1ms、首帧 3.4s（模拟器软解）。
 > 真机若仍慢，把「诊断日志 → 复制全部」发给开发者，按上面 1-5 定位。
+
+## 2.1 自定义封面相关
+
+- 换封面流程：导入预览/专辑详情 → 换封面 → 相册选择 / 网易云搜索 / 恢复 B 站原始封面。
+- 日志（tag `Cover`）：
+  - `netease search q='..' results=N`：搜索成功数；0 或报错 → 网易云接口/网络问题（非官方接口，可能变更）；
+  - `cover download bytes=N`：图片下载；失败会记录异常；
+  - `save cover album=X bytes=N path=..jpg`：解码压缩保存到 `files/covers/`；
+  - `update album=X cover=<bilibili>`：恢复 B 站封面（本地文件路径被清空）。
+- 现象「换了封面没变」：先看 `Cover` 日志是否有 `update`；若专辑详情一直显示旧图，检查
+  `coverLocalPath` 文件是否存在（App 更新/清数据会丢 files 目录，但归档可恢复）；
+  `album.coverUrl` 仅作远程兜底，本地文件优先。
+- 归档备份封面：导出 JSON 里的 `coverBase64`（原图 ≤2MB 才写入）；导入时自动保存并更新；
+  非法/超限 base64 会被忽略、不影响导入（见 LIBRARY_ARCHIVE.md）。
 
 ## 3. 导入相关
 
@@ -55,6 +80,8 @@
   - 仅更新分割点：只替换已存在专辑的分曲，不会新建；匹配不到会跳过；
   - 覆盖全库：先自动备份到 `files/backups/`（保留 10 份）再清空导入，报告里有备份路径。
 - **旧版占位曲**：v0.4.0 启动自动清理（单曲、0→总时长、标题=专辑名）；日志 `[App] legacy placeholder cleaned=N`。
+- **数据库升级**：v0.5.0 Room v1→v2 仅 `ALTER TABLE albums ADD COLUMN coverLocalPath TEXT`，
+  升级保留原有专辑/分曲（真机与模拟器均已实测）；升级失败日志中会出现 Room 异常，可直接看到 SQL 问题。
 
 ## 4. 构建 / IDE
 

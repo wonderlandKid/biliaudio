@@ -24,7 +24,8 @@ import coil3.request.crossfade
  */
 @Composable
 fun CoverImage(
-    url: String?,
+    /** 任意 Coil 可加载的数据：远程 URL、本地 [File] 路径或 content Uri */
+    url: Any?,
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
     contentScale: ContentScale = ContentScale.Crop,

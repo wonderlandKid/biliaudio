@@ -19,11 +19,14 @@ import com.wonderlandkid.biliaudio.data.model.SegmentSpec
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.net.BiliUrlParser
 import com.wonderlandkid.biliaudio.util.Diag
+import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.first
+import okio.ByteString.Companion.decodeBase64
+import okio.ByteString.Companion.toByteString
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,6 +44,7 @@ class LibraryArchiveRepositoryImpl(
     private val albumRepository: AlbumRepository,
     private val biliRepository: BiliRepository,
     private val settingsRepository: SettingsRepository,
+    private val albumCoverRepository: AlbumCoverRepository = NoopAlbumCoverRepository,
     private val codec: LibraryArchiveCodec = LibraryArchiveCodec(),
 ) : LibraryArchiveRepository {
 
@@ -50,12 +54,14 @@ class LibraryArchiveRepositoryImpl(
         albumRepository: AlbumRepository,
         biliRepository: BiliRepository,
         settingsRepository: SettingsRepository,
+        albumCoverRepository: AlbumCoverRepository = NoopAlbumCoverRepository,
         codec: LibraryArchiveCodec = LibraryArchiveCodec(),
     ) : this(
         backupDir = File(context.applicationContext.filesDir, "backups"),
         albumRepository = albumRepository,
         biliRepository = biliRepository,
         settingsRepository = settingsRepository,
+        albumCoverRepository = albumCoverRepository,
         codec = codec,
     )
 
@@ -218,6 +224,7 @@ class LibraryArchiveRepositoryImpl(
                         ),
                     )
                 }
+                applyArchiveCover(result.albumId, archiveAlbum)
                 itemResult(
                     archiveAlbum,
                     ArchiveItemAction.CREATED,
@@ -248,6 +255,7 @@ class LibraryArchiveRepositoryImpl(
             updatedAt = System.currentTimeMillis(),
         )
         albumRepository.updateAlbum(merged)
+        applyArchiveCover(existing.id, archiveAlbum)
         val message = if (archiveAlbum.segments.isEmpty()) {
             "已更新元信息（文件未包含分曲，保留原分曲）"
         } else {
@@ -351,6 +359,16 @@ class LibraryArchiveRepositoryImpl(
         title = title,
         artist = artist,
         coverUrl = coverUrl,
+        coverBase64 = coverLocalPath?.let { path ->
+            runCatching {
+                val file = File(path)
+                if (file.isFile && file.length() in 1..MAX_INLINE_COVER_BYTES) {
+                    file.readBytes().toByteString().base64()
+                } else {
+                    null
+                }
+            }.getOrNull()
+        },
         durationMs = durationMs,
         createdAt = createdAt,
         lastPlayedAt = lastPlayedAt,
@@ -363,6 +381,17 @@ class LibraryArchiveRepositoryImpl(
         },
     )
 
+    /** 应用归档内嵌封面（base64 JPEG）：保存本地文件并更新专辑封面路径。 */
+    private suspend fun applyArchiveCover(albumId: Long, archiveAlbum: ArchiveAlbum) {
+        val base64 = archiveAlbum.coverBase64?.takeIf { it.isNotBlank() } ?: return
+        val bytes = runCatching {
+            base64.filterNot { it.isWhitespace() }.decodeBase64()?.toByteArray()
+        }.getOrNull() ?: return
+        val path = albumCoverRepository.saveAlbumCover(albumId, bytes) ?: return
+        albumRepository.updateAlbumCover(albumId, path)
+        Diag.log(TAG, "archive cover applied album=$albumId bytes=$bytes")
+    }
+
     private fun nowIso(): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date())
 
@@ -371,3 +400,14 @@ class LibraryArchiveRepositoryImpl(
 }
 
 private const val TAG = "Archive"
+
+/** 归档内嵌封面的最大字节数（超过则不写入 base64，避免备份文件过大）。 */
+private const val MAX_INLINE_COVER_BYTES = 2L * 1024 * 1024
+
+/** 测试/无 UI 场景的默认空实现。 */
+private object NoopAlbumCoverRepository : AlbumCoverRepository {
+    override suspend fun searchNetEaseAlbums(query: String, limit: Int) = emptyList<com.wonderlandkid.biliaudio.data.model.CoverCandidate>()
+    override suspend fun fetchCoverBytes(url: String): ByteArray? = null
+    override suspend fun saveAlbumCover(albumId: Long, bytes: ByteArray): String? = null
+    override fun deleteAlbumCoverFile(path: String?) = Unit
+}

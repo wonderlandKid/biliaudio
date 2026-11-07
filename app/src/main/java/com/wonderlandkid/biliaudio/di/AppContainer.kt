@@ -2,6 +2,7 @@ package com.wonderlandkid.biliaudio.di
 
 import android.content.Context
 import com.wonderlandkid.biliaudio.data.db.AppDatabase
+import com.wonderlandkid.biliaudio.data.impl.AlbumCoverRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
@@ -10,6 +11,7 @@ import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.net.BiliApi
 import com.wonderlandkid.biliaudio.data.net.CookieStore
+import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
@@ -60,6 +62,9 @@ class AppContainer(context: Context) {
         biliRepository = biliRepository,
     )
 
+    /** 在线封面搜索（网易云）+ 自定义封面文件存取。 */
+    val albumCoverRepository: AlbumCoverRepository = AlbumCoverRepositoryImpl(appContext)
+
     val authRepository: AuthRepository = AuthRepositoryImpl(
         context = appContext,
         api = biliApi,
@@ -74,6 +79,7 @@ class AppContainer(context: Context) {
         albumRepository = albumRepository,
         biliRepository = biliRepository,
         settingsRepository = settingsRepository,
+        albumCoverRepository = albumCoverRepository,
     )
 
     // ---------------- 播放层 ----------------

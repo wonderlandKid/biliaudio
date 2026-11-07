@@ -150,6 +150,7 @@ internal object PlaybackMapping {
         albumTitle = album.title,
         artist = album.artist,
         coverUrl = album.coverUrl,
+        coverLocalPath = album.coverLocalPath,
         albumDurationMs = album.durationMs,
     )
 }

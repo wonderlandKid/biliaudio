@@ -128,7 +128,7 @@ fun SongRow(
         isPlaying = isPlaying,
         leading = {
             CoverImage(
-                url = song.album.coverUrl,
+                url = song.coverModel(),
                 modifier = Modifier.size(48.dp),
                 cornerRadius = 12.dp,
             )

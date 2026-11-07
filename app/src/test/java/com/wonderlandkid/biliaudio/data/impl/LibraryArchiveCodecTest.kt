@@ -321,6 +321,59 @@ class LibraryArchiveCodecTest {
     }
 
     // ------------------------------------------------------------------
+    // 自定义封面 coverBase64（v0.5.0）
+    // ------------------------------------------------------------------
+
+    /** 测试用 B 站风格 base64（JPEG 字节的 base64 文本，导出/导入只做透传，不校验图片内容）。 */
+    private val coverBase64Fixture = java.util.Base64.getEncoder()
+        .encodeToString(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0x01, 0x02, 0x03, 0xFF.toByte(), 0xD9.toByte()))
+
+    @Test
+    fun `coverBase64 survives encode parse roundtrip`() {
+        val archive = LibraryArchive.create(
+            albums = listOf(
+                ArchiveAlbum(
+                    bvid = "BV1GJ411x7h7",
+                    title = "带自定义封面的专辑",
+                    segments = listOf(ArchiveSegment(startMs = 0, title = "曲目一")),
+                    coverBase64 = coverBase64Fixture,
+                ),
+            ),
+        )
+
+        val json = codec.encode(archive)
+        assertTrue("导出 JSON 应包含 coverBase64 字段", json.contains("\"coverBase64\""))
+
+        val parsed = codec.parse(json).archive.albums.single()
+        assertEquals(coverBase64Fixture, parsed.coverBase64)
+    }
+
+    @Test
+    fun `handwritten archive with coverBase64 is parsed`() {
+        val text = """
+            {"format":"biliaudio-library","version":1,"albums":[
+              {"bvid":"BV1GJ411x7h7","title":"手写封面","coverBase64":"$coverBase64Fixture",
+               "segments":[{"startMs":0,"title":"一"}]}
+            ]}
+        """.trimIndent()
+
+        val result = codec.parse(text)
+        assertEquals("biliaudio-library", result.recognizedAs)
+        assertEquals(coverBase64Fixture, result.archive.albums.single().coverBase64)
+    }
+
+    @Test
+    fun `blank coverBase64 is normalized to null`() {
+        val text = """
+            {"format":"biliaudio-library","version":1,"albums":[
+              {"bvid":"BV1GJ411x7h7","coverBase64":"   "}
+            ]}
+        """.trimIndent()
+
+        assertNull(codec.parse(text).archive.albums.single().coverBase64)
+    }
+
+    // ------------------------------------------------------------------
 
     private fun expectFailure(text: String): String {
         return try {

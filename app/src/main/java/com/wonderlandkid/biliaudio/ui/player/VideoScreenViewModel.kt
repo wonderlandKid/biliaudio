@@ -51,6 +51,15 @@ class VideoScreenViewModel(
     private var requestedAlbumId: Long? = null
     private var prepareInFlight = false
 
+    /** 是否已进入 READY（用于识别“刚 READY”的宽限期）。 */
+    private var wasReady = false
+
+    /** 上次漂移校正时间（用于最小校正间隔节流）。 */
+    private var lastDriftCorrectionAtMs = 0L
+
+    /** 本次 READY 的时间点（毫秒）。 */
+    private var readyAtMs = 0L
+
     init {
         viewModelScope.launch {
             while (isActive) {
@@ -116,18 +125,42 @@ class VideoScreenViewModel(
         }
         val video = videoState.value
         // 只有 READY 才参与同步：准备/缓冲阶段 seek 会打断加载，导致「转圈更久」
-        if (video.phase != VideoPhase.READY || video.error != null) return
+        val isReady = video.phase == VideoPhase.READY && video.error == null
+        if (isReady && !wasReady) {
+            wasReady = true
+            readyAtMs = System.currentTimeMillis()
+        } else if (!isReady) {
+            wasReady = false
+        }
+        if (!isReady) return
 
         if (audio.isPlaying) {
             if (!video.isPlaying) videoController.play()
-            // 漂移校正：只有超过阈值才 seek，避免打断视频解码
+            // 刚 READY 的宽限期内不做漂移 seek：视频通常比音频晚 0.2~0.5s，立刻 seek 会触发一次
+            // 短暂 BUFFERING，让封面占位/加载提示再次出现（用户感知的「闪两次」）。
+            // 等播放稳定后再正常校正，体验更平滑。
+            if (System.currentTimeMillis() - readyAtMs < READY_DRIFT_GRACE_MS) return
+            // 漂移校正：只有超过阈值才 seek，且两次校正间隔 ≥3s，避免 seek→缓冲→再 seek 循环
+            val now = System.currentTimeMillis()
+            if (now - lastDriftCorrectionAtMs < VideoSync.MIN_CORRECTION_INTERVAL_MS) return
             val videoPositionMs = videoController.player?.currentPosition ?: return
             if (VideoSync.needsCorrection(audio.albumPositionMs, videoPositionMs)) {
+                lastDriftCorrectionAtMs = now
+                Diag.log(
+                    "Video",
+                    "drift seek audio=${audio.albumPositionMs}ms video=${videoPositionMs}ms " +
+                        "diff=${audio.albumPositionMs - videoPositionMs}ms",
+                )
                 videoController.seekTo(VideoSync.targetPosition(audio.albumPositionMs))
             }
         } else if (video.isPlaying) {
             videoController.pause()
         }
+    }
+
+    private companion object {
+        /** READY 后的漂移校正宽限期：避免刚出首帧就 seek 触发 BUFFERING（“闪两次”）。 */
+        private const val READY_DRIFT_GRACE_MS = 1_200L
     }
 
     private suspend fun prepareAlbum(albumId: Long, audio: PlaybackState) {
@@ -137,6 +170,7 @@ class VideoScreenViewModel(
         requestedAlbumId = albumId
         try {
             val album = albumRepository.getAlbum(albumId) ?: return
+            wasReady = false
             videoController.prepare(
                 album = album,
                 startAlbumPositionMs = audio.albumPositionMs,

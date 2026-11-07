@@ -13,11 +13,13 @@ import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.model.BatchImportReport
 import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
+import com.wonderlandkid.biliaudio.data.model.CoverCandidate
 import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.model.LibraryArchive
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
+import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
@@ -142,6 +144,127 @@ class LibraryArchiveRepositoryTest {
         assertEquals(1, report.updatedCount)
         assertEquals("只更新名字", albumRepo.allAlbums().single().title)
         assertEquals(3, albumRepo.allTracks(1).size)
+    }
+
+    // ------------------------------------------------------------------
+    // 内嵌封面 coverBase64（v0.5.0）
+    // ------------------------------------------------------------------
+
+    /** 测试用封面字节与 base64（只做透传，不校验图片内容）。 */
+    private fun coverBase64(bytes: ByteArray): String = java.util.Base64.getEncoder().encodeToString(bytes)
+
+    private val coverBytesFixture = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0x01, 0x02, 0x03, 0xFF.toByte(), 0xD9.toByte())
+
+    @Test
+    fun `merge applies embedded cover to existing album`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "已有专辑"), tracks = tracks(1, 2, 2))
+        val coverRepo = FakeAlbumCoverRepository()
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), coverRepo,
+        )
+        val text = archiveText(
+            ArchiveAlbum(
+                bvid = "BV1GJ411x7h7",
+                title = "已有专辑",
+                coverBase64 = coverBase64(coverBytesFixture),
+            ),
+        )
+
+        val report = repo.importArchive(text, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        // 1) fake 封面仓库收到 saveAlbumCover(1, bytes)
+        assertEquals(1, coverRepo.saved.size)
+        assertEquals(1L, coverRepo.saved.single().albumId)
+        assertTrue(coverBytesFixture.contentEquals(coverRepo.saved.single().bytes))
+        // 2) 专辑仓库收到 updateAlbumCover(1, fake 返回的固定路径)
+        assertEquals(listOf(1L to coverRepo.fixedPath), albumRepo.coverUpdates.toList())
+        assertEquals(coverRepo.fixedPath, albumRepo.allAlbums().single().coverLocalPath)
+    }
+
+    @Test
+    fun `merge applies embedded cover to newly created album`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        val coverRepo = FakeAlbumCoverRepository()
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), coverRepo,
+        )
+        val text = archiveText(
+            ArchiveAlbum(
+                bvid = "BV1uv411q7Mv",
+                title = "新建专辑",
+                segments = listOf(ArchiveSegment(startMs = 0, title = "一")),
+                coverBase64 = coverBase64(coverBytesFixture),
+            ),
+        )
+
+        val report = repo.importArchive(text, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.createdCount)
+        val created = albumRepo.allAlbums().single()
+        assertEquals(1, coverRepo.saved.size)
+        assertEquals(created.id, coverRepo.saved.single().albumId)
+        assertEquals(listOf(created.id to coverRepo.fixedPath), albumRepo.coverUpdates.toList())
+        assertEquals(coverRepo.fixedPath, created.coverLocalPath)
+    }
+
+    @Test
+    fun `export embeds custom cover as coverBase64`() = runBlocking {
+        val coverFile = java.io.File.createTempFile("biliaudio-cover", ".jpg").apply { writeBytes(coverBytesFixture) }
+        try {
+            val albumRepo = FakeAlbumRepository()
+            albumRepo.seed(
+                album(1, "BV1GJ411x7h7", "封面专辑").copy(coverLocalPath = coverFile.absolutePath),
+                tracks = tracks(1, 1, 1),
+            )
+            val repo = LibraryArchiveRepositoryImpl(
+                null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), FakeAlbumCoverRepository(),
+            )
+
+            val exported = codec.parse(repo.exportAllJson()).archive.albums.single()
+
+            assertEquals(coverBase64(coverBytesFixture), exported.coverBase64)
+        } finally {
+            coverFile.delete()
+        }
+    }
+
+    @Test
+    fun `archive without coverBase64 does not touch cover repository`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "已有专辑"), tracks = tracks(1, 2, 2))
+        val coverRepo = FakeAlbumCoverRepository()
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), coverRepo,
+        )
+        val text = archiveText(ArchiveAlbum(bvid = "BV1GJ411x7h7", title = "只改名字"))
+
+        val report = repo.importArchive(text, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        assertTrue(coverRepo.saved.isEmpty())
+        assertTrue(albumRepo.coverUpdates.isEmpty())
+        assertNull(albumRepo.allAlbums().single().coverLocalPath)
+    }
+
+    @Test
+    fun `invalid coverBase64 is ignored without failing import`() = runBlocking {
+        val albumRepo = FakeAlbumRepository()
+        albumRepo.seed(album(1, "BV1GJ411x7h7", "已有专辑"), tracks = tracks(1, 2, 2))
+        val coverRepo = FakeAlbumCoverRepository()
+        val repo = LibraryArchiveRepositoryImpl(
+            null, albumRepo, FakeBiliRepository(), FakeSettingsRepository(), coverRepo,
+        )
+        val text = archiveText(
+            ArchiveAlbum(bvid = "BV1GJ411x7h7", title = "已有专辑", coverBase64 = "!!!not-base64!!!"),
+        )
+
+        val report = repo.importArchive(text, ArchiveImportMode.MERGE)
+
+        assertEquals(1, report.updatedCount)
+        assertTrue("非法 base64 不应调用 saveAlbumCover", coverRepo.saved.isEmpty())
+        assertTrue(albumRepo.coverUpdates.isEmpty())
     }
 
     // ------------------------------------------------------------------
@@ -346,6 +469,25 @@ class LibraryArchiveRepositoryTest {
         override suspend fun searchVideos(keyword: String, page: Int): List<BiliVideoSearchItem> = emptyList()
     }
 
+    /** 记录封面保存调用并返回固定路径的 fake。 */
+    private class FakeAlbumCoverRepository : AlbumCoverRepository {
+        data class SaveCall(val albumId: Long, val bytes: ByteArray)
+
+        val saved = mutableListOf<SaveCall>()
+        val fixedPath: String = "/fake/covers/album-cover.jpg"
+
+        override suspend fun searchNetEaseAlbums(query: String, limit: Int): List<CoverCandidate> = emptyList()
+
+        override suspend fun fetchCoverBytes(url: String): ByteArray? = null
+
+        override suspend fun saveAlbumCover(albumId: Long, bytes: ByteArray): String? {
+            saved += SaveCall(albumId, bytes)
+            return fixedPath
+        }
+
+        override fun deleteAlbumCoverFile(path: String?) = Unit
+    }
+
     private class FakeAlbumRepository : AlbumRepository {
         private val albumsFlow = MutableStateFlow<List<Album>>(emptyList())
         private val tracksFlow = MutableStateFlow<Map<Long, List<Track>>>(emptyMap())
@@ -382,6 +524,19 @@ class LibraryArchiveRepositoryTest {
             albumsFlow.value = albumsFlow.value.filterNot { it.id == id } + saved
             tracksFlow.value = tracksFlow.value + (id to tracks.mapIndexed { index, track -> track.copy(albumId = id, index = index) })
             return id
+        }
+
+        /** 记录 updateAlbumCover 调用：(albumId, 新封面路径) */
+        val coverUpdates = mutableListOf<Pair<Long, String?>>()
+
+        override suspend fun updateAlbumCover(albumId: Long, coverLocalPath: String?): Boolean {
+            val exists = albumsFlow.value.any { it.id == albumId }
+            if (!exists) return false
+            coverUpdates += albumId to coverLocalPath
+            albumsFlow.value = albumsFlow.value.map {
+                if (it.id == albumId) it.copy(coverLocalPath = coverLocalPath) else it
+            }
+            return true
         }
 
         override suspend fun updateAlbum(album: Album) {

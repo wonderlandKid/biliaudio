@@ -172,6 +172,11 @@ class LibraryArchiveCodec(
                 throw ArchiveFormatException("第 $position 张专辑的封面地址必须是 http/https")
             }
         }
+        val coverBase64 = album.coverBase64?.trim()?.takeIf { it.isNotEmpty() }?.also {
+            if (it.length > MAX_COVER_BASE64_LENGTH) {
+                throw ArchiveFormatException("第 $position 张专辑的内嵌封面过大（base64 最多 $MAX_COVER_BASE64_LENGTH 字符）")
+            }
+        }
         val durationMs = album.durationMs?.takeIf { it > 0 }
         val playCount = album.playCount?.takeIf { it >= 0 }
         val page = album.page.coerceAtLeast(1)
@@ -216,6 +221,7 @@ class LibraryArchiveCodec(
             title = title,
             artist = artist,
             coverUrl = coverUrl,
+            coverBase64 = coverBase64,
             durationMs = durationMs,
             createdAt = album.createdAt?.takeIf { it > 0 },
             lastPlayedAt = album.lastPlayedAt?.takeIf { it > 0 },
@@ -241,6 +247,7 @@ class LibraryArchiveCodec(
         title: String?,
         artist: String?,
         coverUrl: String?,
+        coverBase64: String?,
         durationMs: Long?,
         createdAt: Long?,
         lastPlayedAt: Long?,
@@ -254,6 +261,7 @@ class LibraryArchiveCodec(
         title = title,
         artist = artist,
         coverUrl = coverUrl,
+        coverBase64 = coverBase64,
         durationMs = durationMs,
         createdAt = createdAt,
         lastPlayedAt = lastPlayedAt,
@@ -263,6 +271,8 @@ class LibraryArchiveCodec(
 
     companion object {
         private const val MAX_TEXT_LENGTH = 5 * 1024 * 1024
+        /** 内嵌封面 base64 最大长度（约 6MB 原图）。 */
+        private const val MAX_COVER_BASE64_LENGTH = 8 * 1024 * 1024
         private const val MAX_ALBUMS = 2000
         private const val MAX_SEGMENTS = 500
         private const val MAX_TITLE_LENGTH = 200

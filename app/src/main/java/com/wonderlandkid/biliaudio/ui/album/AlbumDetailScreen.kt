@@ -3,6 +3,7 @@ package com.wonderlandkid.biliaudio.ui.album
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -24,6 +26,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
@@ -60,10 +63,13 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
+import com.wonderlandkid.biliaudio.ui.components.CoverPick
+import com.wonderlandkid.biliaudio.ui.components.CoverPickerSheet
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.SectionHeader
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
+import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -91,6 +97,7 @@ fun AlbumDetailScreen(
             playbackController = container.playbackController,
             libraryArchiveRepository = container.libraryArchiveRepository,
             appContext = container.appContext,
+            albumCoverRepository = container.albumCoverRepository,
         )
     },
 ) {
@@ -98,6 +105,8 @@ fun AlbumDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // 「换封面」共享组件（相册 / 网易云 / 恢复 B 站）
+    var showCoverPicker by remember { mutableStateOf(false) }
     // 导出专辑文件：系统文件选择器（CreateDocument，默认文件名 <专辑名>-biliaudio.json）
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
@@ -162,9 +171,11 @@ fun AlbumDetailScreen(
                 currentTrackId = state.currentTrackId,
                 isPlaying = state.isPlaying,
                 isThisAlbumPlaying = state.isThisAlbumPlaying,
+                isApplyingCover = state.isApplyingCover,
                 onPlayAll = viewModel::playAll,
                 onPlayTrack = viewModel::playTrack,
                 onOpenSplitEditor = { onOpenSplitEditor(album.id) },
+                onChangeCover = { showCoverPicker = true },
                 modifier = Modifier.padding(innerPadding),
             )
         }
@@ -179,6 +190,23 @@ fun AlbumDetailScreen(
             onConfirm = {
                 showDeleteDialog = false
                 viewModel.deleteAlbum()
+            },
+        )
+    }
+
+    // 更换封面弹层（共享组件，内部不写库；选中后由 ViewModel 保存并写库）
+    val pickerAlbum = state.album
+    if (pickerAlbum != null) {
+        CoverPickerSheet(
+            visible = showCoverPicker,
+            title = "更换专辑封面",
+            defaultQuery = "${pickerAlbum.title} ${pickerAlbum.artist}".trim(),
+            currentCoverModel = pickerAlbum.coverModel(),
+            allowRestoreBilibili = pickerAlbum.coverLocalPath != null,
+            onDismiss = { showCoverPicker = false },
+            onPick = { pick: CoverPick ->
+                showCoverPicker = false
+                viewModel.applyCover(pickerAlbum.id, pick)
             },
         )
     }
@@ -257,9 +285,11 @@ private fun AlbumDetailContent(
     currentTrackId: Long?,
     isPlaying: Boolean,
     isThisAlbumPlaying: Boolean,
+    isApplyingCover: Boolean,
     onPlayAll: () -> Unit,
     onPlayTrack: (Long) -> Unit,
     onOpenSplitEditor: () -> Unit,
+    onChangeCover: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -267,7 +297,12 @@ private fun AlbumDetailContent(
         contentPadding = PaddingValues(bottom = Spacing.xxl),
     ) {
         item(key = "hero") {
-            AlbumHero(album = album, trackCount = tracks.size)
+            AlbumHero(
+                album = album,
+                trackCount = tracks.size,
+                isApplyingCover = isApplyingCover,
+                onChangeCover = onChangeCover,
+            )
         }
         item(key = "actions") {
             AlbumActionRow(
@@ -316,6 +351,8 @@ private fun AlbumDetailContent(
 private fun AlbumHero(
     album: Album,
     trackCount: Int,
+    isApplyingCover: Boolean,
+    onChangeCover: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -323,13 +360,53 @@ private fun AlbumHero(
             .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CoverImage(
-            url = album.coverUrl,
+        Box(
             modifier = Modifier
                 .fillMaxWidth(0.72f)
                 .aspectRatio(1f),
-            cornerRadius = 28.dp,
-        )
+        ) {
+            CoverImage(
+                // 支持用户自定义本地封面（album.coverModel() 优先本地 File，回退 B 站 URL）
+                url = album.coverModel(),
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 28.dp,
+            )
+            // 右下角「换封面」胶囊按钮（相册 / 网易云 / 恢复 B 站）
+            Surface(
+                onClick = onChangeCover,
+                enabled = !isApplyingCover,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(Spacing.sm),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shadowElevation = 2.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xxs),
+                ) {
+                    if (isApplyingCover) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.PhotoCamera,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    Text(
+                        text = if (isApplyingCover) "更新中…" else "换封面",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(Spacing.xl))
         Text(
             text = album.title,

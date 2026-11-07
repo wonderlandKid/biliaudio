@@ -12,6 +12,7 @@ import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.model.ResolvedStreams
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
+import com.wonderlandkid.biliaudio.data.model.CoverCandidate
 import com.wonderlandkid.biliaudio.data.model.UserProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,12 @@ interface AlbumRepository {
     suspend fun updateAlbum(album: Album)
     suspend fun replaceTracks(albumId: Long, tracks: List<Track>)
     suspend fun deleteAlbum(albumId: Long)
+
+    /**
+     * 更新专辑自定义封面：`coverLocalPath = null` 表示恢复 B 站原始封面。
+     * @return 是否更新成功（专辑存在）
+     */
+    suspend fun updateAlbumCover(albumId: Long, coverLocalPath: String?): Boolean
 
     /** 记录播放（最近播放排序、播放次数）。 */
     suspend fun markPlayed(albumId: Long, trackId: Long)
@@ -59,6 +66,27 @@ interface AlbumRepository {
      * 3) CSV：`BV号,专辑名,艺术家,mm:ss,歌名` 每行一首。
      */
     suspend fun importBatchText(text: String): BatchImportReport
+}
+
+/** 在线封面搜索（网易云音乐）+ 封面文件存取。 */
+interface AlbumCoverRepository {
+    /**
+     * 搜索专辑封面（网易云专辑搜索）。
+     * @param query 关键词（通常为专辑名 + 艺术家）
+     */
+    suspend fun searchNetEaseAlbums(query: String, limit: Int = 20): List<CoverCandidate>
+
+    /** 下载远程封面图片字节；失败返回 null。 */
+    suspend fun fetchCoverBytes(url: String): ByteArray?
+
+    /**
+     * 保存专辑封面（把图片解码、缩放并压缩为 JPEG 存到应用私有目录）。
+     * @return 保存后的本地绝对路径；图片无效返回 null
+     */
+    suspend fun saveAlbumCover(albumId: Long, bytes: ByteArray): String?
+
+    /** 删除本地封面文件（不修改数据库字段）。 */
+    fun deleteAlbumCoverFile(path: String?)
 }
 
 /** B 站视频信息 / 搜索。 */

@@ -124,7 +124,26 @@ class AlbumRepositoryImpl(
     }
 
     override suspend fun deleteAlbum(albumId: Long) {
+        // 先删本地自定义封面文件，避免孤儿文件占用空间
+        val coverPath = albumDao.getById(albumId)?.coverLocalPath
         albumDao.deleteById(albumId)
+        coverPath?.let { path ->
+            runCatching {
+                java.io.File(path).takeIf { it.isFile }?.delete()
+            }
+        }
+    }
+
+    override suspend fun updateAlbumCover(albumId: Long, coverLocalPath: String?): Boolean {
+        val entity = albumDao.getById(albumId) ?: return false
+        albumDao.update(
+            entity.copy(
+                coverLocalPath = coverLocalPath,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+        Diag.log("Cover", "update album=$albumId cover=${coverLocalPath ?: "<bilibili>"}")
+        return true
     }
 
     /**

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -218,6 +219,7 @@ fun VideoPreviewCard(
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onSplitTextChange: (String) -> Unit,
+    onChangeCover: () -> Unit,
     onImport: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onReset: () -> Unit,
@@ -238,11 +240,33 @@ fun VideoPreviewCard(
         ) {
             // ---- 视频基本信息 ----
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                CoverImage(
-                    url = info.coverUrl,
-                    modifier = Modifier.size(92.dp),
-                    cornerRadius = 16.dp,
-                )
+                // 封面可点击更换（相册 / 网易云搜索）；有 pendingCover 时预览选中的封面
+                Box(
+                    modifier = Modifier
+                        .size(92.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(onClick = onChangeCover),
+                ) {
+                    CoverImage(
+                        url = state.pendingCoverModel,
+                        modifier = Modifier.fillMaxSize(),
+                        cornerRadius = 16.dp,
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.65f),
+                    ) {
+                        Text(
+                            text = "换封面",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                        )
+                    }
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = info.title,

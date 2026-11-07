@@ -256,10 +256,10 @@ class PlaybackMappingTest {
     @Test
     fun videoSync_correctsOnlyWhenDriftExceedsThreshold() {
         assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 10_000L, videoPositionMs = 10_000L))
-        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 10_300L, videoPositionMs = 10_000L))
-        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 9_700L, videoPositionMs = 10_000L))
-        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 10_301L, videoPositionMs = 10_000L))
-        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 9_699L, videoPositionMs = 10_000L))
+        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 10_800L, videoPositionMs = 10_000L))
+        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 9_200L, videoPositionMs = 10_000L))
+        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 10_801L, videoPositionMs = 10_000L))
+        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 9_199L, videoPositionMs = 10_000L))
         // 自定义阈值
         assertTrue(VideoSync.needsCorrection(2_000L, 0L, thresholdMs = 1_000L))
         assertFalse(VideoSync.needsCorrection(2_000L, 0L, thresholdMs = 2_000L))

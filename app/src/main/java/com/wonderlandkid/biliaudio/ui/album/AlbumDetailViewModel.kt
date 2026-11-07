@@ -6,10 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
+import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
+import com.wonderlandkid.biliaudio.ui.components.CoverPick
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,8 @@ data class AlbumDetailUiState(
     val isDeleting: Boolean = false,
     /** 正在导出专辑文件（菜单项置灰 + 顶栏进度） */
     val isExporting: Boolean = false,
+    /** 正在保存/应用新的自定义封面 */
+    val isApplyingCover: Boolean = false,
     /** 删除成功后由页面收口返回上一页 */
     val deleted: Boolean = false,
     /** 一次性提示（Snackbar） */
@@ -52,6 +56,7 @@ class AlbumDetailViewModel(
     private val libraryArchiveRepository: LibraryArchiveRepository,
     /** 应用级 Context，仅用于读写用户通过 SAF 选择的文件 */
     private val appContext: Context,
+    private val albumCoverRepository: AlbumCoverRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AlbumDetailUiState())
@@ -156,6 +161,74 @@ class AlbumDetailViewModel(
                         message = "删除失败：${throwable.message ?: "未知错误"}",
                     )
                 }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 自定义封面
+    // ------------------------------------------------------------------
+
+    /**
+     * 应用用户选择的封面（相册本地图片 / 网易云在线封面 / 恢复 B 站原始封面）。
+     *
+     * - 文件保存、下载、写库都在 IO 线程执行；
+     * - 成功后 Room Flow 会自动刷新页面封面，UI 无需手动改状态；
+     * - 结果通过一次性 [AlbumDetailUiState.message] 走 Snackbar。
+     */
+    fun applyCover(albumId: Long, pick: CoverPick) {
+        if (_uiState.value.isApplyingCover) return
+        // 恢复 B 站封面时用于删除旧的本地封面文件
+        val oldLocalPath = _uiState.value.album?.coverLocalPath
+        viewModelScope.launch {
+            _uiState.update { it.copy(isApplyingCover = true) }
+            val errorMessage = try {
+                withContext(Dispatchers.IO) { applyCoverInternal(albumId, oldLocalPath, pick) }
+                null
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (throwable: Throwable) {
+                throwable.message?.takeIf { it.isNotBlank() } ?: "未知错误"
+            }
+            _uiState.update {
+                it.copy(
+                    isApplyingCover = false,
+                    message = errorMessage?.let { reason -> "封面更新失败：$reason" } ?: "封面已更新",
+                )
+            }
+        }
+    }
+
+    /** 真正执行封面保存/写库；失败抛异常，message 为可直接展示的中文提示。 */
+    private suspend fun applyCoverInternal(albumId: Long, oldLocalPath: String?, pick: CoverPick) {
+        when (pick) {
+            is CoverPick.LocalImage -> {
+                if (pick.bytes.isEmpty()) throw IllegalStateException("读取到的图片为空")
+                val path = albumCoverRepository.saveAlbumCover(albumId, pick.bytes)
+                    ?: throw IllegalStateException("封面保存失败（图片格式不支持或存储空间不足）")
+                if (!albumRepository.updateAlbumCover(albumId, path)) {
+                    albumCoverRepository.deleteAlbumCoverFile(path)
+                    throw IllegalStateException("封面写入数据库失败")
+                }
+            }
+
+            is CoverPick.NetEase -> {
+                val bytes = albumCoverRepository.fetchCoverBytes(pick.candidate.fullUrl)
+                    ?: throw IllegalStateException("封面下载失败，请检查网络后重试")
+                val path = albumCoverRepository.saveAlbumCover(albumId, bytes)
+                    ?: throw IllegalStateException("封面保存失败（图片格式不支持或存储空间不足）")
+                if (!albumRepository.updateAlbumCover(albumId, path)) {
+                    albumCoverRepository.deleteAlbumCoverFile(path)
+                    throw IllegalStateException("封面写入数据库失败")
+                }
+            }
+
+            CoverPick.RestoreBilibili -> {
+                if (!albumRepository.updateAlbumCover(albumId, null)) {
+                    throw IllegalStateException("恢复 B 站封面失败")
+                }
+                // 写库成功后再删旧文件，避免旧封面丢失但数据库还没恢复
+                albumCoverRepository.deleteAlbumCoverFile(oldLocalPath)
             }
         }
     }

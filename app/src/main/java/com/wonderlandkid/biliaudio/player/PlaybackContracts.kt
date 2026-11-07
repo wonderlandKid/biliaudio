@@ -14,6 +14,8 @@ data class QueueEntry(
     val albumTitle: String,
     val artist: String,
     val coverUrl: String,
+    /** 用户自定义封面（本机文件绝对路径），null 时使用 [coverUrl] */
+    val coverLocalPath: String? = null,
     val albumDurationMs: Long,
 ) {
     val durationMs: Long get() = track.durationMs

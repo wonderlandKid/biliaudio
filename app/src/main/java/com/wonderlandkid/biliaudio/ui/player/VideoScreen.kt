@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -55,12 +56,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
@@ -80,12 +83,16 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.wonderlandkid.biliaudio.player.PlaybackState
+import com.wonderlandkid.biliaudio.player.QueueEntry
 import com.wonderlandkid.biliaudio.player.VideoPhase
 import com.wonderlandkid.biliaudio.player.VideoPlaybackState
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
+import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.util.TimeUtils
 import kotlinx.coroutines.delay
 
@@ -95,8 +102,12 @@ import kotlinx.coroutines.delay
  * - 非全屏：顶部 16:9 视频 + 当前曲信息 / 专辑进度 / 控制 + 专辑分曲列表；
  * - 全屏：视频铺满 + 沉浸式（隐藏系统栏）+ 点击显示/隐藏覆盖控制；
  * - 视频与音频每 500ms 校正一次漂移（>300ms 才 seek），播放/暂停/拖动联动；
- * - 加载体验：按 [VideoPhase] 显示「正在获取视频流 / 正在准备播放器 / 正在缓冲」+ 已等待秒数，
- *   视频清晰度小标签；加载超过 8s 提示「视频源加载较慢，可稍候或点重试」并提供重试；
+ * - 加载体验（v0.4.1 修复「黑一下→又提示一次缓冲」）：
+ *   · 非 READY 时视频区域用当前专辑封面 + 黑色 0.25 蒙层占位，READY 后 150ms 淡出；
+ *   · 加载覆盖层延迟 500ms 才出现、文案固定「正在缓冲…」（阶段信息只进 Diag 日志）；
+ *   · >2s 显示已等待秒数，>8s 提示加载较慢并提供重试；
+ *   · 快速加载（<500ms）全程无 spinner/文案，只有「封面 → 视频」一次切换；
+ * - 视频清晰度小标签（如 480P）；
  * - 返回键：全屏时先退出全屏，再返回上一页。
  *
  * 注意：本页是导航层之外的全屏路由，非全屏时由页面自己处理系统栏 insets。
@@ -175,6 +186,26 @@ fun VideoScreen(
     val currentEntry = audioState.queue.getOrNull(audioState.currentIndex)
     val hasPlayback = audioState.currentTrack != null
 
+    // 封面占位只用于“视频还没出第一帧之前”。
+    // 一旦 READY 过就不再回退显示：READY 后可能因为同步 seek 出现一次短暂 BUFFERING，
+    // 若此时重新显示封面，用户就会看到「封面闪两次」；这里用 renderedAlbumId 把状态“锁死”。
+    var renderedAlbumId by remember { mutableStateOf(-1L) }
+    LaunchedEffect(videoState.phase, videoState.albumId) {
+        if (videoState.phase == VideoPhase.READY) {
+            renderedAlbumId = videoState.albumId ?: -1L
+        }
+    }
+    val showCoverPlaceholder = videoState.phase != VideoPhase.READY &&
+        videoState.error == null &&
+        renderedAlbumId != videoState.albumId
+    LaunchedEffect(showCoverPlaceholder) {
+        Diag.log(
+            "Video",
+            "coverPlaceholder ${if (showCoverPlaceholder) "SHOW" else "HIDE"} " +
+                "phase=${videoState.phase} album=${videoState.albumId}",
+        )
+    }
+
     when {
         !hasPlayback -> EmptyVideoPage(onBack = onBack, modifier = modifier)
         isFullscreen -> FullscreenVideoContent(
@@ -182,6 +213,7 @@ fun VideoScreen(
             videoState = videoState,
             player = viewModel.player,
             albumTitle = currentEntry?.albumTitle.orEmpty(),
+            showCoverPlaceholder = showCoverPlaceholder,
             controlsVisible = controlsVisible,
             onToggleControls = { controlsVisible = !controlsVisible },
             onExitFullscreen = { isFullscreen = false },
@@ -197,6 +229,7 @@ fun VideoScreen(
             videoState = videoState,
             player = viewModel.player,
             albumTitle = currentEntry?.albumTitle.orEmpty(),
+            showCoverPlaceholder = showCoverPlaceholder,
             onBack = onBack,
             onEnterFullscreen = {
                 controlsVisible = true
@@ -223,6 +256,7 @@ private fun NonFullscreenVideoContent(
     videoState: VideoPlaybackState,
     player: Player?,
     albumTitle: String,
+    showCoverPlaceholder: Boolean,
     onBack: () -> Unit,
     onEnterFullscreen: () -> Unit,
     onTogglePlay: () -> Unit,
@@ -277,6 +311,11 @@ private fun NonFullscreenVideoContent(
                 .background(Color.Black),
         ) {
             VideoSurface(player = player, modifier = Modifier.fillMaxSize())
+            // 非 READY 时用专辑封面占位，避免进入页面先黑屏；出首帧后淡出且不再回退
+            VideoCoverPlaceholder(
+                entry = audioState.queue.getOrNull(audioState.currentIndex),
+                visible = showCoverPlaceholder,
+            )
             VideoStatusOverlay(state = videoState, onRetry = onRetry)
             // 当前视频清晰度（如 480P）
             VideoQualityBadge(
@@ -393,6 +432,7 @@ private fun FullscreenVideoContent(
     videoState: VideoPlaybackState,
     player: Player?,
     albumTitle: String,
+    showCoverPlaceholder: Boolean,
     controlsVisible: Boolean,
     onToggleControls: () -> Unit,
     onExitFullscreen: () -> Unit,
@@ -409,6 +449,11 @@ private fun FullscreenVideoContent(
             .background(Color.Black),
     ) {
         VideoSurface(player = player, modifier = Modifier.fillMaxSize())
+        // 非 READY 时用专辑封面占位（全屏与非全屏行为一致）；出首帧后淡出且不再回退
+        VideoCoverPlaceholder(
+            entry = audioState.queue.getOrNull(audioState.currentIndex),
+            visible = showCoverPlaceholder,
+        )
 
         // 点击画面显示 / 隐藏控制层
         Box(
@@ -526,6 +571,8 @@ private fun VideoSurface(
         factory = { context ->
             PlayerView(context).apply {
                 useController = false
+                // 禁用 PlayerView 自带缓冲 spinner，避免和我们自绘的加载覆盖层叠成双 spinner
+                setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
             }
@@ -538,15 +585,56 @@ private fun VideoSurface(
     )
 }
 
-/** 加载超过该秒数时提示「视频源加载较慢」（用户体验兜底）。 */
-private const val SLOW_LOADING_HINT_SECONDS = 8L
+/** 加载覆盖层延迟出现阈值：<500ms 的快速加载不显示 spinner/文案，避免「黑屏→缓冲提示」两次观感。 */
+private const val OVERLAY_SHOW_DELAY_MS = 500L
+
+/** 加载超过该毫秒数才显示「已等待 Ns」。 */
+private const val ELAPSED_TEXT_THRESHOLD_MS = 2_000L
+
+/** 加载超过该毫秒数时提示「视频源加载较慢」（用户体验兜底）。 */
+private const val SLOW_LOADING_HINT_MS = 8_000L
 
 /**
- * 视频加载中 / 错误覆盖层。
+ * 视频区域封面占位：phase != READY（且无错误）时在 PlayerView 上层显示当前专辑封面 +
+ * 黑色 0.25 透明蒙层，避免进入页面时先黑屏；READY 后 150ms 淡出。封面为空时保持黑底。
+ */
+@Composable
+private fun VideoCoverPlaceholder(
+    entry: QueueEntry?,
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val cover = entry?.coverModel()
+    AnimatedVisibility(
+        visible = visible && cover != null,
+        enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 150)),
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            CoverImage(
+                url = cover,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 0.dp,
+                contentScale = ContentScale.Crop,
+            )
+            // 黑色 0.25 蒙层：压暗封面，突出上方加载提示/控制层
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.25f)),
+            )
+        }
+    }
+}
+
+/**
+ * 视频加载中 / 错误覆盖层（v0.4.1 起：单次、延迟出现、文案固定）。
  *
- * - phase 驱动文案：RESOLVING=正在获取视频流，PREPARING=正在准备播放器，BUFFERING=正在缓冲；
- * - 显示当前阶段已等待秒数（每秒本地刷新，不额外请求）；
- * - 总加载时间超过 [SLOW_LOADING_HINT_SECONDS] 秒时提示「较慢」并提供重试按钮。
+ * - 显示条件：加载总时长 > [OVERLAY_SHOW_DELAY_MS]（快速加载完全不出现，只看到封面→视频）；
+ * - 用户可见文案固定「正在缓冲…」，不再按 phase 切换（阶段信息只进 Diag 日志）；
+ * - >[ELAPSED_TEXT_THRESHOLD_MS] 显示「已等待 Ns」，>[SLOW_LOADING_HINT_MS] 显示慢加载提示 + 重试；
+ * - 可见性 SHOW/HIDE 打 Diag tag「Video」，便于和 AlbumVideoPlayer 的 phase/首帧日志对照。
  */
 @Composable
 private fun VideoStatusOverlay(
@@ -557,10 +645,52 @@ private fun VideoStatusOverlay(
     val phase = state.phase
     val hasError = state.error != null || phase == VideoPhase.ERROR
     val isLoading = !hasError && phase != VideoPhase.READY
-    val phaseElapsedSeconds = rememberPhaseElapsedSeconds(phase)
-    val loadingElapsedSeconds = rememberLoadingElapsedSeconds(isLoading)
+    // 当前专辑是否已经出过画面：出过之后中途的短暂 BUFFERING（音画校正 seek 引起）不再弹加载提示，
+    // 避免用户看到的「缓冲提示」二次/多次出现；换专辑时 remember(state.albumId) 会重置。
+    var hasRenderedOnce by remember(state.albumId) { mutableStateOf(false) }
+    LaunchedEffect(phase) {
+        if (phase == VideoPhase.READY) hasRenderedOnce = true
+    }
+    val showInitialLoading = isLoading && !hasRenderedOnce
+    // 日志用最新 phase（LaunchedEffect 的 key 是 isLoading，phase 变化不会重启计时协程）
+    val currentPhase = rememberUpdatedState(phase)
+
+    var overlayVisible by remember { mutableStateOf(false) }
+    var elapsedMs by remember { mutableStateOf(0L) }
+    var loadingStartedAtMs by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(isLoading) {
+        if (!isLoading) {
+            if (overlayVisible) {
+                Diag.log(
+                    "Video",
+                    "overlay HIDE phase=${currentPhase.value} " +
+                        "elapsed=${System.currentTimeMillis() - loadingStartedAtMs}ms",
+                )
+            }
+            overlayVisible = false
+            elapsedMs = 0L
+            return@LaunchedEffect
+        }
+        // 新的一轮加载：先等 500ms，快速加载则用户完全看不到 spinner/文案
+        val startedAtMs = System.currentTimeMillis()
+        loadingStartedAtMs = startedAtMs
+        elapsedMs = 0L
+        overlayVisible = false
+        delay(OVERLAY_SHOW_DELAY_MS)
+        overlayVisible = true
+        Diag.log(
+            "Video",
+            "overlay SHOW phase=${currentPhase.value} elapsed=${System.currentTimeMillis() - startedAtMs}ms",
+        )
+        while (true) {
+            elapsedMs = System.currentTimeMillis() - startedAtMs
+            delay(250L)
+        }
+    }
 
     when {
+        // 错误立即显示（不走延迟），并提供重试
         hasError -> Box(
             modifier = modifier
                 .fillMaxSize()
@@ -579,7 +709,7 @@ private fun VideoStatusOverlay(
             }
         }
 
-        isLoading -> Box(
+        isLoading && showInitialLoading && overlayVisible -> Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.28f)),
@@ -589,17 +719,19 @@ private fun VideoStatusOverlay(
                 CircularProgressIndicator(color = Color.White)
                 Spacer(Modifier.height(Spacing.md))
                 Text(
-                    text = phaseLoadingLabel(phase),
+                    text = "正在缓冲…",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = "已等待 ${phaseElapsedSeconds}s",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.72f),
-                )
-                if (loadingElapsedSeconds >= SLOW_LOADING_HINT_SECONDS) {
+                if (elapsedMs >= ELAPSED_TEXT_THRESHOLD_MS) {
+                    Text(
+                        text = "已等待 ${elapsedMs / 1_000L}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.72f),
+                    )
+                }
+                if (elapsedMs >= SLOW_LOADING_HINT_MS) {
                     Spacer(Modifier.height(Spacing.md))
                     Text(
                         text = "视频源加载较慢，可稍候或点重试",
@@ -614,44 +746,6 @@ private fun VideoStatusOverlay(
 
         else -> Unit
     }
-}
-
-/** 某个 phase 内已等待的秒数（phase 变化时重新计时，每秒刷新）。 */
-@Composable
-private fun rememberPhaseElapsedSeconds(phase: VideoPhase): Long {
-    var seconds by remember(phase) { mutableStateOf(0L) }
-    LaunchedEffect(phase) {
-        if (phase == VideoPhase.READY || phase == VideoPhase.ERROR) return@LaunchedEffect
-        val startAtMs = System.currentTimeMillis()
-        while (true) {
-            seconds = (System.currentTimeMillis() - startAtMs) / 1_000L
-            delay(1_000L)
-        }
-    }
-    return seconds
-}
-
-/** 整个加载过程已等待的秒数（RESOLVING/PREPARING/BUFFERING 之间切换不清零，用于慢加载提示）。 */
-@Composable
-private fun rememberLoadingElapsedSeconds(isLoading: Boolean): Long {
-    var seconds by remember(isLoading) { mutableStateOf(0L) }
-    LaunchedEffect(isLoading) {
-        if (!isLoading) return@LaunchedEffect
-        val startAtMs = System.currentTimeMillis()
-        while (true) {
-            seconds = (System.currentTimeMillis() - startAtMs) / 1_000L
-            delay(1_000L)
-        }
-    }
-    return seconds
-}
-
-/** phase → 加载文案。 */
-private fun phaseLoadingLabel(phase: VideoPhase): String = when (phase) {
-    VideoPhase.RESOLVING -> "正在获取视频流…"
-    VideoPhase.PREPARING, VideoPhase.IDLE -> "正在准备播放器…"
-    VideoPhase.BUFFERING -> "正在缓冲…"
-    VideoPhase.READY, VideoPhase.ERROR -> ""
 }
 
 /** 视频清晰度标签（如「480P」）。 */

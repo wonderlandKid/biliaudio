@@ -37,7 +37,7 @@ fun AlbumCard(
             .padding(bottom = Spacing.xs),
     ) {
         CoverImage(
-            url = album.coverUrl,
+            url = album.coverModel(),
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f),
@@ -105,7 +105,7 @@ fun AlbumCompactRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         CoverImage(
-            url = album.coverUrl,
+            url = album.coverModel(),
             modifier = Modifier.size(52.dp),
             cornerRadius = 14.dp,
         )

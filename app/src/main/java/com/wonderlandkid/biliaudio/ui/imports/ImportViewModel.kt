@@ -18,9 +18,11 @@ import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
+import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
+import com.wonderlandkid.biliaudio.ui.components.CoverPick
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -69,7 +71,18 @@ data class VideoImportState(
     val splitText: String = "",
     /** [SplitTextParser] 的解析结果；文本为空时为 null */
     val splitParse: SplitTextParser.Result? = null,
+    /** 预览里选中、待导入成功后应用到专辑的封面（null = 用 B 站原始封面） */
+    val pendingCover: CoverPick? = null,
 ) {
+    /** 预览当前应展示的封面数据（优先待应用封面，否则 B 站封面） */
+    val pendingCoverModel: Any?
+        get() = when (val pick = pendingCover) {
+            is CoverPick.LocalImage -> pick.uri
+            is CoverPick.NetEase -> pick.candidate.thumbnailUrl
+            CoverPick.RestoreBilibili -> null
+            null -> info?.coverUrl
+        }
+
     /** 解析出的分割点（可直接传给 AlbumImportRequest.segments；空文本 → 空列表 = 未分割专辑） */
     val splitSegments: List<SegmentSpec>
         get() = splitParse?.toSegmentSpecs().orEmpty()
@@ -150,6 +163,7 @@ class ImportViewModel(
     private val albumRepository: AlbumRepository,
     private val biliRepository: BiliRepository,
     private val libraryArchiveRepository: LibraryArchiveRepository,
+    private val albumCoverRepository: AlbumCoverRepository,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -207,6 +221,11 @@ class ImportViewModel(
         _uiState.update { it.copy(bv = it.bv.withSplitText(text)) }
     }
 
+    /** 更新 BV 预览里选中的待应用封面（null = 恢复使用 B 站封面）。 */
+    fun updateBvPendingCover(pick: CoverPick?) {
+        _uiState.update { it.copy(bv = it.bv.copy(pendingCover = pick)) }
+    }
+
     /** 解析 BV 号 / 链接，成功后展示可编辑的预览卡片。 */
     fun parseBvInput() {
         val input = _uiState.value.bv.input.trim()
@@ -252,6 +271,7 @@ class ImportViewModel(
     fun importBv() {
         val state = _uiState.value.bv
         val info = state.info ?: return
+        val pendingCover = state.pendingCover
         // 分曲文本非空但识别 0 个分割点：禁止导入并提示
         state.splitError?.let { message ->
             _uiState.update { it.copy(bv = it.bv.copy(importError = message)) }
@@ -284,10 +304,14 @@ class ImportViewModel(
                                     importedAlbumId = result.albumId,
                                     importedTitle = result.albumTitle,
                                     importedTrackCount = result.trackCount,
+                                    // 封面已在上方记录，成功态清空待应用封面
+                                    pendingCover = null,
                                 ),
                             )
                         }
                         _messages.tryEmit(importSuccessMessage(result.albumTitle, result.trackCount))
+                        // 封面应用失败不阻塞导入（专辑已创建成功）
+                        applyPendingCover(result.albumId, pendingCover)
                     }
 
                     is ImportResult.Failure -> {
@@ -586,9 +610,15 @@ class ImportViewModel(
         updateSearchPreview { it.withSplitText(text) }
     }
 
+    /** 更新搜索预览里选中的待应用封面（null = 恢复使用 B 站封面）。 */
+    fun updateSearchPreviewPendingCover(pick: CoverPick?) {
+        updateSearchPreview { it.copy(pendingCover = pick) }
+    }
+
     fun importSearchPreview() {
         val state = _uiState.value.searchPreview ?: return
         val info = state.info ?: return
+        val pendingCover = state.pendingCover
         // 分曲文本非空但识别 0 个分割点：禁止导入并提示
         state.splitError?.let { message ->
             updateSearchPreview { it.copy(importError = message) }
@@ -619,9 +649,12 @@ class ImportViewModel(
                                 importedAlbumId = result.albumId,
                                 importedTitle = result.albumTitle,
                                 importedTrackCount = result.trackCount,
+                                pendingCover = null,
                             )
                         }
                         _messages.tryEmit(importSuccessMessage(result.albumTitle, result.trackCount))
+                        // 封面应用失败不阻塞导入（专辑已创建成功）
+                        applyPendingCover(result.albumId, pendingCover)
                     }
 
                     is ImportResult.Failure -> {
@@ -654,6 +687,42 @@ class ImportViewModel(
         splitText = text,
         splitParse = if (text.isBlank()) null else SplitTextParser.parse(text),
     )
+
+    /**
+     * 把预览里选中的封面应用到刚导入的专辑。
+     * 失败只提示「封面设置失败」，不影响导入结果。
+     */
+    private suspend fun applyPendingCover(albumId: Long, pick: CoverPick?) {
+        if (pick == null) return
+        try {
+            when (pick) {
+                is CoverPick.LocalImage -> {
+                    val path = withContext(Dispatchers.IO) {
+                        albumCoverRepository.saveAlbumCover(albumId, pick.bytes)
+                    } ?: error("封面图片保存失败")
+                    withContext(Dispatchers.IO) { albumRepository.updateAlbumCover(albumId, path) }
+                }
+
+                is CoverPick.NetEase -> {
+                    val bytes = withContext(Dispatchers.IO) {
+                        albumCoverRepository.fetchCoverBytes(pick.candidate.fullUrl)
+                    } ?: error("封面下载失败，请检查网络后重试")
+                    val path = withContext(Dispatchers.IO) {
+                        albumCoverRepository.saveAlbumCover(albumId, bytes)
+                    } ?: error("封面图片保存失败")
+                    withContext(Dispatchers.IO) { albumRepository.updateAlbumCover(albumId, path) }
+                }
+
+                CoverPick.RestoreBilibili -> withContext(Dispatchers.IO) {
+                    albumRepository.updateAlbumCover(albumId, null)
+                }
+            }
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            _messages.tryEmit("封面设置失败：${t.message?.takeIf { it.isNotBlank() } ?: "未知错误"}")
+        }
+    }
 
     /** 导入成功提示：0 首表示未分割专辑（整张按一首播放）。 */
     private fun importSuccessMessage(albumTitle: String, trackCount: Int): String =

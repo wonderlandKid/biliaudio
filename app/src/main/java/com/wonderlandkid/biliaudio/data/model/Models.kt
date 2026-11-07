@@ -13,7 +13,10 @@ data class Album(
     val pageCount: Int = 1,
     val title: String,
     val artist: String,
+    /** B 站原始封面 URL（远程兜底） */
     val coverUrl: String,
+    /** 用户自定义封面（本机文件绝对路径）；null 时使用 [coverUrl] */
+    val coverLocalPath: String? = null,
     /** 视频总时长（即整张专辑的音频总时长） */
     val durationMs: Long,
     val createdAt: Long = System.currentTimeMillis(),
@@ -156,3 +159,20 @@ data class AppSettings(
     /** null = 跟随系统 */
     val darkTheme: Boolean? = null,
 )
+
+/**
+ * 在线封面候选项（当前来源：网易云音乐专辑）。
+ * 只用于 UI 展示与下载，不落库。
+ */
+data class CoverCandidate(
+    val source: String = "netease",
+    val id: String,
+    val title: String,
+    val artist: String,
+    /** 列表缩略图（带 param=300y300） */
+    val thumbnailUrl: String,
+    /** 原图（用于下载保存） */
+    val fullUrl: String,
+) {
+    val displaySubtitle: String get() = if (artist.isBlank()) title else "$artist · $title"
+}

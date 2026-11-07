@@ -50,7 +50,7 @@ fun MiniPlayerBar(
         modifier = modifier,
     ) {
         if (track == null) return@AnimatedVisibility
-        val cover = state.queue.getOrNull(state.currentIndex)?.coverUrl
+        val cover = state.queue.getOrNull(state.currentIndex)?.coverModel()
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
