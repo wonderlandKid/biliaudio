@@ -1,0 +1,61 @@
+# 分割点文本真实样例（用户提供的三种格式，可混用）
+
+> 用于 `SplitTextParser` / 导入页「分曲文本（可选）」/ 分曲编辑「文本导入」的回归测试。
+> 说明：格式 1 需要视频时长足够（最后一首 48:23）；测试长专辑可用 BV1sp4y1B7bH（59:25）。
+
+## 格式 1：编号 + 歌名 + 时间（时间在后，标题与时间之间可能没有空格）
+
+```text
+1.Breakaway00:00
+2.Since U Been Gone03:57
+3.Behind These Hazel Eyes07:06
+4.Because of You10:25
+5.Gone14:04
+6.Addicted17:32
+7.Where Is Your Heart21:29
+8.Walk Away26:08
+9.You Found Me29:17
+10.I Hate Myself For Losing You32:56
+11.Hear Me36:17
+12.Beautiful Disaster(Live)40:13
+13.Miss Independent44:48
+14.Low48:23
+```
+
+## 格式 2：时间 + 歌名（时间在前）
+
+```text
+00:00 Tap Out
+03:42 All The Time
+06:44 One Way Trigger
+10:46 Welcome To Japan
+14:37 80's Comedown Machine
+19:36 50/50
+22:19 Slow Animals
+26:40 Partners In Crime
+30:01 Chances
+33:38 Happy Ending
+36:30 Call It Fate, Call It Karma
+```
+
+## 格式 3：歌名 + 时间（时间在后；首行有前导空格、部分行无空格）
+
+```text
+ Come Together00:00
+Something04:20
+Maxwell's Silver Hammer07:22
+Oh! Darling 10:50
+Octopus's Garden14:17
+I Want You (She's So Heavy)17:08
+Here Comes The Sun24:55
+Because28:01
+You Never Give Me Your Money30:47
+Sun King34:50
+Mean Mr Mustard37:16
+Polythene Pam38:23
+She Came In Through The Bathroom Window39:35
+Golden Slumbers41:34
+Carry That Weight43:06
+The End44:42
+Her Majesty47:04
+```

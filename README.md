@@ -161,7 +161,7 @@ BV1GJ411x7h7,专辑名,艺术家,03:21,曲目二
 ## 已知限制 / 路线图
 
 - **多 P 视频自动分曲**尚未支持（当前按单视频导入后手动分曲）；
-- 歌词页视频清晰度登录后可提升（未登录实测最高 480P）；全屏为竖屏铺满，横屏全屏待做；
+- 歌词页视频清晰度：未登录最高 480P，登录后上限 720P（可后续加画质设置项）；全屏为竖屏铺满，横屏全屏待做；
 - 播放地址会过期，出错时自动重新解析一次；暂不做离线缓存；
 - 搜索接口偶发被 B 站风控（会提示可重试）；
 - 后续：B 站收藏夹批量导入、离线下载、自动静音切分、均衡器、封面取色主题、歌单。
@@ -177,6 +177,18 @@ app/src/main/java/com/wonderlandkid/biliaudio
 └── util/
 docs/           # 设计文档、B站接口笔记、导入/归档格式、截图、示例文件
 ```
+
+## 文档索引
+
+- [AGENTS.md](AGENTS.md)：项目入口、开发约定、文档导航
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
+- [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/选流策略等）
+- [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.4.0 版本记录
+- [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
+- [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记
+- [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md)：音乐库归档格式 / [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md)：导入与分割点文本格式
+- [docs/samples/](docs/samples/)：归档示例与分割点文本真实样例
 
 ## 说明
 
