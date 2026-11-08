@@ -16,7 +16,6 @@ object Routes {
 
     fun artist(artistName: String): String = "artist/" + android.net.Uri.encode(artistName)
     const val PLAYER = "player"
-    const val VIDEO = "video"
     const val SEARCH = "search"
 
     const val ALBUM = "album/{albumId}"

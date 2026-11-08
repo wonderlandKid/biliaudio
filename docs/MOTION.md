@@ -30,6 +30,7 @@
 | 底部导航消失 | 250ms | EmphasizedAccelerate | 高度收缩 + 淡出；迷你条避让同步 |
 | 播放页展开/收起（手指） | 跟手 | 手指位置 | 拖动期间实时；这是交互，不是自动动画 |
 | 播放页松手归位 | spring | damping 0.90 / stiffness 320 | 带初速度，有自然回弹但不甩 |
+| 歌词视频覆盖层进出 | **500ms** | Emphasized（与页面 push/pop 同一条） | 从右盖在播放页上/向右滑出，不闪父页面、不露迷你条 |
 | 歌词视频控制层显隐 | 260 / 200ms | EmphasizedDecelerate / EmphasizedAccelerate | 淡入/淡出 |
 | 歌词视频封面占位淡出 | 300 / 250ms | EmphasizedDecelerate / EmphasizedAccelerate | 封面 → 视频画面 |
 | Ripple / 底部导航指示器 / ModalBottomSheet | Material 3 默认 | M3 默认曲线/弹簧 | 系统组件自带非线性动效，不覆盖 |

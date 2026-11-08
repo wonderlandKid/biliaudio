@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +65,7 @@ fun MiniPlayerBar(
     state: PlaybackState,
     onClick: () -> Unit,
     onTogglePlay: () -> Unit,
+    onPrevious: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
@@ -173,6 +175,13 @@ fun MiniPlayerBar(
                             color = onContainer.copy(alpha = 0.66f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(onClick = onPrevious) {
+                        Icon(
+                            Icons.Rounded.SkipPrevious,
+                            contentDescription = "上一首",
+                            tint = onContainer.copy(alpha = 0.86f),
                         )
                     }
                     FilledIconButton(

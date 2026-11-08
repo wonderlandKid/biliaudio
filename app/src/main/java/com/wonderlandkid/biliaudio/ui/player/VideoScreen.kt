@@ -135,8 +135,9 @@ fun VideoScreen(
     val context = LocalContext.current
     val view = LocalView.current
 
-    // 全屏时返回键先退出全屏
+    // 全屏时返回键先退出全屏；非全屏时关闭视频覆盖层（视频不是独立路由）
     BackHandler(enabled = isFullscreen) { isFullscreen = false }
+    BackHandler(enabled = !isFullscreen) { onBack() }
 
     // 退到后台时暂停视频（音频继续后台播放，回到前台后由同步轮询恢复）
     val lifecycleOwner = LocalLifecycleOwner.current

@@ -39,6 +39,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -59,7 +61,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -112,10 +117,12 @@ fun AppNavHost() {
 
     val tabRoutes = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
     val miniPlayerOnlyRoutes = setOf(Routes.ALBUM, Routes.SPLIT_EDITOR)
-    val immersiveRoutes = setOf(Routes.VIDEO)
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
-    val isImmersive = currentRoute in immersiveRoutes
+    // 歌词视频是播放页上方的一层覆盖页，不是独立导航目的地：
+    // 进入/退出时底下始终是「正在播放」页，不会闪回专辑页，也不会让迷你条滑上来。
+    var videoOpen by remember { mutableStateOf(false) }
+    val isImmersive = videoOpen
     val showMiniPlayer = (showChrome || showMiniPlayerOnly) && !isImmersive
 
     val hazeState = rememberHazeState()
@@ -140,7 +147,6 @@ fun AppNavHost() {
     // 0f = 迷你条，1f = 全屏播放页；拖拽期间实时变化
     var playerProgress by remember { mutableFloatStateOf(0f) }
     var playerOpenTarget by rememberSaveable { mutableStateOf(false) }
-    var reopenPlayerAfterVideo by rememberSaveable { mutableStateOf(false) }
     var settleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     fun animatePlayerTo(open: Boolean, velocity: Float = 0f) {
@@ -177,18 +183,6 @@ fun AppNavHost() {
             animatePlayerTo(open, (-velocity / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(-6f, 6f))
         },
     )
-
-    // 视频页返回后恢复播放页（视频是从播放页打开的）
-    LaunchedEffect(currentRoute) {
-        if (currentRoute == Routes.VIDEO) {
-            // 播放页卡片让位给视频页；返回时再恢复
-            settleJob?.cancel()
-            playerProgress = 0f
-        } else if (reopenPlayerAfterVideo) {
-            reopenPlayerAfterVideo = false
-            animatePlayerTo(true)
-        }
-    }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -407,20 +401,6 @@ fun AppNavHost() {
                     }
                 }
 
-                // ---------------- 歌词视频页（左右滑动进出） ----------------
-                composable(
-                    Routes.VIDEO,
-                    enterTransition = { slideInFromRight() },
-                    exitTransition = { slideOutToLeft() },
-                    popEnterTransition = { slideInFromLeft() },
-                    popExitTransition = { slideOutToRight() },
-                ) {
-                    Page {
-                        VideoScreen(
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                }
             }
 
             // 悬浮迷你播放条（播放页展开时淡出并让位给播放页卡片）
@@ -468,10 +448,10 @@ fun AppNavHost() {
                         onBack = { animatePlayerTo(false) },
                         dragModifier = playerDragModifier,
                         onOpenVideo = {
-                            reopenPlayerAfterVideo = true
+                            // 播放页保持完全展开作为视频页背景，只把视频层盖上来
                             settleJob?.cancel()
-                            playerProgress = 0f
-                            navController.navigate(Routes.VIDEO)
+                            playerProgress = 1f
+                            videoOpen = true
                         },
                         onOpenAlbum = { albumId ->
                             animatePlayerTo(false)
@@ -486,6 +466,29 @@ fun AppNavHost() {
                             .height(48.dp)
                             .then(playerDragModifier),
                     )
+                }
+            }
+
+            // 歌词视频：盖在播放页上方（播放页保持展开，避免闪回父页面/迷你条上滑）
+            AnimatedVisibility(
+                visible = videoOpen,
+                enter = slideInHorizontally(animationSpec = PageSlideSpec) { it },
+                exit = slideOutHorizontally(animationSpec = PageSlideSpec) { it },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                // 视频页用独立 ViewModelStore：关闭视频后立即 clear，释放第二路视频播放器。
+                val videoViewModelStore = remember {
+                    object : ViewModelStoreOwner {
+                        override val viewModelStore = ViewModelStore()
+                    }
+                }
+                DisposableEffect(videoViewModelStore) {
+                    onDispose { videoViewModelStore.viewModelStore.clear() }
+                }
+                CompositionLocalProvider(LocalViewModelStoreOwner provides videoViewModelStore) {
+                    Page(modifier = Modifier.padding(innerPadding)) {
+                        VideoScreen(onBack = { videoOpen = false })
+                    }
                 }
             }
 
@@ -513,9 +516,12 @@ fun AppNavHost() {
  * 避免透明背景导致两页内容叠加透视。
  */
 @Composable
-private fun Page(content: @Composable () -> Unit) {
+private fun Page(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
         content()
@@ -580,6 +586,7 @@ private fun MiniPlayerHost(
         state = state,
         onClick = onClick,
         onTogglePlay = { playbackController.togglePlayPause() },
+        onPrevious = { playbackController.previous() },
         onNext = { playbackController.next() },
         hazeState = hazeState,
         dragModifier = dragModifier,
