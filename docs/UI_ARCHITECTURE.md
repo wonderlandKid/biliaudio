@@ -78,6 +78,8 @@ fun BiliDetailScaffold(
 | --- | --- | --- |
 | `BiliPageHeader` | `ui/components/PageHeader.kt` | T1 页大标题 + 副标题 |
 | `BiliDetailScaffold` / `BiliTopBar` | `ui/template/BiliPageTemplates.kt` | T2 统一容器/顶栏 |
+| `BiliGroup` / `BiliGroupItem` | `ui/components/BiliGroup.kt` | 分组卡片与组内条目的统一背景/圆角/内边距/字体/点击态 |
+| `BiliGroupSectionTitle` | `ui/components/BiliGroup.kt` | 分组外的小节标题（设置/缓存/用户数据统一） |
 | `SearchField` / `SearchBarEntry` | `ui/components/Common.kt` | 胶囊搜索框/入口 |
 | `TrackRow` / `AlbumCard` / `CoverImage` | `ui/components/` | 列表行/卡片/封面 |
 | `EmptyState` / `LoadingBox` | `ui/components/Common.kt` | 空态/加载态 |
@@ -85,6 +87,15 @@ fun BiliDetailScaffold(
 
 尺寸、圆角、间距统一用 `ui/theme/Tokens.kt`（`Spacing`/`Dimens`）；动效统一用
 `ui/theme/Motion.kt` 的 `BiliMotion` + `Entrance.kt`，不要页面内散写时长/曲线。
+
+### Group / Item 怎么保证一致
+
+- 分组容器统一 `BiliGroup`：`Dimens.cardCorner` 圆角 + `surfaceContainerHigh` + 标准内边距；
+- 组内行统一 `BiliGroupItem`：leading/标题/副标题/trailing 的间距、字体、点击裁剪与点击态只维护一份；
+- `SettingsCard` 已委托给 `BiliGroup`；设置、缓存管理、歌单列表、统计卡片、发现页快捷卡全部使用同一模板；
+- 组内自定义内容（如统计时长条、缓存音频/视频 chips）只允许在 **BiliGroup 容器内部**做业务排版，
+  不重新定义卡片背景/圆角/阴影；
+- 列表行统一复用 `TrackRow`/`SongRow`；页面壳统一 T2 模板；空态/加载态统一 `EmptyState`/`LoadingBox`。
 
 ## 5. 导航/返回/动画规则（摘要）
 

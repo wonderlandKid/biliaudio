@@ -14,6 +14,7 @@ import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
+import com.wonderlandkid.biliaudio.data.repository.UserDataBackupRepository
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,7 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val authRepository: AuthRepository,
     private val libraryArchiveRepository: LibraryArchiveRepository,
+    private val userDataBackupRepository: UserDataBackupRepository,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -166,6 +168,63 @@ class SettingsViewModel(
     /** 关闭目录导入结果弹窗。 */
     fun dismissTreeImportResult() {
         _treeImportResult.value = null
+    }
+
+    // ------------------------------------------------------------------
+    // 用户数据备份（歌单 + 听歌统计，独立于音乐库归档）
+    // ------------------------------------------------------------------
+
+    /** 导出歌单 + 听歌统计到 SAF JSON 文件。 */
+    fun exportUserData(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val jsonText = withContext(Dispatchers.IO) {
+                    userDataBackupRepository.exportJson()
+                }
+                withContext(Dispatchers.IO) {
+                    val output = appContext.contentResolver.openOutputStream(uri)
+                        ?: throw IOException("无法写入所选文件")
+                    output.use { stream ->
+                        stream.write(jsonText.toByteArray(Charsets.UTF_8))
+                        stream.flush()
+                    }
+                }
+                _messages.tryEmit("已导出歌单与听歌统计")
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _messages.tryEmit("导出用户数据失败：${messageOf(t)}")
+            }
+        }
+    }
+
+    /** 从 SAF JSON 文件导入歌单 + 听歌统计。 */
+    fun importUserData(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) {
+                    val input = appContext.contentResolver.openInputStream(uri)
+                        ?: throw IOException("无法读取所选文件")
+                    input.use { stream ->
+                        val bytes = ByteArrayOutputStream().also { output -> stream.copyTo(output) }
+                        if (bytes.size() > MAX_USER_DATA_BYTES) throw IOException("文件过大")
+                        bytes.toByteArray().toString(Charsets.UTF_8)
+                    }
+                }
+                val report = withContext(Dispatchers.IO) {
+                    userDataBackupRepository.importJson(text)
+                }
+                val warning = report.warnings.firstOrNull()?.let { "；$it" }.orEmpty()
+                _messages.tryEmit(
+                    "用户数据导入完成：新建歌单 ${report.playlistsCreated} / 合并 ${report.playlistsMerged} / " +
+                        "恢复歌曲 ${report.entriesRestored} / 统计 ${report.statsRestored}$warning",
+                )
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _messages.tryEmit("导入用户数据失败：${messageOf(t)}")
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -303,6 +362,8 @@ class SettingsViewModel(
     }
 
     private companion object {
+        private const val MAX_USER_DATA_BYTES = 8 * 1024 * 1024
+
         /** 目录导入递归深度 / 文件数 / 单文件大小限制（防止误选超大目录）。 */
         const val MAX_TREE_DEPTH = 8
         const val MAX_TREE_FILES = 3000

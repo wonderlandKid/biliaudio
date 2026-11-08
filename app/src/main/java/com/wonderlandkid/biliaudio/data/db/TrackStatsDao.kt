@@ -21,6 +21,9 @@ interface TrackStatsDao {
     @Query("SELECT * FROM track_stats WHERE trackUid = :trackUid")
     suspend fun getByUid(trackUid: String): TrackStatsEntity?
 
+    @Query("SELECT * FROM track_stats ORDER BY albumId ASC")
+    suspend fun getAll(): List<TrackStatsEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(stats: TrackStatsEntity)
 

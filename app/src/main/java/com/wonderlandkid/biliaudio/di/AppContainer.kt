@@ -9,6 +9,7 @@ import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.PlaylistRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.UserDataBackupRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.PlaybackStatsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
@@ -21,6 +22,7 @@ import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
+import com.wonderlandkid.biliaudio.data.repository.UserDataBackupRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
@@ -83,6 +85,12 @@ class AppContainer(context: Context) {
     /** 听歌统计（播放次数/收听时长）。 */
     val playbackStatsRepository: PlaybackStatsRepository = PlaybackStatsRepositoryImpl(
         database = AppDatabase.getInstance(appContext),
+    )
+
+    /** 歌单 + 听歌统计的独立用户数据备份（与音乐库归档分离）。 */
+    val userDataBackupRepository: UserDataBackupRepository = UserDataBackupRepositoryImpl(
+        database = AppDatabase.getInstance(appContext),
+        albumRepository = albumRepository,
     )
 
     /** 在线封面搜索（网易云）+ 自定义封面文件存取。 */

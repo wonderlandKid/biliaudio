@@ -662,3 +662,18 @@
   每 5 秒批量写入，暂停/切歌/重新入队 flush；未分割专辑使用 `album:<id>` 虚拟 uid。
 - **未做**：歌单/统计进入归档备份、拖拽排序、歌单封面、分享；统计只展示 Top 50/100。
 
+---
+
+## D47 用户数据独立备份 + 分组/条目 UI 模板（v0.22.0）
+
+- **日期**：2026-11-08
+- **持久化与导出边界**：歌单/统计本来就在 Room v4 持久化；但不应塞进音乐库归档（核心库结构），
+  因此在设置新增「用户数据 → 歌单与听歌统计备份」，单独 JSON 导出/导入。
+  导出用专辑稳定键 + startMs 定位歌曲；恢复歌单按名称合并、统计按 max 合并，避免重复导入翻倍。
+- **UI 一致性**：之前每个新页面自己写 `Surface(shape=22dp, color=surfaceContainerHigh)`，圆角/内边距/
+  字体容易漂移。新增 `BiliGroup`（容器）+ `BiliGroupItem`（组内行）+ `BiliGroupSectionTitle`（组外标题），
+  统一 background/shape/padding/typography/click clip；`SettingsCard` 也委托 BiliGroup。
+  新页面必须使用模板，组内业务内容只能放在容器内，不重新定义卡片外观。
+- **影响**：用户数据可单独迁移；设置/缓存/歌单/统计/发现快捷卡视觉一致，后续新页面不用再
+  copy-paste 卡片样式。
+

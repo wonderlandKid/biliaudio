@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.BiliGroup
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
@@ -99,12 +100,9 @@ fun StatsScreen(
 
 @Composable
 private fun StatsSummaryCard(totalListenedMs: Long, totalPlayCount: Int) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-        shape = RoundedCornerShape(Dimens.cardCorner),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    BiliGroup(
+        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        contentPadding = PaddingValues(0.dp),
     ) {
         Row(
             modifier = Modifier.padding(Spacing.lg),
@@ -153,11 +151,7 @@ private fun AlbumStatsList(stats: List<AlbumListeningUi>) {
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         itemsIndexed(stats, key = { _, item -> item.album.id }) { index, item ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(Dimens.cardCorner),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
+            BiliGroup(contentPadding = PaddingValues(0.dp)) {
                 Row(
                     modifier = Modifier.padding(Spacing.md),
                     verticalAlignment = Alignment.CenterVertically,

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.BiliGroup
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
@@ -190,11 +191,7 @@ private fun CacheSummaryCard(
     onClearAll: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Dimens.cardCorner),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
+    BiliGroup(contentPadding = PaddingValues(0.dp)) {
         Row(
             modifier = Modifier.padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
@@ -227,11 +224,7 @@ private fun CacheAlbumCard(
 ) {
     val summary = item.summary
     val context = LocalContext.current
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Dimens.cardCorner),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
+    BiliGroup(contentPadding = PaddingValues(0.dp)) {
         Column(modifier = Modifier.padding(Spacing.md)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -67,6 +68,8 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.BiliGroup
+import com.wonderlandkid.biliaudio.ui.components.BiliGroupSectionTitle
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
@@ -104,6 +107,7 @@ fun SettingsScreen(
             settingsRepository = container.settingsRepository,
             authRepository = container.authRepository,
             libraryArchiveRepository = container.libraryArchiveRepository,
+            userDataBackupRepository = container.userDataBackupRepository,
             appContext = container.appContext,
         )
     }
@@ -115,6 +119,14 @@ fun SettingsScreen(
     val isExportingTree by viewModel.isExportingTree.collectAsStateWithLifecycle()
     val isImportingTree by viewModel.isImportingTree.collectAsStateWithLifecycle()
     val treeImportReport by viewModel.treeImportResult.collectAsStateWithLifecycle()
+
+    // 用户数据（歌单/统计）独立 JSON 备份：与音乐库归档完全分开
+    val userDataExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri -> if (uri != null) viewModel.exportUserData(uri) }
+    val userDataImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.importUserData(uri) }
 
     // 目录归档：导出到文件夹 / 从文件夹导入（SAF 选择目录）
     val treeExportLauncher = rememberLauncherForActivityResult(
@@ -203,6 +215,21 @@ fun SettingsScreen(
                         onImportShareClick = onOpenBackupImport,
                         onExportTreeClick = { treeExportLauncher.launch(null) },
                         onImportTreeClick = { treeImportLauncher.launch(null) },
+                    )
+                }
+            }
+            item { SettingsPadded { SectionTitle("用户数据") } }
+            item {
+                SettingsPadded {
+                    UserDataBackupCard(
+                        onExport = {
+                            userDataExportLauncher.launch(buildUserDataFileName())
+                        },
+                        onImport = {
+                            userDataImportLauncher.launch(
+                                arrayOf("application/json", "text/plain", "application/octet-stream"),
+                            )
+                        },
                     )
                 }
             }
@@ -389,30 +416,16 @@ fun SettingsScreen(
 
 @Composable
 private fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = Spacing.xs, top = Spacing.xs),
-    )
+    BiliGroupSectionTitle(title = title)
 }
 
-/** 统一的大圆角设置卡片。 */
+/** 设置卡片统一走通用分组模板。 */
 @Composable
 private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Dimens.cardCorner),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-            content = content,
-        )
-    }
+    BiliGroup(modifier = modifier, content = content)
 }
 
 /** 账号卡片：未登录 → 去登录；已登录 → 头像/昵称/退出。 */
@@ -964,6 +977,54 @@ private fun DiagnosticsToggleCard(
 }
 
 /** 「诊断日志」入口卡片：显示最近日志行数，点击进入诊断日志页。 */
+@Composable
+private fun UserDataBackupCard(
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    SettingsCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.Backup,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(Spacing.md))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "歌单与听歌统计备份", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "独立 JSON，不含音乐库专辑/分曲/封面/缓存",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onExport,
+                    modifier = Modifier.weight(1f),
+                ) { Text("导出") }
+                androidx.compose.material3.Button(
+                    onClick = onImport,
+                    modifier = Modifier.weight(1f),
+                ) { Text("导入") }
+            }
+        }
+    }
+}
+
+private fun buildUserDataFileName(): String {
+    val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+    return "biliaudio-user-data-$stamp.json"
+}
+
 @Composable
 private fun CacheManagementEntryCard(onClick: () -> Unit) {
     SettingsCard {

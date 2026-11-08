@@ -44,6 +44,8 @@ import com.wonderlandkid.biliaudio.ui.components.AlbumCard
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.SearchBarEntry
 import com.wonderlandkid.biliaudio.ui.components.AlbumCompactRow
+import com.wonderlandkid.biliaudio.ui.components.BiliGroup
+import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.ListBottomSpacer
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
@@ -238,41 +240,27 @@ private fun HomeHubCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Row(
-            modifier = Modifier.padding(Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .padding(Spacing.sm)
-                        .size(20.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+    BiliGroup(modifier = modifier, contentPadding = PaddingValues(0.dp)) {
+        BiliGroupItem(
+            title = title,
+            subtitle = subtitle,
+            onClick = onClick,
+            leading = {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .padding(Spacing.sm)
+                            .size(20.dp),
+                    )
+                }
+            },
+        )
     }
 }
 
