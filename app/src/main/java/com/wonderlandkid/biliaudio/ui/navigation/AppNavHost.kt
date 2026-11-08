@@ -88,6 +88,7 @@ import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.player.VideoScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
+import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
@@ -307,6 +308,7 @@ fun AppNavHost() {
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
                             onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
                             onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                            onOpenCacheManagement = { navController.navigate(Routes.CACHE_MANAGEMENT) },
                         )
                     }
                 }
@@ -390,6 +392,11 @@ fun AppNavHost() {
                 composable(Routes.DIAGNOSTICS) {
                     Page {
                         DiagnosticsScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(Routes.CACHE_MANAGEMENT) {
+                    Page {
+                        CacheManagementScreen(onBack = { navController.popBackStack() })
                     }
                 }
                 composable(Routes.LOGIN) {

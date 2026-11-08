@@ -9,6 +9,7 @@ object Routes {
     const val IMPORT_ARCHIVE = "import_archive"
     const val LOGIN = "login"
     const val DIAGNOSTICS = "diagnostics"
+    const val CACHE_MANAGEMENT = "cache_management"
 
     /** 艺术家详情：artistName 由 [artist] 生成（URL 编码）。 */
     const val ARTIST = "artist/{artistName}"

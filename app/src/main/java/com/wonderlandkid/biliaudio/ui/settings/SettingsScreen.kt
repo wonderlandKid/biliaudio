@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
@@ -88,12 +89,14 @@ import java.util.Locale
  * @param onOpenLogin 未登录时点击「去登录」的回调（由导航层打开扫码登录页）
  * @param onOpenBackupImport 点击「导入 / 恢复」的回调（由导航层打开导入页的「归档导入」Tab）
  * @param onOpenDiagnostics 点击「诊断日志」的回调（由导航层打开诊断日志页）
+ * @param onOpenCacheManagement 点击「缓存管理」的回调（由导航层打开缓存管理页）
  */
 @Composable
 fun SettingsScreen(
     onOpenLogin: () -> Unit,
     onOpenBackupImport: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
+    onOpenCacheManagement: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel: SettingsViewModel = appViewModel { container ->
@@ -201,6 +204,12 @@ fun SettingsScreen(
                         onExportTreeClick = { treeExportLauncher.launch(null) },
                         onImportTreeClick = { treeImportLauncher.launch(null) },
                     )
+                }
+            }
+            item { SettingsPadded { SectionTitle("存储") } }
+            item {
+                SettingsPadded {
+                    CacheManagementEntryCard(onClick = onOpenCacheManagement)
                 }
             }
             item { SettingsPadded { SectionTitle("诊断与维护") } }
@@ -955,6 +964,44 @@ private fun DiagnosticsToggleCard(
 }
 
 /** 「诊断日志」入口卡片：显示最近日志行数，点击进入诊断日志页。 */
+@Composable
+private fun CacheManagementEntryCard(onClick: () -> Unit) {
+    SettingsCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+                .padding(vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Storage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "缓存管理", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "查看已缓存的专辑音频/歌词视频，删除或清空全部",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun DiagnosticsEntryCard(
     lineCount: Int,

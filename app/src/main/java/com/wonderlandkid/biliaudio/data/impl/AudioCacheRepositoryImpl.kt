@@ -5,6 +5,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.ResolvedStreams
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.CachedAudio
+import com.wonderlandkid.biliaudio.data.repository.CachedMediaSummary
 import com.wonderlandkid.biliaudio.data.repository.CachedVideo
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.util.Diag
@@ -120,11 +121,74 @@ class AudioCacheRepositoryImpl(
         }
     }
 
+    override suspend fun listCached(): List<CachedMediaSummary> = withContext(Dispatchers.IO) {
+        val map = linkedMapOf<String, CachedMediaSummary>()
+        dir.listFiles().orEmpty()
+            .filter { it.isFile && it.name.endsWith(".properties") }
+            .forEach { meta ->
+                val metaName = meta.nameWithoutExtension
+                val isVideo = metaName.endsWith("_video")
+                val key = metaName.removeSuffix("_video")
+                val audioFile = File(dir, "$key.m4a")
+                val videoFile = File(dir, "${key}_video.mp4")
+                val mediaExists = if (isVideo) {
+                    videoFile.isFile && videoFile.length() > 0L
+                } else {
+                    audioFile.isFile && audioFile.length() > 0L
+                }
+                if (!mediaExists) return@forEach
+                val props = runCatching {
+                    Properties().apply { meta.inputStream().use { load(it) } }
+                }.getOrNull() ?: return@forEach
+                val old = map[key]
+                val albumId = props.getProperty("albumId")?.toLongOrNull()
+                    ?: old?.albumId ?: 0L
+                val bvid = props.getProperty("bvid") ?: old?.bvid ?: key.substringBefore('_')
+                val cid = props.getProperty("cid")?.toLongOrNull()
+                    ?: old?.cid ?: key.substringAfter('_', "").toLongOrNull() ?: 0L
+                val cachedAtMs = props.getProperty("cachedAtMs")?.toLongOrNull() ?: 0L
+                val newValue = if (isVideo) {
+                    CachedMediaSummary(
+                        albumId = albumId,
+                        bvid = bvid,
+                        cid = cid,
+                        audioBytes = old?.audioBytes ?: 0L,
+                        audioQualityLabel = old?.audioQualityLabel,
+                        videoBytes = videoFile.length(),
+                        videoHeight = props.getProperty("videoHeight")?.toIntOrNull(),
+                        updatedAtMs = maxOf(old?.updatedAtMs ?: 0L, cachedAtMs),
+                    )
+                } else {
+                    CachedMediaSummary(
+                        albumId = albumId,
+                        bvid = bvid,
+                        cid = cid,
+                        audioBytes = audioFile.length(),
+                        audioQualityLabel = props.getProperty("qualityLabel"),
+                        videoBytes = old?.videoBytes ?: 0L,
+                        videoHeight = old?.videoHeight,
+                        updatedAtMs = maxOf(old?.updatedAtMs ?: 0L, cachedAtMs),
+                    )
+                }
+                map[key] = newValue
+            }
+        map.values.sortedByDescending { it.updatedAtMs }
+    }
+
     override suspend fun remove(album: Album) = withContext(Dispatchers.IO) {
         // 只删音频；歌词视频由 removeVideo 单独管理，避免删除音频时误删视频缓存。
         val key = keyOf(album)
         File(dir, "$key.m4a").delete()
         File(dir, "$key.properties").delete()
+        Unit
+    }
+
+    override suspend fun removeCached(item: CachedMediaSummary) = withContext(Dispatchers.IO) {
+        val key = "${item.bvid}_${item.cid}"
+        File(dir, "$key.m4a").delete()
+        File(dir, "$key.properties").delete()
+        File(dir, "${key}_video.mp4").delete()
+        File(dir, "${key}_video.properties").delete()
         Unit
     }
 

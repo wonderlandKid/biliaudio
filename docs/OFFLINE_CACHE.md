@@ -28,7 +28,17 @@
   视频文件：`<bvid>_<cid>_video.mp4` + `_video.properties`；
 - 下载失败/文件不完整会清理临时文件并提示；文件长度与 Content-Length 不一致视为失败。
 
-## 3. 边界（刻意未做）
+## 3. 缓存管理（v0.20.0）
+
+入口：**设置 → 存储 → 缓存管理**。
+
+- 顶部：已缓存专辑数 + 总占用空间；
+- 每张专辑：封面/标题/艺术家、音频档位与大小、歌词视频清晰度与大小、合计、更新时间；
+- 单条删除 / 清空全部都有二次确认；
+- 列表从缓存目录元数据扫描，不需要 Room schema；专辑已删除但缓存遗留时会显示“已删除的专辑”供清理；
+- 空状态提示去专辑详情缓存。
+
+## 4. 边界（刻意未做）
 
 - **视频大小不可控**：缓存的是整段原始视频，清晰度跟随当前解析结果（未登录常见 480P，登录可能 1080P），
   文件可能从几十 MB 到 1GB+，UI 会在缓存前弹出确认；
@@ -39,7 +49,7 @@
 - 缓存不进入归档/换机备份；清除 App 数据会一起删除；
 - 不自动清理孤立缓存（删除专辑/手动删除已覆盖主要路径；后续可加缓存管理页）。
 
-## 4. 实现位置
+## 5. 实现位置
 
 | 层 | 文件 | 职责 |
 | --- | --- | --- |
@@ -48,9 +58,10 @@
 | 音频播放 | `player/PlaybackEngine.kt` | `resolveStream()` 先查音频缓存；`DefaultDataSource` 支持 `file://` |
 | 视频播放 | `player/AlbumVideoPlayer.kt` | 先查视频缓存；`DefaultDataSource` 同时支持在线/本地 |
 | UI | `ui/album/AlbumDetailViewModel.kt` / `AlbumDetailScreen.kt` | 菜单入口、下载状态、删除、Snackbar |
+| 缓存管理 | `ui/settings/CacheManagementScreen.kt` / `CacheManagementViewModel.kt` | 设置入口、列表、单条/清空 |
 | 容器 | `di/AppContainer.kt` | 注入 `audioCacheRepository` |
 
-## 5. 后续可做（按优先级）
+## 6. 后续可做（按优先级）
 
 1. 缓存管理页（缓存总大小、逐专辑删除、清空全部）；
 2. Wi-Fi-only 开关 + 后台/前台服务下载 + 断点续传；
