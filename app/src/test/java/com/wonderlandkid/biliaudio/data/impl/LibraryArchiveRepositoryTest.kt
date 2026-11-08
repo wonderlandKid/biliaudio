@@ -4,6 +4,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
 import com.wonderlandkid.biliaudio.data.model.AlbumWithTracks
 import com.wonderlandkid.biliaudio.data.model.AppSettings
+import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.ArchiveKind
@@ -241,6 +242,9 @@ class LibraryArchiveRepositoryTest {
         }
         override suspend fun setDiagnosticLogsEnabled(enabled: Boolean) {
             _settings.value = _settings.value.copy(diagnosticLogsEnabled = enabled)
+        }
+        override suspend fun setHomeStatsMode(mode: HomeStatsMode) {
+            _settings.value = _settings.value.copy(homeStatsMode = mode)
         }
     }
 

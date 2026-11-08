@@ -17,12 +17,13 @@
 - **T1 不再自己套 Scaffold**（底部导航/inset 由 `AppNavHost` 的 Scaffold 统一处理）；
   内容用 `BiliPageHeader` + 业务列表；**固定页头/搜索/登录卡等静态元素不做入场**，
   只有列表/内容区用 `Modifier.entrance`（发现逐项、设置逐卡、音乐库内容区）；
-- **发现页结构（v0.23.0）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块
-  「随机专辑 / 我的歌单 / 听歌统计 / 最近播放」只露前 4 条，统一用 `HomeSectionCard`
-  （`BiliGroup` + 右上角操作）；详情：
+- **发现页结构（v0.23.1）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块按
+  「最近播放 → 听歌统计 → 我的歌单 → 随机专辑」排列，只露前 4 条，统一用 `HomeSectionCard`
+  （`BiliGroup` + 左右 `Spacing.lg` 外边距 + 右上角操作）；详情：
   - 随机专辑：换一批/导入；单条打开专辑；
   - 我的歌单：查看全部 → Playlists；
-  - 听歌统计：查看全部 → Stats；
+  - 听歌统计：预览可切换「专辑时长 / 歌曲次数」（持久化 `AppSettings.homeStatsMode`），
+    查看全部 → Stats；
   - 最近播放：查看全部 → RecentAlbums（详情最多 10 张）；
 - **T2 一律用 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`）。禁止在页面里手写一行
   `Row { IconButton(back); Text(title) }` 的顶栏；

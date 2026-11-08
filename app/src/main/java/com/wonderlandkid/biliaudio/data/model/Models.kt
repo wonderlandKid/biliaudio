@@ -165,6 +165,12 @@ class BiliApiException(
     val code: Int? = null,
 ) : Exception(message)
 
+/** 发现页听歌统计预览的展示口径。 */
+enum class HomeStatsMode(val label: String) {
+    ALBUM_LISTEN_TIME("专辑时长"),
+    TRACK_PLAY_COUNT("歌曲次数"),
+}
+
 /** 用户偏好设置。 */
 data class AppSettings(
     val audioQuality: AudioQualityPreference = AudioQualityPreference.AUTO,
@@ -172,6 +178,8 @@ data class AppSettings(
     val darkTheme: Boolean? = null,
     /** 维测日志开关（关闭后 Diag 不再记录/打印） */
     val diagnosticLogsEnabled: Boolean = false,
+    /** 发现页「听歌统计」预览的默认口径（持久化，可在发现页切换） */
+    val homeStatsMode: HomeStatsMode = HomeStatsMode.ALBUM_LISTEN_TIME,
 )
 
 /**

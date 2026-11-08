@@ -4,25 +4,36 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
+import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.model.Playlist
+import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
+import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 @Immutable
 data class HomeStatsAlbum(
     val album: Album,
     val listenedMs: Long,
+)
+
+data class HomeStatsTrack(
+    val song: TrackWithAlbum,
+    val playCount: Int,
 )
 
 /**
@@ -43,6 +54,10 @@ data class HomeUiState(
     val playlistCount: Int = 0,
     /** 听歌统计预览：按专辑累计时长取前 4 */
     val statsAlbums: List<HomeStatsAlbum> = emptyList(),
+    /** 听歌统计预览：按歌曲播放次数取前 4 */
+    val statsTracks: List<HomeStatsTrack> = emptyList(),
+    /** 发现页听歌统计预览的展示口径（持久化） */
+    val statsMode: HomeStatsMode = HomeStatsMode.ALBUM_LISTEN_TIME,
     /** 最近播放预览（最多 4 张，详情页展示 10 张） */
     val recentAlbums: List<Album> = emptyList(),
     val isLoggedIn: Boolean = false,
@@ -62,6 +77,7 @@ class HomeViewModel(
     authRepository: AuthRepository,
     playlistRepository: PlaylistRepository,
     statsRepository: PlaybackStatsRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private data class LibraryCounts(val songCount: Int, val albumCount: Int)
@@ -88,6 +104,20 @@ class HomeViewModel(
         }.take(HOME_SECTION_LIMIT)
     }
 
+    private val statsTracksFlow = combine(
+        statsRepository.observeTrackPlayCounts(HOME_SECTION_LIMIT),
+        albumRepository.songs,
+    ) { stats, songs ->
+        val songsByUid = songs.associateBy { it.track.uid }
+        stats.mapNotNull { stat ->
+            songsByUid[stat.trackUid]?.let { HomeStatsTrack(it, stat.playCount) }
+        }.take(HOME_SECTION_LIMIT)
+    }
+
+    private val statsModeFlow = settingsRepository.settings
+        .map { it.homeStatsMode }
+        .distinctUntilChanged()
+
     val uiState: StateFlow<HomeUiState> = run {
         val countsFlow = combine(
             albumRepository.albums,
@@ -112,7 +142,12 @@ class HomeViewModel(
             )
         }
 
-        combine(baseFlow, statsAlbumsFlow) { base, statsAlbums ->
+        combine(
+            baseFlow,
+            statsAlbumsFlow,
+            statsTracksFlow,
+            statsModeFlow,
+        ) { base, statsAlbums, statsTracks, statsMode ->
             HomeUiState(
                 isLoading = false,
                 songCount = base.counts.songCount,
@@ -121,6 +156,8 @@ class HomeViewModel(
                 playlists = base.playlists.take(HOME_SECTION_LIMIT),
                 playlistCount = base.playlists.size,
                 statsAlbums = statsAlbums,
+                statsTracks = statsTracks,
+                statsMode = statsMode,
                 recentAlbums = base.recentAlbums,
                 isLoggedIn = base.isLoggedIn,
             )
@@ -143,6 +180,14 @@ class HomeViewModel(
     /** 随机专辑：换一批。 */
     fun shuffleRandomAlbums() {
         shuffleTick.update { it + 1 }
+    }
+
+    /** 发现页听歌统计预览：切换专辑时长 / 歌曲次数，并持久化。 */
+    fun setHomeStatsMode(mode: HomeStatsMode) {
+        if (uiState.value.statsMode == mode) return
+        viewModelScope.launch {
+            runCatching { settingsRepository.setHomeStatsMode(mode) }
+        }
     }
 
     private data class BaseHome(

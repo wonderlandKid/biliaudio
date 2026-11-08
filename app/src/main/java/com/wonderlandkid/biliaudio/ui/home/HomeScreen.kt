@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.data.model.Album
+import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.model.Playlist
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
@@ -70,6 +72,7 @@ fun HomeScreen(
             authRepository = container.authRepository,
             playlistRepository = container.playlistRepository,
             statsRepository = container.playbackStatsRepository,
+            settingsRepository = container.settingsRepository,
         )
     },
 ) {
@@ -84,6 +87,7 @@ fun HomeScreen(
         onOpenStats = onOpenStats,
         onOpenRecentAlbums = onOpenRecentAlbums,
         onShuffleAlbums = viewModel::shuffleRandomAlbums,
+        onStatsModeChange = viewModel::setHomeStatsMode,
         modifier = modifier,
     )
 }
@@ -99,6 +103,7 @@ private fun HomeContent(
     onOpenStats: () -> Unit,
     onOpenRecentAlbums: () -> Unit,
     onShuffleAlbums: () -> Unit,
+    onStatsModeChange: (HomeStatsMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -124,18 +129,29 @@ private fun HomeContent(
             }
 
             else -> {
-                item(key = "random") {
+                item(key = "recent") {
                     Box(modifier = Modifier.entrance(order = 0)) {
-                        RandomAlbumsSection(
-                            albums = state.randomAlbums,
+                        RecentPreviewSection(
+                            albums = state.recentAlbums,
                             onOpenAlbum = onOpenAlbum,
-                            onShuffle = onShuffleAlbums,
-                            onImport = onOpenImport,
+                            onOpenAll = onOpenRecentAlbums,
+                        )
+                    }
+                }
+                item(key = "stats") {
+                    Box(modifier = Modifier.entrance(order = 1)) {
+                        StatsPreviewSection(
+                            mode = state.statsMode,
+                            albums = state.statsAlbums,
+                            tracks = state.statsTracks,
+                            onModeChange = onStatsModeChange,
+                            onOpenAlbum = onOpenAlbum,
+                            onOpenAll = onOpenStats,
                         )
                     }
                 }
                 item(key = "playlists") {
-                    Box(modifier = Modifier.entrance(order = 1)) {
+                    Box(modifier = Modifier.entrance(order = 2)) {
                         PlaylistsPreviewSection(
                             playlists = state.playlists,
                             totalCount = state.playlistCount,
@@ -144,21 +160,13 @@ private fun HomeContent(
                         )
                     }
                 }
-                item(key = "stats") {
-                    Box(modifier = Modifier.entrance(order = 2)) {
-                        StatsPreviewSection(
-                            albums = state.statsAlbums,
-                            onOpenAlbum = onOpenAlbum,
-                            onOpenAll = onOpenStats,
-                        )
-                    }
-                }
-                item(key = "recent") {
+                item(key = "random") {
                     Box(modifier = Modifier.entrance(order = 3)) {
-                        RecentPreviewSection(
-                            albums = state.recentAlbums,
+                        RandomAlbumsSection(
+                            albums = state.randomAlbums,
                             onOpenAlbum = onOpenAlbum,
-                            onOpenAll = onOpenRecentAlbums,
+                            onShuffle = onShuffleAlbums,
+                            onImport = onOpenImport,
                         )
                     }
                 }
@@ -183,7 +191,10 @@ private fun HomeSectionCard(
     actions: @Composable RowScope.() -> Unit,
     content: @Composable () -> Unit,
 ) {
-    BiliGroup(contentPadding = PaddingValues(0.dp)) {
+    BiliGroup(
+        modifier = Modifier.padding(horizontal = Spacing.lg),
+        contentPadding = PaddingValues(0.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,26 +299,81 @@ private fun PlaylistsPreviewSection(
 
 @Composable
 private fun StatsPreviewSection(
+    mode: HomeStatsMode,
     albums: List<HomeStatsAlbum>,
+    tracks: List<HomeStatsTrack>,
+    onModeChange: (HomeStatsMode) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenAll: () -> Unit,
 ) {
     HomeSectionCard(
         title = "听歌统计",
-        subtitle = "按专辑累计收听时长",
+        subtitle = when (mode) {
+            HomeStatsMode.ALBUM_LISTEN_TIME -> "按专辑累计收听时长"
+            HomeStatsMode.TRACK_PLAY_COUNT -> "按歌曲播放次数"
+        },
         actions = {
             TextButton(onClick = onOpenAll) { Text("查看全部") }
         },
     ) {
-        if (albums.isEmpty()) {
-            SectionEmptyRow("播放一些音乐后，这里会显示 Top 专辑。")
-        } else {
-            albums.take(4).forEach { stat ->
-                HomeAlbumRow(
-                    album = stat.album,
-                    onClick = { onOpenAlbum(stat.album.id) },
-                    trailingText = TimeUtils.formatHumanDuration(stat.listenedMs),
-                )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            FilterChip(
+                selected = mode == HomeStatsMode.ALBUM_LISTEN_TIME,
+                onClick = { onModeChange(HomeStatsMode.ALBUM_LISTEN_TIME) },
+                label = { Text("专辑时长") },
+            )
+            FilterChip(
+                selected = mode == HomeStatsMode.TRACK_PLAY_COUNT,
+                onClick = { onModeChange(HomeStatsMode.TRACK_PLAY_COUNT) },
+                label = { Text("歌曲次数") },
+            )
+        }
+        when (mode) {
+            HomeStatsMode.ALBUM_LISTEN_TIME -> {
+                if (albums.isEmpty()) {
+                    SectionEmptyRow("播放一些音乐后，这里会显示 Top 专辑。")
+                } else {
+                    albums.take(4).forEach { stat ->
+                        HomeAlbumRow(
+                            album = stat.album,
+                            onClick = { onOpenAlbum(stat.album.id) },
+                            trailingText = TimeUtils.formatHumanDuration(stat.listenedMs),
+                        )
+                    }
+                }
+            }
+
+            HomeStatsMode.TRACK_PLAY_COUNT -> {
+                if (tracks.isEmpty()) {
+                    SectionEmptyRow("播放一些歌曲后，这里会显示 Top 歌曲。")
+                } else {
+                    tracks.take(4).forEach { stat ->
+                        BiliGroupItem(
+                            title = stat.song.track.title,
+                            subtitle = "${stat.song.album.artist} · ${stat.song.album.title}",
+                            onClick = { onOpenAlbum(stat.song.album.id) },
+                            leading = {
+                                CoverImage(
+                                    url = stat.song.coverModel(),
+                                    modifier = Modifier.size(48.dp),
+                                    cornerRadius = 12.dp,
+                                )
+                            },
+                            trailing = {
+                                Text(
+                                    text = "${stat.playCount} 次",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                        )
+                    }
+                }
             }
         }
     }

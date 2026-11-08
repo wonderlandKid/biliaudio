@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.wonderlandkid.biliaudio.data.model.AppSettings
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
+import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,11 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         _settings.update { it.copy(diagnosticLogsEnabled = enabled) }
     }
 
+    override suspend fun setHomeStatsMode(mode: HomeStatsMode) {
+        prefs.edit().putString(KEY_HOME_STATS_MODE, mode.name).apply()
+        _settings.update { it.copy(homeStatsMode = mode) }
+    }
+
     override suspend fun setDarkTheme(dark: Boolean?) {
         val editor = prefs.edit()
         when (dark) {
@@ -51,10 +57,14 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         // 未设置过 → null（跟随系统）
         val dark = if (prefs.contains(KEY_DARK_THEME)) prefs.getBoolean(KEY_DARK_THEME, false) else null
         val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, false)
+        val homeStatsMode = prefs.getString(KEY_HOME_STATS_MODE, null)
+            ?.let { name -> runCatching { HomeStatsMode.valueOf(name) }.getOrNull() }
+            ?: HomeStatsMode.ALBUM_LISTEN_TIME
         return AppSettings(
             audioQuality = quality,
             darkTheme = dark,
             diagnosticLogsEnabled = diagnosticLogs,
+            homeStatsMode = homeStatsMode,
         )
     }
 
@@ -63,5 +73,6 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         const val KEY_AUDIO_QUALITY = "audio_quality"
         const val KEY_DARK_THEME = "dark_theme"
         const val KEY_DIAGNOSTIC_LOGS = "diagnostic_logs_enabled"
+        const val KEY_HOME_STATS_MODE = "home_stats_mode"
     }
 }

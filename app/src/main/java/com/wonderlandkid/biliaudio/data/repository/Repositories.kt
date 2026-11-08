@@ -3,6 +3,7 @@ package com.wonderlandkid.biliaudio.data.repository
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.AppSettings
 import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
+import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.model.AlbumWithTracks
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.model.BatchImportReport
@@ -136,6 +137,9 @@ interface SettingsRepository {
 
     /** 维测日志开关：关闭后不再记录/打印诊断日志。 */
     suspend fun setDiagnosticLogsEnabled(enabled: Boolean)
+
+    /** 发现页听歌统计预览口径。 */
+    suspend fun setHomeStatsMode(mode: HomeStatsMode)
 }
 
 /** 解析 B 站播放流（带缓存、按需刷新过期地址）。 */
