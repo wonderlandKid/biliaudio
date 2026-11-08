@@ -76,6 +76,7 @@ import com.wonderlandkid.biliaudio.ui.components.CoverPickerSheet
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.SearchField
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
+import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 /**
@@ -130,12 +131,11 @@ fun ImportScreen(
         if (uri != null) viewModel.loadArchiveFile(uri)
     }
 
-    Scaffold(
+    BiliDetailScaffold(
+        onBack = onBack,
+        title = "导入专辑",
         modifier = modifier,
-        // 系统 insets 已由外层 NavHost 的 Scaffold 处理，这里不再重复 padding
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHostState = snackbarHostState,
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -143,7 +143,6 @@ fun ImportScreen(
                 .padding(innerPadding)
                 .imePadding(),
         ) {
-            ImportTopBar(title = "导入专辑", onBack = onBack)
             ImportTabRow(
                 selected = state.selectedTab,
                 onSelect = { tab ->
@@ -321,31 +320,6 @@ fun ImportScreen(
 // 顶部栏 / Tab
 // ---------------------------------------------------------------------------
 
-@Composable
-private fun ImportTopBar(
-    title: String,
-    onBack: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "返回",
-            )
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 /** 居中胶囊分段 Tab（扁平、大圆角，无模糊材质）。 */
 @Composable

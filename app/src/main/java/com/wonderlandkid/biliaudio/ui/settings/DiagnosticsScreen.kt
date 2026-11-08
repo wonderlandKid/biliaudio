@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
+import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.Dispatchers
@@ -177,19 +178,17 @@ fun DiagnosticsScreen(
         }
     }
 
-    Scaffold(
+    BiliDetailScaffold(
+        onBack = onBack,
+        title = "诊断日志",
         modifier = modifier,
-        // 系统 insets 已由外层 NavHost 的 Scaffold 处理
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHostState = snackbarHostState,
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            DiagnosticTopBar(onBack = onBack)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -406,28 +405,6 @@ fun DiagnosticsScreen(
 // 内部组件 / 工具
 // ---------------------------------------------------------------------------
 
-@Composable
-private fun DiagnosticTopBar(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "返回",
-            )
-        }
-        Text(
-            text = "诊断日志",
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 @Composable
 private fun DiagPill(text: String) {

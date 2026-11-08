@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.11.0）
+# 项目现状与交接（v0.12.0）
 
-> 最后更新：2026-11-08 · 版本 v0.11.0 · tag `v0.11.0`（release commit 以 `git rev-parse v0.11.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.12.0 · tag `v0.12.0`（release commit 以 `git rev-parse v0.12.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -77,6 +77,7 @@
 - **v0.8.2** 参考 SPICaMusic_Android 统一导航：一级 Tab 瞬时切换（无滑动），层级页面统一 push/pop（右进右出、旧页 1/4 视差、无淡入/缩放）
 - **v0.8.3** 一级 Tab 内容入场动画（Entrance.kt）、迷你条底部 spring 过渡；确认分割时间支持 01:22:23（新增单测）
 - **v0.8.4** 修复 v0.8.3 闪退（负 padding）、入场动画初始进度 bug、predictive back 默认缩小淡出（全局覆盖返回转场）
+- **v0.12.0** UI 页面分四类并模板化（BiliDetailScaffold/BiliTopBar），T2 页面统一迁移；新增 UI_ARCHITECTURE 文档
 - **v0.11.0** 预测返回不预演、一级 Tab 内容入场统一、Tab 平级返回 + 连续两次退出
 - **v0.10.0** 归档/配置 v3 分域 bundle（manifest/library/settings/covers）；维测日志默认关闭；控制中心用自定义封面
 - **v0.9.1** 归档单文件上限 5MB→64MB（不改 schema；大库用目录归档）

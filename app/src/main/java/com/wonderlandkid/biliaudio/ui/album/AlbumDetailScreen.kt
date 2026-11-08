@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -70,6 +71,7 @@ import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.SectionHeader
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -125,17 +127,15 @@ fun AlbumDetailScreen(
         viewModel.consumeMessage()
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            AlbumDetailTopBar(
+    BiliDetailScaffold(
+        onBack = onBack,
+        modifier = modifier,
+        snackbarHostState = snackbarHostState,
+        actions = {
+            AlbumDetailActions(
                 isRefreshing = state.isRefreshing,
                 isExporting = state.isExporting,
                 menuEnabled = state.album != null,
-                onBack = onBack,
                 onMenuClick = { menuExpanded = true },
                 menuExpanded = menuExpanded,
                 onMenuDismiss = { menuExpanded = false },
@@ -214,11 +214,10 @@ fun AlbumDetailScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AlbumDetailTopBar(
+private fun RowScope.AlbumDetailActions(
     isRefreshing: Boolean,
     isExporting: Boolean,
     menuEnabled: Boolean,
-    onBack: () -> Unit,
     onMenuClick: () -> Unit,
     menuExpanded: Boolean,
     onMenuDismiss: () -> Unit,
@@ -226,56 +225,43 @@ private fun AlbumDetailTopBar(
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    TopAppBar(
-        title = {},
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
-            }
-        },
-        actions = {
-            if (isRefreshing || isExporting) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .padding(end = Spacing.sm)
-                        .size(20.dp),
-                    strokeWidth = 2.dp,
+    if (isRefreshing || isExporting) {
+        CircularProgressIndicator(
+            modifier = Modifier
+                .padding(end = Spacing.sm)
+                .size(20.dp),
+            strokeWidth = 2.dp,
+        )
+    }
+    IconButton(onClick = onMenuClick) {
+        Icon(Icons.Rounded.MoreVert, contentDescription = "更多操作")
+    }
+    DropdownMenu(expanded = menuExpanded, onDismissRequest = onMenuDismiss) {
+        DropdownMenuItem(
+            text = { Text("刷新视频信息") },
+            leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+            enabled = menuEnabled && !isRefreshing,
+            onClick = onRefresh,
+        )
+        DropdownMenuItem(
+            text = { Text("导出专辑文件") },
+            leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+            enabled = menuEnabled && !isExporting,
+            onClick = onExport,
+        )
+        DropdownMenuItem(
+            text = { Text("删除专辑", color = MaterialTheme.colorScheme.error) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
                 )
-            }
-            IconButton(onClick = onMenuClick) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "更多操作")
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = onMenuDismiss) {
-                DropdownMenuItem(
-                    text = { Text("刷新视频信息") },
-                    leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
-                    enabled = menuEnabled && !isRefreshing,
-                    onClick = onRefresh,
-                )
-                DropdownMenuItem(
-                    text = { Text("导出专辑文件") },
-                    leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
-                    enabled = menuEnabled && !isExporting,
-                    onClick = onExport,
-                )
-                DropdownMenuItem(
-                    text = { Text("删除专辑", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                    enabled = menuEnabled,
-                    onClick = onDelete,
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-        // 系统栏 inset 由外层 AppNavHost 的 Scaffold 统一处理
-        windowInsets = WindowInsets(0, 0, 0, 0),
-    )
+            },
+            enabled = menuEnabled,
+            onClick = onDelete,
+        )
+    }
 }
 
 @Composable

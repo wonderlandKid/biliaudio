@@ -1,5 +1,21 @@
 # 版本记录
 
+## v0.12.0（2026-11-08 · tag `v0.12.0`）
+
+**UI 结构整理：页面分类 + 层级页模板，减少页面间实现漂移**
+
+- 新增 `ui/template/BiliPageTemplates.kt`：
+  - `BiliTopBar`：统一的返回 + 标题 + actions 顶栏（titleLarge/顶栏背景/insets 约定）；
+  - `BiliDetailScaffold`：层级页面统一 Scaffold（surface 容器、Snackbar、顶栏、innerPadding）；
+- 所有 T2 层级页面迁移到模板：
+  - 专辑详情（顶栏 actions 保留）、编辑分割点、艺术家详情、导入、诊断日志、扫码登录；
+  - 删除各页面手写的 Row 顶栏和各自不一致的标题样式（headlineMedium/titleLarge 混用）；
+- Tab 页仍统一 `BiliPageHeader`，不自己套 Scaffold；播放/歌词/弹层保持 T3/T4 例外；
+- 新增 [docs/UI_ARCHITECTURE.md](UI_ARCHITECTURE.md)：页面四分类、模板 API、状态/UiState 约定、
+  共享组件、导航/返回/动效规则、新页 checklist、迁移状态表；
+- AGENTS 的 UI 规范更新为“T1/T2/T3/T4 + 必须用模板/页头”，避免后续页再各写各的。
+- 单测保持 126 全绿。
+
 ## v0.11.0（2026-11-08 · tag `v0.11.0`）
 
 **预测式返回不预演、一级 Tab 内容入场统一、Tab 平级返回 + 连续两次返回退出**

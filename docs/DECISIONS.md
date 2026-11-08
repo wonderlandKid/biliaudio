@@ -486,3 +486,20 @@
   - 播放页内 ModalBottomSheet 的 BackHandler 晚于播放页收起注册，优先关闭弹层。
 - **影响**：返回叙事一致（层级页返回上一页，一级 Tab 返回=退出），减少误退；Tab 内容入场统一。
 
+---
+
+## D36 UI 页面分类与模板化（v0.12.0）
+
+- **日期**：2026-11-08
+- **背景**：项目由多轮快速实现积累，页面各写各的顶栏/Scaffold/标题样式，维护者需要先理解每个页面
+  才能改一致性。需要一套低成本的页面分类与模板，而不是继续复制粘贴。
+- **决策**：
+  - 页面分四类：T1 一级 Tab（`BiliPageHeader`，外層 AppNavHost Scaffold）、T2 层级详情页
+    （`BiliDetailScaffold`/`BiliTopBar`）、T3 沉浸页（播放/歌词，页面自管）、T4 弹层/对话框；
+  - 所有 T2 页面迁移到统一模板；禁止手写“Row + 返回 + 标题”顶栏；
+  - Tab 页不再各自套 Scaffold；insets 统一由 AppNavHost 外层 Scaffold 处理；
+  - 状态约定：Screen 只收集 `@Immutable` UiState + 转发事件；loading/error/empty 复用公共组件；
+    一次性消息 Snackbar + consume；
+  - 规范写入 docs/UI_ARCHITECTURE.md，并同步 AGENTS 的 UI 条款与新页面 checklist。
+- **非目标**：不重写 ViewModel/数据流，不改变页面视觉信息结构；本次只收敛页面外壳与共享视觉约定。
+

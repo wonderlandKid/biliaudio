@@ -43,6 +43,7 @@ import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.SectionHeader
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -75,23 +76,9 @@ fun ArtistDetailScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-                // 系统栏 inset 由外层 AppNavHost 的 Scaffold 统一处理
-                windowInsets = WindowInsets(0, 0, 0, 0),
-            )
-        },
+    BiliDetailScaffold(
+        onBack = onBack,
+        modifier = modifier,
     ) { innerPadding ->
         when {
             state.isLoading -> LoadingBox(modifier = Modifier.padding(innerPadding))

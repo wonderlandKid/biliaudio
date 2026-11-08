@@ -55,6 +55,7 @@ import com.wonderlandkid.biliaudio.data.repository.QrLoginState
 import com.wonderlandkid.biliaudio.data.repository.QrPhase
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
+import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -97,11 +98,13 @@ fun LoginScreen(
         onBack()
     }
 
-    Scaffold(
+    BiliDetailScaffold(
+        onBack = {
+            viewModel.cancelLogin()
+            onBack()
+        },
+        title = "扫码登录",
         modifier = modifier,
-        // 系统 insets 已由外层 NavHost 的 Scaffold 处理
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -109,12 +112,6 @@ fun LoginScreen(
                 .padding(innerPadding)
                 .imePadding(),
         ) {
-            LoginTopBar(
-                onBack = {
-                    viewModel.cancelLogin()
-                    onBack()
-                },
-            )
             if (isLoggedIn) {
                 LoginSuccessContent(
                     profile = profile,
@@ -131,32 +128,6 @@ fun LoginScreen(
     }
 }
 
-// ---------------------------------------------------------------------------
-// 顶部栏
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun LoginTopBar(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "返回",
-            )
-        }
-        Text(
-            text = "扫码登录",
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 // ---------------------------------------------------------------------------
 // 扫码内容
