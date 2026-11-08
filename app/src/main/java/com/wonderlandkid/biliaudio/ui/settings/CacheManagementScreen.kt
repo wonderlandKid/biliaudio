@@ -46,6 +46,7 @@ import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import java.text.SimpleDateFormat
@@ -108,10 +109,10 @@ fun CacheManagementScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
                 contentPadding = PaddingValues(
-                    start = Spacing.lg,
-                    end = Spacing.lg,
+                    start = BiliLayout.pageHorizontal,
+                    end = BiliLayout.pageHorizontal,
                     top = Spacing.sm,
-                    bottom = Spacing.xxl,
+                    bottom = BiliLayout.pageBottom,
                 ),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {

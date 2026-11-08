@@ -38,6 +38,7 @@ import com.wonderlandkid.biliaudio.ui.components.BiliGroup
 import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
@@ -80,7 +81,7 @@ fun PlaylistsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(Spacing.lg),
+                contentPadding = PaddingValues(BiliLayout.pageHorizontal),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 items(items = playlists, key = { it.id }) { playlist ->

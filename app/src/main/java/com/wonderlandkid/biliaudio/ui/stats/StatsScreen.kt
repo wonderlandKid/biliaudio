@@ -41,6 +41,7 @@ import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -109,7 +110,7 @@ fun StatsScreen(
 @Composable
 private fun StatsSummaryCard(totalListenedMs: Long, totalPlayCount: Int) {
     BiliGroup(
-        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        modifier = Modifier.padding(horizontal = BiliLayout.pageHorizontal, vertical = Spacing.sm),
         contentPadding = PaddingValues(0.dp),
     ) {
         Row(
@@ -156,10 +157,10 @@ private fun AlbumStatsList(stats: List<AlbumListeningUi>, onOpenAlbum: (Long) ->
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = Spacing.lg,
-            end = Spacing.lg,
+            start = BiliLayout.pageHorizontal,
+            end = BiliLayout.pageHorizontal,
             top = Spacing.sm,
-            bottom = 96.dp,
+            bottom = BiliLayout.contentBottomWithMiniPlayer,
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
@@ -235,10 +236,10 @@ private fun TrackStatsList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = Spacing.lg,
-            end = Spacing.lg,
+            start = BiliLayout.pageHorizontal,
+            end = BiliLayout.pageHorizontal,
             top = Spacing.sm,
-            bottom = 96.dp,
+            bottom = BiliLayout.contentBottomWithMiniPlayer,
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {

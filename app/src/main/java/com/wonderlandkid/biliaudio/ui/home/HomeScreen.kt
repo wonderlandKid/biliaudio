@@ -38,13 +38,15 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.HomeStatsMode
 import com.wonderlandkid.biliaudio.data.model.Playlist
 import com.wonderlandkid.biliaudio.ui.appViewModel
-import com.wonderlandkid.biliaudio.ui.components.BiliGroup
+import com.wonderlandkid.biliaudio.ui.components.BiliAlbumRow
 import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
+import com.wonderlandkid.biliaudio.ui.components.BiliSection
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
 import com.wonderlandkid.biliaudio.util.TimeUtils
@@ -183,42 +185,6 @@ private fun HomeHeader(statsText: String) {
     BiliPageHeader(title = "发现", subtitle = statsText)
 }
 
-/** 四个区块共用的卡片：标题 + 右上角操作 + 最多四条预览。 */
-@Composable
-private fun HomeSectionCard(
-    title: String,
-    subtitle: String?,
-    actions: @Composable RowScope.() -> Unit,
-    content: @Composable () -> Unit,
-) {
-    BiliGroup(
-        modifier = Modifier.padding(horizontal = Spacing.lg),
-        contentPadding = PaddingValues(0.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleLarge)
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            actions()
-        }
-        content()
-    }
-}
-
 @Composable
 private fun RandomAlbumsSection(
     albums: List<Album>,
@@ -226,7 +192,7 @@ private fun RandomAlbumsSection(
     onShuffle: () -> Unit,
     onImport: () -> Unit,
 ) {
-    HomeSectionCard(
+    BiliSection(
         title = "随机专辑",
         subtitle = if (albums.isEmpty()) "从音乐库随机挑选 4 张" else "从音乐库随机挑选 ${albums.size} 张",
         actions = {
@@ -246,7 +212,7 @@ private fun RandomAlbumsSection(
             SectionEmptyRow("还没有专辑，导入一张开始随机推荐。", actionLabel = "导入专辑", onAction = onImport)
         } else {
             albums.take(4).forEach { album ->
-                HomeAlbumRow(album = album, onClick = { onOpenAlbum(album.id) })
+                BiliAlbumRow(album = album, onClick = { onOpenAlbum(album.id) })
             }
         }
     }
@@ -259,7 +225,7 @@ private fun PlaylistsPreviewSection(
     onOpenPlaylist: (Long) -> Unit,
     onOpenAll: () -> Unit,
 ) {
-    HomeSectionCard(
+    BiliSection(
         title = "我的歌单",
         subtitle = if (totalCount > 0) "$totalCount 个歌单" else "自己整理播放列表",
         actions = {
@@ -306,7 +272,7 @@ private fun StatsPreviewSection(
     onOpenAlbum: (Long) -> Unit,
     onOpenAll: () -> Unit,
 ) {
-    HomeSectionCard(
+    BiliSection(
         title = "听歌统计",
         subtitle = when (mode) {
             HomeStatsMode.ALBUM_LISTEN_TIME -> "按专辑累计收听时长"
@@ -319,7 +285,7 @@ private fun StatsPreviewSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.lg),
+                .padding(horizontal = BiliLayout.groupItemHorizontal),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             FilterChip(
@@ -339,7 +305,7 @@ private fun StatsPreviewSection(
                     SectionEmptyRow("播放一些音乐后，这里会显示 Top 专辑。")
                 } else {
                     albums.take(4).forEach { stat ->
-                        HomeAlbumRow(
+                        BiliAlbumRow(
                             album = stat.album,
                             onClick = { onOpenAlbum(stat.album.id) },
                             trailingText = TimeUtils.formatHumanDuration(stat.listenedMs),
@@ -385,7 +351,7 @@ private fun RecentPreviewSection(
     onOpenAlbum: (Long) -> Unit,
     onOpenAll: () -> Unit,
 ) {
-    HomeSectionCard(
+    BiliSection(
         title = "最近播放",
         subtitle = "最近听过的专辑",
         actions = {
@@ -396,41 +362,10 @@ private fun RecentPreviewSection(
             SectionEmptyRow("还没有最近播放记录。")
         } else {
             albums.take(4).forEach { album ->
-                HomeAlbumRow(album = album, onClick = { onOpenAlbum(album.id) })
+                BiliAlbumRow(album = album, onClick = { onOpenAlbum(album.id) })
             }
         }
     }
-}
-
-@Composable
-private fun HomeAlbumRow(
-    album: Album,
-    onClick: () -> Unit,
-    trailingText: String? = null,
-) {
-    BiliGroupItem(
-        title = album.title,
-        subtitle = album.artist,
-        onClick = onClick,
-        leading = {
-            CoverImage(
-                url = album.coverModel(),
-                modifier = Modifier.size(48.dp),
-                cornerRadius = 12.dp,
-            )
-        },
-        trailing = if (trailingText != null) {
-            {
-                Text(
-                    text = trailingText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            null
-        },
-    )
 }
 
 @Composable
@@ -442,7 +377,7 @@ private fun SectionEmptyRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+            .padding(horizontal = BiliLayout.groupItemHorizontal, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

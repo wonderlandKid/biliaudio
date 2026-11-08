@@ -59,6 +59,7 @@ import com.wonderlandkid.biliaudio.ui.components.SearchField
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,7 +147,7 @@ fun PlaylistDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(bottom = 96.dp),
+                contentPadding = PaddingValues(bottom = BiliLayout.contentBottomWithMiniPlayer),
             ) {
                 item(key = "header") {
                     Column(

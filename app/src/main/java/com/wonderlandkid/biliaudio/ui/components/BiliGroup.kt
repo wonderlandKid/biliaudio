@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -19,8 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wonderlandkid.biliaudio.data.model.Album
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
@@ -91,7 +95,7 @@ fun BiliGroupItem(
                 base
             }
         }
-        .padding(horizontal = Spacing.md, vertical = Spacing.sm + 2.dp)
+        .padding(horizontal = BiliLayout.groupItemHorizontal, vertical = BiliLayout.groupItemVertical)
     Row(
         modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -122,6 +126,76 @@ fun BiliGroupItem(
             it()
         }
     }
+}
+
+/** 设置/详情卡片统一首行：图标 + 标题 + 副标题 + 可选 trailing。 */
+@Composable
+fun BiliGroupHeader(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(Spacing.md),
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(BiliLayout.leadingIconSize),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
+/** 通用专辑列表行：封面 + 标题/艺术家 + 可选 trailing。 */
+@Composable
+fun BiliAlbumRow(
+    album: Album,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingText: String? = null,
+) {
+    BiliGroupItem(
+        title = album.title,
+        subtitle = album.artist,
+        onClick = onClick,
+        modifier = modifier,
+        leading = {
+            CoverImage(
+                url = album.coverModel(),
+                modifier = Modifier.size(BiliLayout.listCoverSize),
+                cornerRadius = BiliLayout.listCoverCorner,
+            )
+        },
+        trailing = if (trailingText != null) {
+            {
+                Text(
+                    text = trailingText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            null
+        },
+    )
 }
 
 /** 分组外的小节标题（与 Settings 页 SectionTitle 同一视觉 token）。 */

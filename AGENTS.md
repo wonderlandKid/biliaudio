@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.23.1**（tag `v0.23.1`，2026-11-08；release commit 以 `git rev-parse v0.23.1` 为准）
+- **版本：v0.24.0**（tag `v0.24.0`，2026-11-08；release commit 以 `git rev-parse v0.24.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.23.1）
+- 单元测试：**131 个**（v0.24.0；含 5 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.23.1: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.24.0: 131 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -45,10 +45,10 @@ scripts/screenshot.sh home 8
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/大面积毛玻璃**；
    （v0.7.0 起用户明确要求：仅迷你播放条可使用 Haze 毛玻璃，其余页面保持扁平）
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **信息架构（v0.23.1）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
+4. **信息架构（v0.24.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
    最近播放 → 听歌统计 → 我的歌单 → 随机专辑排列（详情从右上角进入；最近播放详情 10 张）；
    听歌统计预览可切专辑时长/歌曲次数，选择持久化到 `AppSettings.homeStatsMode`；
-   设置卡片首行用 `SettingsHeaderRow` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
+   设置卡片首行用 `BiliGroupHeader` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
    （trackUid 关联，唯一防重复）；统计用 track_stats（播放次数+实际收听时长，5 秒批量落库）。
    歌单/统计持久化在 Room v4；**不进入音乐库归档**，通过设置 → 用户数据 →「歌单与听歌统计备份」
    独立 JSON 导出/导入（按专辑稳定键 + startMs 关联，统计恢复用 max 合并）；详见 [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md)。
@@ -65,10 +65,13 @@ scripts/screenshot.sh home 8
      `ui/template/BiliPageTemplates.kt` 的 `BiliDetailScaffold`/`BiliTopBar`）、T3 沉浸页（播放/歌词，页面自管）、
      T4 弹层/对话框；禁止再手写“Row + 返回 + 标题”式顶栏；
    - 搜索框统一用 `SearchField`（可编辑）/`SearchBarEntry`（入口）；
-   - **分组/条目必须用 `ui/components/BiliGroup.kt`** 的 `BiliGroup` / `BiliGroupItem` /
-     `BiliGroupSectionTitle`，禁止页面内再手写大圆角 Surface 卡片；组内自定义业务内容也只能放在
-     BiliGroup 容器内；**音乐内容行点击必须真正播放，禁止 `onClick={}` 空实现**；同类行必须有当前播放高亮；
-   - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md)（新增页面 checklist/状态约定/共享组件）。
+   - **先查 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) 选页面类型/组件**：
+     区块用 `BiliSection`，卡片用 `BiliGroup`，卡片首行用 `BiliGroupHeader`，组内行用
+     `BiliGroupItem`/`BiliAlbumRow`，专辑/歌曲行用 `BiliAlbumRow`/`TrackRow`；
+   - 禁止页面内手写大圆角 Surface 卡片、私有 SectionCard/Header、空 `onClick={}`；
+     音乐内容行点击必须真正播放并高亮；
+   - 页面级留白/迷你条底部留白用 `BiliLayout` token；新增规则要同步 `UiArchitectureConsistencyTest`；
+   - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) / [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
 8. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
@@ -103,13 +106,14 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.23.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.24.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
 | [docs/ARCHIVE_SCHEMA_V2.md](docs/ARCHIVE_SCHEMA_V2.md) | 归档 v2 历史设计（已被 v3 分域布局取代） |
 | [docs/ARCHIVE_LAYOUT_V3.md](docs/ARCHIVE_LAYOUT_V3.md) | 归档/配置布局 v3（已实施：library/playlists/settings/covers + manifest bundle） |
 | [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) | **页面分四类 + 模板/状态/导航/动画规范（新增页面前必读）** |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | **页面种类 / 组件目录 / token / 选型流程 / 豁免清单（新页面唯一入口）** |
 | [docs/MOTION.md](docs/MOTION.md) | **动效时长/曲线总表、跟手例外、调参入口（新增动效前必读）** |
 | [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md) | **歌单与听歌统计：信息架构、Room v4、记录规则、边界** |
 | [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md) | **专辑音频/歌词视频离线缓存：可行性、边界、实现位置、后续规划** |

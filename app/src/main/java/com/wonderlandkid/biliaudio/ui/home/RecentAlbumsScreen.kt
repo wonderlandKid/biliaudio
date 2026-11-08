@@ -13,12 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.ui.appViewModel
+import com.wonderlandkid.biliaudio.ui.components.BiliAlbumRow
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
-import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
-import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 /** 最近播放（发现页「查看全部」）：最多 10 张最近听过的专辑。 */
@@ -52,26 +52,18 @@ fun RecentAlbumsScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
                 contentPadding = PaddingValues(
-                    start = Spacing.lg,
-                    end = Spacing.lg,
+                    start = BiliLayout.pageHorizontal,
+                    end = BiliLayout.pageHorizontal,
                     top = Spacing.sm,
-                    bottom = 96.dp,
+                    bottom = BiliLayout.contentBottomWithMiniPlayer,
                 ),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 items(albums, key = { it.id }) { album ->
                     BiliGroup(contentPadding = PaddingValues(0.dp)) {
-                        BiliGroupItem(
-                            title = album.title,
-                            subtitle = album.artist,
+                        BiliAlbumRow(
+                            album = album,
                             onClick = { onOpenAlbum(album.id) },
-                            leading = {
-                                CoverImage(
-                                    url = album.coverModel(),
-                                    modifier = Modifier.size(48.dp),
-                                    cornerRadius = 12.dp,
-                                )
-                            },
                         )
                     }
                 }

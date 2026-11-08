@@ -17,7 +17,7 @@
 - **T1 不再自己套 Scaffold**（底部导航/inset 由 `AppNavHost` 的 Scaffold 统一处理）；
   内容用 `BiliPageHeader` + 业务列表；**固定页头/搜索/登录卡等静态元素不做入场**，
   只有列表/内容区用 `Modifier.entrance`（发现逐项、设置逐卡、音乐库内容区）；
-- **发现页结构（v0.23.1）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块按
+- **发现页结构（v0.24.0）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块按
   「最近播放 → 听歌统计 → 我的歌单 → 随机专辑」排列，只露前 4 条，统一用 `HomeSectionCard`
   （`BiliGroup` + 左右 `Spacing.lg` 外边距 + 右上角操作）；详情：
   - 随机专辑：换一批/导入；单条打开专辑；
@@ -107,7 +107,7 @@ fun BiliDetailScaffold(
 
 ### 设置卡片首行模板
 
-设置卡片统一用 `SettingsHeaderRow`：22dp 图标 + `bodyLarge` 标题 + `bodySmall` 副标题，
+设置卡片统一用 `BiliGroupHeader`：22dp 图标 + `bodyLarge` 标题 + `bodySmall` 副标题，
 右侧可放 Switch/操作；账号头像属于身份例外。分组容器仍用 `BiliGroup`。
 
 ### 同类 Group/Item 的行为规则（v0.22.1 审计）

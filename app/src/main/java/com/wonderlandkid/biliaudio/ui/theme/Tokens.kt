@@ -68,3 +68,22 @@ object Dimens {
     val bottomBarHeight = 64.dp
     val miniPlayerHeight = 64.dp
 }
+
+/**
+ * 页面/组件统一布局 token（v0.24.0）。
+ *
+ * 页面里禁止再按心情写 padding 数字；横向页面留白统一 [pageHorizontal]，
+ * 区块间距 [sectionGap]，列表封面/图标尺寸 [listCoverSize]/[leadingIconSize]。
+ */
+object BiliLayout {
+    val pageHorizontal = Spacing.lg
+    val pageBottom = Spacing.xxl
+    val sectionGap = Spacing.md
+    val sectionHeaderVertical = Spacing.md
+    val groupItemHorizontal = Spacing.md
+    val groupItemVertical = Spacing.sm + 2.dp
+    val leadingIconSize = 22.dp
+    val listCoverSize = 48.dp
+    val listCoverCorner = 12.dp
+    val contentBottomWithMiniPlayer = 96.dp
+}

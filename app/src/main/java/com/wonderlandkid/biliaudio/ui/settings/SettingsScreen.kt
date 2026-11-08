@@ -72,10 +72,12 @@ import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
+import com.wonderlandkid.biliaudio.ui.components.BiliGroupHeader
 import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
 import com.wonderlandkid.biliaudio.ui.components.BiliGroupSectionTitle
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
@@ -432,41 +434,6 @@ private fun SettingsCard(
     BiliGroup(modifier = modifier, content = content)
 }
 
-/** 设置卡片统一首行：图标 + 标题 + 副标题（或 trailing）。 */
-@Composable
-private fun SettingsHeaderRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge)
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        trailing?.invoke()
-    }
-}
-
 /** 账号卡片：未登录 → 去登录；已登录 → 头像/昵称/退出。 */
 @Composable
 private fun AccountCard(
@@ -580,7 +547,7 @@ private fun AudioQualityCard(
     onSelect: (AudioQualityPreference) -> Unit,
 ) {
     SettingsCard {
-        SettingsHeaderRow(
+        BiliGroupHeader(
             icon = Icons.Rounded.GraphicEq,
             title = "音质",
             subtitle = "在线播放和缓存使用的音频档位",
@@ -641,7 +608,7 @@ private fun DarkThemeCard(
         Triple("深色", true, "始终使用深色主题"),
     )
     SettingsCard {
-        SettingsHeaderRow(
+        BiliGroupHeader(
             icon = Icons.Rounded.DarkMode,
             title = "深色模式",
             subtitle = "跟随系统或固定主题",
@@ -689,7 +656,7 @@ private fun DarkThemeCard(
 @Composable
 private fun AboutCard() {
     SettingsCard {
-        SettingsHeaderRow(
+        BiliGroupHeader(
             icon = Icons.Rounded.Info,
             title = "关于哔哩专辑",
             subtitle = "版本、版权与技术栈",
@@ -779,7 +746,7 @@ private fun BackupRestoreCard(
     onImportTreeClick: () -> Unit,
 ) {
     SettingsCard {
-        SettingsHeaderRow(
+        BiliGroupHeader(
             icon = Icons.Rounded.Backup,
             title = "整库备份（bundle）",
             subtitle = "manifest + library + settings + covers 分域目录；zip 只是传输层",
@@ -891,7 +858,7 @@ private fun SettingsPadded(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.lg)
+            .padding(horizontal = BiliLayout.pageHorizontal)
             // 页头 BiliPageHeader 不经过这里，保持静态；只有列表/卡片内容入场
             .entrance(order = 0),
     ) {
@@ -987,7 +954,7 @@ private fun DiagnosticsToggleCard(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     SettingsCard {
-        SettingsHeaderRow(
+        BiliGroupHeader(
             icon = Icons.Rounded.BugReport,
             title = "维测日志",
             subtitle = if (enabled) {
@@ -1018,7 +985,7 @@ private fun UserDataBackupCard(
                 .padding(vertical = Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            SettingsHeaderRow(
+            BiliGroupHeader(
                 icon = Icons.Rounded.Backup,
                 title = "歌单与听歌统计备份",
                 subtitle = "独立 JSON，不含音乐库专辑/分曲/封面/缓存",
