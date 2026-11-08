@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.13.1**（tag `v0.13.1`，2026-11-08；release commit 以 `git rev-parse v0.13.1` 为准）
+- **版本：v0.14.0**（tag `v0.14.0`，2026-11-08；release commit 以 `git rev-parse v0.14.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.13.1）
+- 单元测试：**126 个**（v0.14.0）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.13.1: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.14.0: 126 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -57,15 +57,17 @@ scripts/screenshot.sh home 8
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
    - **层级页面统一 push/pop（完整宽度）**：push = 新页从右侧整页滑入、旧页同时整页向左滑出；
-     pop = 当前页整页向右滑出、上一页从左侧整页回位；无 alpha、无 scale；
-     Tab↔详情也遵循此规则（Tab 路由不能固定 None，要按目标动态判断）；Tab↔Tab 才瞬时；
+     pop = 当前页整页向右滑出、上一页从左侧整页回位；**固定 500ms**（EmphasizedDecelerate 进 /
+     EmphasizedAccelerate 出），不跟手势速度联动；无 alpha、无 scale；Tab↔详情同理，Tab↔Tab 才瞬时；
    - **预测式返回不预演**：Manifest `enableOnBackInvokedCallback=false`，系统不做预测式预演；
      手势只提交普通 back，之后走 NavHost 普通 pop（方向稳定，避免反向扫动/快速浮现）；
    - **一级 Tab 行为平级**：音乐库/设置返回不回到发现，进入退出流程；根 Tab 返回需 2 秒内连续两次
      （第一次 Toast 提示「再返回一次退出应用」）；键盘弹出时 BackHandler 让位给键盘；
    - 歌词页同样按层级页面处理；迷你条 ↔ 播放页是上下关系（连续跟手展开，顶部栏可下滑关闭）；
    - 一级 Tab 入场规则：**固定页头/搜索/登录卡等静态元素不动；只有列表/内容区播放「淡入 + 上浮」**
-     （发现逐项、设置逐卡、音乐库内容区；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）。
+     （320ms 起、50ms/项、封顶 650ms、交错 45ms；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）；
+   - **所有自动动画必须有速度曲线**（Emphasized 或 spring），禁止 LinearEasing/匀速；时长统一用
+     `BiliMotion` token，详见 [docs/MOTION.md](docs/MOTION.md)。
 7. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
@@ -81,13 +83,14 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.13.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.14.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
 | [docs/ARCHIVE_SCHEMA_V2.md](docs/ARCHIVE_SCHEMA_V2.md) | 归档 v2 历史设计（已被 v3 分域布局取代） |
 | [docs/ARCHIVE_LAYOUT_V3.md](docs/ARCHIVE_LAYOUT_V3.md) | 归档/配置布局 v3（已实施：library/playlists/settings/covers + manifest bundle） |
 | [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) | **页面分四类 + 模板/状态/导航/动画规范（新增页面前必读）** |
+| [docs/MOTION.md](docs/MOTION.md) | **动效时长/曲线总表、跟手例外、调参入口（新增动效前必读）** |
 | [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md) | 批量导入与分割点文本格式（三种粘贴格式） |
 | [docs/samples/](docs/samples/) | 归档示例、分割点文本真实样例 |
 | [docs/screenshots/](docs/screenshots/) | 模拟器/真机走查截图 |

@@ -89,7 +89,8 @@ fun BiliDetailScaffold(
 
 - 一级 Tab：瞬时切换，内容入场；三个 Tab 行为平级；
 - 层级页：push 新页从右整页进入、旧页整页向左退出；pop 当前页整页向右退出、上一页从左整页回位；
-  Tab↔详情也走这条；Tab↔Tab 才瞬时；无 alpha/scale；
+  Tab↔详情也走这条；Tab↔Tab 才瞬时；**固定 500ms**；无 alpha/scale；
+- 所有动画时长/曲线见 [MOTION.md](MOTION.md)；禁止匀速/LinearEasing，导航动画不跟手速联动；
 - 预测式返回：Manifest 关闭 predictive back（`enableOnBackInvokedCallback=false`），
   手势只提交普通 back，由 NavHost 播放正常 pop；不做手势预演；
 - 深色模式系统栏：`AppTheme` 根据 App 深色设置调整状态栏/导航栏图标明暗；

@@ -88,6 +88,7 @@ import com.wonderlandkid.biliaudio.player.VideoPhase
 import com.wonderlandkid.biliaudio.player.VideoPlaybackState
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
+import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
@@ -471,8 +472,18 @@ private fun FullscreenVideoContent(
 
         AnimatedVisibility(
             visible = controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(
+                animationSpec = tween(
+                    durationMillis = BiliMotion.VideoControlsEnterMs,
+                    easing = BiliMotion.EmphasizedDecelerate,
+                ),
+            ),
+            exit = fadeOut(
+                animationSpec = tween(
+                    durationMillis = BiliMotion.VideoControlsExitMs,
+                    easing = BiliMotion.EmphasizedAccelerate,
+                ),
+            ),
             modifier = Modifier.fillMaxSize(),
         ) {
             Column(
@@ -607,8 +618,18 @@ private fun VideoCoverPlaceholder(
     val cover = entry?.coverModel()
     AnimatedVisibility(
         visible = visible && cover != null,
-        enter = fadeIn(animationSpec = tween(durationMillis = 200)),
-        exit = fadeOut(animationSpec = tween(durationMillis = 150)),
+        enter = fadeIn(
+            animationSpec = tween(
+                durationMillis = BiliMotion.VideoCoverEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
+        ),
+        exit = fadeOut(
+            animationSpec = tween(
+                durationMillis = BiliMotion.VideoCoverExitMs,
+                easing = BiliMotion.EmphasizedAccelerate,
+            ),
+        ),
         modifier = modifier.fillMaxSize(),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {

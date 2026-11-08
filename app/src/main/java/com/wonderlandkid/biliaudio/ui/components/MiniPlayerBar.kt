@@ -72,10 +72,28 @@ fun MiniPlayerBar(
     val track = state.currentTrack
     AnimatedVisibility(
         visible = track != null,
-        enter = slideInVertically(animationSpec = tween(BiliMotion.Short4)) { it / 2 } +
-            fadeIn(animationSpec = tween(BiliMotion.Short4)),
-        exit = slideOutVertically(animationSpec = tween(BiliMotion.Short2)) { it / 2 } +
-            fadeOut(animationSpec = tween(BiliMotion.Short2)),
+        enter = slideInVertically(
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
+        ) { it / 2 } + fadeIn(
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
+        ),
+        exit = slideOutVertically(
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerExitMs,
+                easing = BiliMotion.EmphasizedAccelerate,
+            ),
+        ) { it / 2 } + fadeOut(
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerExitMs,
+                easing = BiliMotion.EmphasizedAccelerate,
+            ),
+        ),
         modifier = modifier,
     ) {
         if (track == null) return@AnimatedVisibility

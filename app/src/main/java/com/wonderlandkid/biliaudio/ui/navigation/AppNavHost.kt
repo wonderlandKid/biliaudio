@@ -124,7 +124,7 @@ fun AppNavHost() {
         .calculateBottomPadding()
     val animatedMiniBottomPadding: Dp by animateDpAsState(
         targetValue = if (showChrome) with(density) { bottomBarHeightPx.toDp() } else systemBottomInset,
-        animationSpec = spring(dampingRatio = 1f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
         label = "miniBottomPadding",
     )
     // spring 不能出现过冲：padding 为负会直接抛 IllegalArgumentException（真机 v0.8.3 闪退根因）
@@ -146,7 +146,7 @@ fun AppNavHost() {
                 targetValue = if (open) 1f else 0f,
                 animationSpec = spring(
                     dampingRatio = 0.90f,
-                    stiffness = 380f,
+                    stiffness = 320f,
                     visibilityThreshold = 0.001f,
                 ),
                 initialVelocity = velocity.coerceIn(-6f, 6f),

@@ -1,7 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.theme
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,8 +23,6 @@ import androidx.compose.ui.unit.dp
  * 动画只写 layer（不触发重组），开销很小。
  */
 private const val EntranceTranslationDp = 24f
-private const val EntranceStaggerMs = 35
-private val EntranceEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
 
 fun Modifier.entrance(
     order: Int = 0,
@@ -45,9 +42,10 @@ fun Modifier.entrance(
             progress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    delayMillis = (order.coerceAtLeast(0) * EntranceStaggerMs),
-                    durationMillis = (250 + order * 45).coerceAtMost(550),
-                    easing = EntranceEasing,
+                    delayMillis = order.coerceAtLeast(0) * BiliMotion.EntranceStaggerMs,
+                    durationMillis = (BiliMotion.EntranceBaseMs + order * BiliMotion.EntranceStepMs)
+                        .coerceAtMost(BiliMotion.EntranceMaxMs),
+                    easing = BiliMotion.EmphasizedDecelerate,
                 ),
             )
         } else {

@@ -49,12 +49,31 @@ object BiliMotion {
     const val TopLevelTotalMs = 400            // 合计 400ms
     const val TopLevelEnterScale = 0.94f       // 94% → 100%
 
+    // ---------------- 页面/局部动效时长（统一在这里调，禁止页面内散写） ----------------
+    /** 层级页面 push/pop：完整宽度滑动；固定 500ms，手势快慢不会改变它。 */
+    const val PageTransitionMs = 500
+
     // ---------------- Shared axis（层级页面） ----------------
-    // 400ms，旧页 200ms 淡出、新页延迟 100ms 以 300ms 淡入（EmphasizedDecelerate）。
+    // v0.14.0：页面 push/pop 放慢到 500ms（M3 Emphasized 推荐「起止都在屏幕」500ms），
+    // 进入用 EmphasizedDecelerate、退出用 EmphasizedAccelerate；全部固定时长，不跟手速联动。
     const val AxisExitFadeMs = 200
     const val AxisEnterDelayMs = 100
     const val AxisEnterFadeMs = 300
-    const val AxisTotalMs = 400
+    const val AxisTotalMs = PageTransitionMs
+    /** 迷你播放条显示/隐藏。 */
+    const val MiniPlayerEnterMs = 280
+    const val MiniPlayerExitMs = 220
+    /** 歌词视频控制层显隐。 */
+    const val VideoControlsEnterMs = 260
+    const val VideoControlsExitMs = 200
+    /** 歌词视频封面占位淡出。 */
+    const val VideoCoverEnterMs = 300
+    const val VideoCoverExitMs = 250
+    /** Tab 列表入场：基础 320ms + 每项 50ms（封顶 650ms），交错 45ms。 */
+    const val EntranceBaseMs = 320
+    const val EntranceStepMs = 50
+    const val EntranceMaxMs = 650
+    const val EntranceStaggerMs = 45
     // 位移用屏幕百分比（Material 原 spec 为 30dp，视觉上偏“原地淡出”；
     // 为了让进入/返回都有明确的空间方向感，这里取 24% 屏宽，进出对称）
     const val AxisTranslationFraction = 0.24f
