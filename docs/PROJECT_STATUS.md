@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.7.0）
+# 项目现状与交接（v0.8.0）
 
-> 最后更新：2026-11-08 · 版本 v0.7.0 · tag `v0.7.0`（release commit 以 `git rev-parse v0.7.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.8.0 · tag `v0.8.0`（release commit 以 `git rev-parse v0.8.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -72,6 +72,7 @@
 - **v0.6.3** 列表卡顿根因定位：debug 包无 R8；交付改为 release（R8+debug 签名），关键 UI 状态加 @Immutable；
   真机滚动 90/95/99th 从 53/69/93ms → 8/8/11ms，janky 7.14% → 0.12%
 - **v0.7.0** 动效节奏放缓（400ms/24% 对称位移）、迷你条 Haze 毛玻璃 + 跟手拖拽、去掉 handle/亮线；Haze 2.0.1
+- **v0.8.0** 全导航改为纯左右滑动（无淡入淡出）、播放页改为迷你条跟手连续展开的覆盖卡片（playerProgress 0→1 + spring）
 
 ## 5. 最近验证状态（截至 v0.4.0）
 
@@ -96,6 +97,8 @@
   - 迷你条：上滑→播放页（底部上滑转场）、下滑→收起细条、点击/上滑→展开，截图确认；
   - 专辑详情进入/返回为横向推入/退出，无缩放；
   - 设置页目录导出到 SAF 文件夹成功生成 `biliaudio-library.json` + `Fallious/.../album.json+segments.json` + `索尼音乐中国/...`；从文件夹导入（合并）结果「新建 0 · 更新 2 · 分曲更新 0 · 跳过 0 · 失败 0」。
+- v0.8.0 模拟器验证：迷你条慢速上滑时播放页卡片连续升起（录屏 `docs/screenshots/v08_player_sheet_drag.png`），
+  松手展开、返回收起；Tab/详情页为纯左右滑动无淡入淡出。
 - v0.7.0 模拟器验证：迷你条改为悬浮内容层（位于底部导航之上）、Haze blur fallback 可读、无 handle、上滑跟手拖动（录屏）、
   下滑收起细条、动效 400ms/24% 位移；截图 `docs/screenshots/v07_*.png`。
   （真机本轮被 PIN 锁屏无法操作，待解锁后复测毛玻璃真机 RenderEffect 与手感）

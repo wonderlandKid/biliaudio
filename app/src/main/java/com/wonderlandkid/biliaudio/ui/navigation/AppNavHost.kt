@@ -1,32 +1,42 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -58,20 +68,19 @@ import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.launch
 
 /**
- * 应用导航壳（v0.7.0）。
+ * 应用导航壳（v0.8.0）。
  *
- * 布局：
- * - 底部导航仍由 Scaffold bottomBar 承载（内容区域在其上方）；
- * - **迷你播放条改为悬浮内容层**（Scaffold 内容区底部对齐），因此可以盖在列表之上，
- *   并使用 Haze backdrop blur 做“毛玻璃”质感（HazeState 由 NavHost 的 hazeSource 提供背景采样）；
- * - 播放页/歌词页沉浸式，无底部 chrome。
+ * 动画（用户明确要求）：
+ * - **全部页面导航使用左右滑动结构**，不再用淡入淡出：
+ *   进入 = 从右侧滑入、返回 = 向右滑出，方向严格「从哪来回哪去」；
+ *   三个 Tab 之间按 Tab 顺序决定左右方向（发现→音乐库→设置 向右推进）。
+ * - **迷你播放条 → 正在播放页 = 上下关系**：迷你条跟手上滑，播放页以底部卡片形式连续展开
+ *   （进度 0→1 由拖拽距离连续控制，松手弹簧收敛；下滑/返回键收起），不是跳转淡入。
  *
- * 动效（Material Design 3 Motion，见 ui/theme/Motion.kt）：
- * - Tab：Fade through（400ms：旧页 200ms 淡出、新页延迟 100ms 以 300ms 淡入并 94%→100%）；
- * - 层级页面：Shared axis X（400ms、屏幕 24% 横向位移 + 淡入淡出，进入/返回严格对称）；
- * - 播放页：Shared axis Y（垂直 14% 屏高）；歌词页：Fade。
+ * 布局：NavHost 作为 Haze source；悬浮迷你条 + 播放页卡片覆盖在内容层上；底部导航在播放页展开时隐藏。
  */
 @Composable
 fun AppNavHost() {
@@ -82,21 +91,67 @@ fun AppNavHost() {
 
     val tabRoutes = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
     val miniPlayerOnlyRoutes = setOf(Routes.ALBUM, Routes.SPLIT_EDITOR)
-    val immersiveRoutes = setOf(Routes.PLAYER, Routes.VIDEO)
+    val immersiveRoutes = setOf(Routes.VIDEO)
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
     val isImmersive = currentRoute in immersiveRoutes
     val showMiniPlayer = (showChrome || showMiniPlayerOnly) && !isImmersive
 
-    // 迷你播放条收起状态：下滑收起、上滑/点击展开；打开播放页时恢复展开
-    var miniPlayerCollapsed by rememberSaveable { mutableStateOf(false) }
-
-    // Haze 背景采样：NavHost 作为 source，悬浮迷你条作为 effect
     val hazeState = rememberHazeState()
-
-    // Scaffold 内容层可能延伸到屏幕底部（bottomBar 只是 overlay），悬浮迷你条需要自己避开底部导航
-    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
+    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+
+    // ---------------- 播放页连续展开状态 ----------------
+    val scope = rememberCoroutineScope()
+    // 0f = 迷你条，1f = 全屏播放页；拖拽期间实时变化
+    var playerProgress by remember { mutableFloatStateOf(0f) }
+    var playerOpenTarget by rememberSaveable { mutableStateOf(false) }
+    var reopenPlayerAfterVideo by rememberSaveable { mutableStateOf(false) }
+    var settleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    fun animatePlayerTo(open: Boolean, velocity: Float = 0f) {
+        settleJob?.cancel()
+        playerOpenTarget = open
+        settleJob = scope.launch {
+            Animatable(playerProgress).animateTo(
+                targetValue = if (open) 1f else 0f,
+                animationSpec = spring(
+                    dampingRatio = 0.90f,
+                    stiffness = 380f,
+                    visibilityThreshold = 0.001f,
+                ),
+                initialVelocity = velocity.coerceIn(-6f, 6f),
+            ) { playerProgress = value.coerceIn(0f, 1f) }
+            playerProgress = if (open) 1f else 0f
+        }
+    }
+
+    val playerDragState = rememberDraggableState { delta ->
+        settleJob?.cancel()
+        playerProgress = (playerProgress - delta / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+    }
+    val playerDragModifier = Modifier.draggable(
+        state = playerDragState,
+        orientation = Orientation.Vertical,
+        onDragStopped = { velocity ->
+            val open = playerProgress > 0.18f || velocity < -800f
+            animatePlayerTo(open, (-velocity / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(-6f, 6f))
+        },
+    )
+
+    // 视频页返回后恢复播放页（视频是从播放页打开的）
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == Routes.VIDEO) {
+            // 播放页卡片让位给视频页；返回时再恢复
+            settleJob?.cancel()
+            playerProgress = 0f
+        } else if (reopenPlayerAfterVideo) {
+            reopenPlayerAfterVideo = false
+            animatePlayerTo(true)
+        }
+    }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -117,18 +172,10 @@ fun AppNavHost() {
         }
     }
 
-    val configuration = LocalConfiguration.current
-    // Shared axis X 位移：屏幕宽度的 24%（进入/返回对称）；播放页 Y 轴：屏高 14%
-    val axisOffsetPx = with(density) {
-        (configuration.screenWidthDp * BiliMotion.AxisTranslationFraction).dp.roundToPx()
-    }
-    val verticalOffsetPx = with(density) {
-        (configuration.screenHeightDp * BiliMotion.AxisVerticalFraction).dp.roundToPx()
-    }
-
     Scaffold(
         bottomBar = {
-            if (showChrome) {
+            // 播放页展开时隐藏底部导航（不再拦截点击）；Tab 页内容 padding 由 innerPadding 提供
+            if (showChrome && playerProgress < 0.02f) {
                 Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
                     BiliBottomBar(
                         current = currentTab,
@@ -146,25 +193,23 @@ fun AppNavHost() {
                     .fillMaxSize()
                     .hazeSource(hazeState)
                     .padding(innerPadding),
-                // 层级页面：Material Shared axis X（进入/返回对称的横向位移 + 分段淡入淡出）
-                enterTransition = { sharedAxisXEnter(axisOffsetPx) },
-                exitTransition = { sharedAxisXExit(axisOffsetPx) },
-                popEnterTransition = { sharedAxisXPopEnter(axisOffsetPx) },
-                popExitTransition = { sharedAxisXPopExit(axisOffsetPx) },
+                // 全部导航：纯左右滑动（无淡入淡出）；返回方向严格反向
+                enterTransition = { slideInFromRight() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeftPart() },
+                popExitTransition = { slideOutToRight() },
             ) {
-                // ---------------- Tabs（Fade through） ----------------
+                // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
                 composable(
                     Routes.HOME,
-                    enterTransition = { fadeThroughEnter() },
-                    exitTransition = { fadeThroughExit() },
-                    popEnterTransition = { fadeThroughEnter() },
-                    popExitTransition = { fadeThroughExit() },
+                    enterTransition = { tabEnter(Routes.HOME) },
+                    exitTransition = { tabExit(Routes.HOME) },
+                    popEnterTransition = { slideInFromLeftPart() },
+                    popExitTransition = { slideOutToRight() },
                 ) {
                     HomeScreen(
                         onOpenSearch = { switchTab(MainTab.LIBRARY) },
-                        onOpenAlbum = { albumId ->
-                            navController.navigate(Routes.album(albumId))
-                        },
+                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                         onOpenLogin = { navController.navigate(Routes.LOGIN) },
                         onOpenImport = { navController.navigate(Routes.IMPORT) },
                         onOpenLibrary = { switchTab(MainTab.LIBRARY) },
@@ -172,26 +217,22 @@ fun AppNavHost() {
                 }
                 composable(
                     Routes.LIBRARY,
-                    enterTransition = { fadeThroughEnter() },
-                    exitTransition = { fadeThroughExit() },
-                    popEnterTransition = { fadeThroughEnter() },
-                    popExitTransition = { fadeThroughExit() },
+                    enterTransition = { tabEnter(Routes.LIBRARY) },
+                    exitTransition = { tabExit(Routes.LIBRARY) },
+                    popEnterTransition = { slideInFromLeftPart() },
+                    popExitTransition = { slideOutToRight() },
                 ) {
                     LibraryScreen(
-                        onOpenAlbum = { albumId ->
-                            navController.navigate(Routes.album(albumId))
-                        },
-                        onOpenArtist = { artistName ->
-                            navController.navigate(Routes.artist(artistName))
-                        },
+                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                        onOpenArtist = { artistName -> navController.navigate(Routes.artist(artistName)) },
                     )
                 }
                 composable(
                     Routes.SETTINGS,
-                    enterTransition = { fadeThroughEnter() },
-                    exitTransition = { fadeThroughExit() },
-                    popEnterTransition = { fadeThroughEnter() },
-                    popExitTransition = { fadeThroughExit() },
+                    enterTransition = { tabEnter(Routes.SETTINGS) },
+                    exitTransition = { tabExit(Routes.SETTINGS) },
+                    popEnterTransition = { slideInFromLeftPart() },
+                    popExitTransition = { slideOutToRight() },
                 ) {
                     SettingsScreen(
                         onOpenLogin = { navController.navigate(Routes.LOGIN) },
@@ -200,7 +241,7 @@ fun AppNavHost() {
                     )
                 }
 
-                // ---------------- 艺术家（Shared axis X） ----------------
+                // ---------------- 艺术家 / 专辑 / 分曲（右进右出） ----------------
                 composable(
                     route = Routes.ARTIST,
                     arguments = listOf(navArgument(Routes.ARG_ARTIST_NAME) { type = NavType.StringType }),
@@ -212,8 +253,6 @@ fun AppNavHost() {
                         onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                     )
                 }
-
-                // ---------------- 专辑（Shared axis X） ----------------
                 composable(
                     route = Routes.ALBUM,
                     arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
@@ -236,7 +275,7 @@ fun AppNavHost() {
                     )
                 }
 
-                // ---------------- 导入 / 登录 / 诊断（Shared axis X） ----------------
+                // ---------------- 导入 / 登录 / 诊断 ----------------
                 composable(Routes.IMPORT) {
                     ImportScreen(
                         onBack = { navController.popBackStack() },
@@ -276,27 +315,13 @@ fun AppNavHost() {
                     )
                 }
 
-                // ---------------- 播放 / 歌词页（沉浸式，页面自行处理 insets） ----------------
-                composable(
-                    Routes.PLAYER,
-                    // 从迷你条向上展开：Shared axis Y
-                    enterTransition = { sharedAxisYEnter(verticalOffsetPx) },
-                    exitTransition = { fadeThroughExit() },
-                    popEnterTransition = { fadeEnter() },
-                    popExitTransition = { sharedAxisYPopExit(verticalOffsetPx) },
-                ) {
-                    NowPlayingScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenVideo = { navController.navigate(Routes.VIDEO) },
-                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                    )
-                }
+                // ---------------- 歌词视频页（左右滑动进出） ----------------
                 composable(
                     Routes.VIDEO,
-                    enterTransition = { fadeEnter() },
-                    exitTransition = { fadeExit() },
-                    popEnterTransition = { fadeEnter() },
-                    popExitTransition = { fadeExit() },
+                    enterTransition = { slideInFromRight() },
+                    exitTransition = { slideOutToLeft() },
+                    popEnterTransition = { slideInFromLeftPart() },
+                    popExitTransition = { slideOutToRight() },
                 ) {
                     VideoScreen(
                         onBack = { navController.popBackStack() },
@@ -304,169 +329,142 @@ fun AppNavHost() {
                 }
             }
 
-            // 悬浮迷你播放条：盖在内容之上（Haze 背景采样 NavHost），位于底部导航之上
+            // 悬浮迷你播放条（播放页展开时淡出并让位给播放页卡片）
             if (showMiniPlayer) {
+                val miniAlpha = (1f - playerProgress / 0.16f).coerceIn(0f, 1f)
                 MiniPlayerHost(
                     playbackController = container.playbackController,
-                    collapsed = miniPlayerCollapsed,
-                    onCollapsedChange = { miniPlayerCollapsed = it },
-                    onOpenPlayer = {
-                        miniPlayerCollapsed = false
-                        navController.navigate(Routes.PLAYER)
-                    },
+                    onClick = { animatePlayerTo(true) },
+                    dragModifier = playerDragModifier,
                     hazeState = hazeState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .graphicsLayer { alpha = miniAlpha }
                         .then(
                             if (showChrome) {
-                                // 位于底部导航之上（bottomBar 覆盖在 Scaffold 内容层底部）
-                                Modifier.padding(
-                                    bottom = with(density) { bottomBarHeightPx.toDp() },
-                                )
+                                Modifier.padding(bottom = with(density) { bottomBarHeightPx.toDp() })
                             } else {
-                                // 迷你条专属路由（专辑详情等）没有底部导航：避开系统手势区
                                 Modifier.navigationBarsPadding()
                             },
                         ),
                 )
+            }
+
+            // 正在播放页：以底部卡片形式连续展开（progress 0→1）
+            if (playerProgress > 0.001f) {
+                val horizontalInset = (18.dp * (1f - playerProgress))
+                    .coerceAtLeast(0.dp)
+                val topRadius = (28.dp * (1f - playerProgress))
+                    .coerceAtLeast(0.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationY = (1f - playerProgress) * size.height
+                        }
+                        .padding(horizontal = horizontalInset)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = topRadius,
+                                topEnd = topRadius,
+                            ),
+                        )
+                        .background(MaterialTheme.colorScheme.surface),
+                ) {
+                    NowPlayingScreen(
+                        onBack = { animatePlayerTo(false) },
+                        onOpenVideo = {
+                            reopenPlayerAfterVideo = true
+                            settleJob?.cancel()
+                            playerProgress = 0f
+                            navController.navigate(Routes.VIDEO)
+                        },
+                        onOpenAlbum = { albumId ->
+                            animatePlayerTo(false)
+                            navController.navigate(Routes.album(albumId))
+                        },
+                    )
+                }
+                // 注册在 NavHost/播放页之后：返回键优先收起播放页卡片，而不是 pop 导航栈
+                BackHandler(enabled = playerProgress > 0.01f) {
+                    animatePlayerTo(false)
+                }
             }
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Material motion 转场实现（时长/曲线见 ui/theme/Motion.kt）
+// 纯左右滑动转场（用户要求：不要淡入淡出，从哪来、回哪去）
 // ---------------------------------------------------------------------------
 
-/**
- * 顶级 Tab：Material **Fade through**（M3 推荐节奏，400ms）：
- * 旧页 200ms 淡出 → 新页延后 100ms 以 300ms 淡入并从 94% 放大到 100%。
- */
-private fun fadeThroughEnter(): EnterTransition =
-    fadeIn(
-        animationSpec = tween(
-            durationMillis = BiliMotion.TopLevelEnterMs,
-            delayMillis = BiliMotion.TopLevelEnterDelayMs,
-            easing = BiliMotion.EmphasizedDecelerate,
-        ),
-    ) + scaleIn(
-        initialScale = BiliMotion.TopLevelEnterScale,
-        animationSpec = tween(
-            durationMillis = BiliMotion.TopLevelEnterMs,
-            delayMillis = BiliMotion.TopLevelEnterDelayMs,
-            easing = BiliMotion.EmphasizedDecelerate,
-        ),
-    )
+private fun tabIndex(route: String?): Int = when (route) {
+    Routes.HOME -> 0
+    Routes.LIBRARY -> 1
+    Routes.SETTINGS -> 2
+    else -> 0
+}
 
-private fun fadeThroughExit(): ExitTransition =
-    fadeOut(
-        animationSpec = tween(
-            durationMillis = BiliMotion.TopLevelExitMs,
-            easing = BiliMotion.EmphasizedAccelerate,
-        ),
-    )
-
-/**
- * 层级页面：Material **Shared axis X**（400ms）。
- * 位移取屏幕 24%，进入从右滑入、返回向右滑出，严格对称（不再是“原地缩小淡出”）。
- */
-private fun sharedAxisXEnter(offsetPx: Int): EnterTransition =
+private fun slideInFromRight(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { offsetPx } + fadeIn(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisEnterFadeMs,
-            delayMillis = BiliMotion.AxisEnterDelayMs,
-            easing = BiliMotion.EmphasizedDecelerate,
-        ),
-    )
+    ) { it }
 
-private fun sharedAxisXExit(offsetPx: Int): ExitTransition =
-    slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { -offsetPx } + fadeOut(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisExitFadeMs,
-            easing = BiliMotion.EmphasizedAccelerate,
-        ),
-    )
-
-private fun sharedAxisXPopEnter(offsetPx: Int): EnterTransition =
+private fun slideInFromLeftPart(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { -offsetPx } + fadeIn(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisEnterFadeMs,
-            delayMillis = BiliMotion.AxisEnterDelayMs,
-            easing = BiliMotion.EmphasizedDecelerate,
-        ),
-    )
+    ) { -it / 3 }
 
-private fun sharedAxisXPopExit(offsetPx: Int): ExitTransition =
+private fun slideOutToLeft(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { offsetPx } + fadeOut(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisExitFadeMs,
-            easing = BiliMotion.EmphasizedAccelerate,
-        ),
-    )
+    ) { -it / 3 }
 
-/** 播放页：Material **Shared axis Y**（从迷你条向上）。 */
-private fun sharedAxisYEnter(offsetPx: Int): EnterTransition =
-    slideInVertically(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { offsetPx } + fadeIn(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisEnterFadeMs,
-            delayMillis = BiliMotion.AxisEnterDelayMs,
-            easing = BiliMotion.EmphasizedDecelerate,
-        ),
-    )
-
-private fun sharedAxisYPopExit(offsetPx: Int): ExitTransition =
-    slideOutVertically(
+private fun slideOutToRight(): ExitTransition =
+    slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { offsetPx } + fadeOut(
-        animationSpec = tween(
-            durationMillis = BiliMotion.AxisExitFadeMs,
-            easing = BiliMotion.EmphasizedAccelerate,
-        ),
-    )
+    ) { it }
 
-/** 沉浸/覆盖层：Material **Fade**。 */
-private fun fadeEnter(): EnterTransition =
-    fadeIn(animationSpec = tween(BiliMotion.FadeInMs, easing = BiliMotion.EmphasizedDecelerate))
+/** Tab 前进：目标序号更大 → 从右侧进入；否则从左侧进入（返回方向一致）。 */
+private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.tabEnter(
+    targetRoute: String,
+): EnterTransition {
+    val forward = tabIndex(targetRoute) >= tabIndex(initialState.destination.route)
+    return slideInHorizontally(
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
+    ) { if (forward) it else -it }
+}
 
-private fun fadeExit(): ExitTransition =
-    fadeOut(animationSpec = tween(BiliMotion.FadeOutMs, easing = BiliMotion.EmphasizedAccelerate))
+private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.tabExit(
+    currentRoute: String,
+): ExitTransition {
+    val forward = tabIndex(targetState.destination.route) > tabIndex(currentRoute)
+    // 注意：targetState 可能是同一 Tab 内部的详情页，此时按“前进”处理
+    return slideOutHorizontally(
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
+    ) { if (forward) -it / 3 else it / 3 }
+}
 
 // ---------------------------------------------------------------------------
 // 迷你播放条宿主
 // ---------------------------------------------------------------------------
 
-/**
- * 迷你播放条宿主：播放状态在本 composable 内部订阅，
- * 避免 250ms 的播放进度 tick 冒泡到 AppNavHost/Scaffold/NavHost 造成整页重组。
- */
 @Composable
 private fun MiniPlayerHost(
     playbackController: PlaybackController,
-    collapsed: Boolean,
-    onCollapsedChange: (Boolean) -> Unit,
-    onOpenPlayer: () -> Unit,
+    onClick: () -> Unit,
+    dragModifier: Modifier,
     hazeState: dev.chrisbanes.haze.HazeState?,
     modifier: Modifier = Modifier,
 ) {
     val state by playbackController.state.collectAsStateWithLifecycle()
     MiniPlayerBar(
         state = state,
-        collapsed = collapsed,
-        onCollapsedChange = onCollapsedChange,
-        onOpenPlayer = onOpenPlayer,
+        onClick = onClick,
         onTogglePlay = { playbackController.togglePlayPause() },
         onNext = { playbackController.next() },
         hazeState = hazeState,
+        dragModifier = dragModifier,
         modifier = modifier,
     )
 }
