@@ -249,7 +249,7 @@ private fun NowPlayingBody(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = Spacing.xl),
+            .padding(horizontal = Spacing.lg),
     ) {
         // 大封面：在剩余空间内取 min(可用宽, 可用高) 的正方形，小屏不会溢出
         BoxWithConstraints(
@@ -259,7 +259,7 @@ private fun NowPlayingBody(
                 .padding(vertical = Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
-            val coverSize = minOf(maxWidth * 0.82f, maxHeight)
+            val coverSize = minOf(maxWidth * 0.96f, maxHeight * 0.98f)
             // 暂停时封面轻微缩小，播放时恢复；比“只换按钮图标”更有播放/暂停的体感。
             val coverScale by animateFloatAsState(
                 targetValue = if (state.isPlaying) 1f else 0.92f,

@@ -175,10 +175,11 @@ fun AlbumDetailScreen(
                 },
                 onToggleVideoCache = {
                     menuExpanded = false
-                    if (state.cachedVideo != null) {
-                        viewModel.toggleVideoCache()
-                    } else {
-                        showVideoCacheConfirm = true
+                    when {
+                        // v0.18 之前可能只缓存了视频（DASH 视频轨不含音频）：给一个补音频入口。
+                        state.cachedVideo != null && state.cachedAudio == null -> viewModel.toggleAudioCache()
+                        state.cachedVideo != null -> viewModel.toggleVideoCache()
+                        else -> showVideoCacheConfirm = true
                     }
                 },
                 onDelete = {
@@ -219,10 +220,11 @@ fun AlbumDetailScreen(
     if (showVideoCacheConfirm && state.album != null) {
         AlertDialog(
             onDismissRequest = { showVideoCacheConfirm = false },
-            title = { Text("缓存歌词视频？") },
+            title = { Text("缓存歌词视频（含音频）？") },
             text = {
                 Text(
-                    "歌词视频是整段原始视频，文件可能较大（数百 MB 至 1 GB+）。" +
+                    "B 站视频轨不含音频，视频缓存不会自动让音频可离线。这里会同时缓存歌词视频和整段音频，" +
+                        "确保断网时听歌和看歌词视频都可用。视频文件可能较大（数百 MB 至 1 GB+），" +
                         "建议在 Wi-Fi 下下载；下载期间请保持页面打开。",
                 )
             },
@@ -344,8 +346,9 @@ private fun RowScope.AlbumDetailActions(
                 Text(
                     when {
                         isCachingVideo -> "视频缓存中…"
+                        cachedVideo && !cached -> "补缓存音频（视频已缓存）"
                         cachedVideo -> "删除歌词视频缓存${cachedVideoHeight?.let { "（${it}P）" }.orEmpty()}"
-                        else -> "缓存歌词视频"
+                        else -> "缓存歌词视频（含音频）"
                     },
                 )
             },

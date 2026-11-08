@@ -86,11 +86,19 @@ class AudioCacheRepositoryImpl(
         album: Album,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): CachedVideo = withContext(Dispatchers.IO) {
-        getCachedVideo(album)?.let { return@withContext it }
+        // B 站 DASH 的视频轨是 video-only，缓存视频并不会顺带得到音频文件；
+        // 用户点“缓存歌词视频”时默认期望整张专辑可离线，所以这里同时确保音频缓存存在。
         val key = keyOf(album)
         val mutex = locks.getOrPut("$key:video") { Mutex() }
         mutex.withLock {
-            getCachedVideo(album)?.let { return@withLock it }
+            val existingVideo = getCachedVideo(album)
+            if (existingVideo != null) {
+                if (getCached(album) == null) cache(album)
+                return@withLock existingVideo
+            }
+            if (getCached(album) == null) {
+                cache(album)
+            }
             val streams = streamResolver.resolve(album)
             val videoUrl = streams.videoUrl?.takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("没有可用的视频流，无法缓存歌词视频")

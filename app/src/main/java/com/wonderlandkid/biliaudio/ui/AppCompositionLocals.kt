@@ -2,7 +2,11 @@ package com.wonderlandkid.biliaudio.ui
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -15,6 +19,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wonderlandkid.biliaudio.BiliAudioApp
 import com.wonderlandkid.biliaudio.di.AppContainer
+import com.wonderlandkid.biliaudio.ui.theme.rememberBiliPressIndication
 
 /** 从任意 Composable 获取应用级依赖容器。 */
 @Composable
@@ -43,6 +48,18 @@ inline fun <reified VM : ViewModel> appViewModel(
     )
 }
 
+/** 全局按压反馈：所有可点击组件统一水波纹 + 按压底色；禁用组件不触发。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProvidePressIndication(content: @Composable () -> Unit) {
+    val indication = rememberBiliPressIndication()
+    CompositionLocalProvider(
+        LocalIndication provides indication,
+        LocalRippleConfiguration provides null,
+        content = content,
+    )
+}
+
 /** 跟随设置的应用主题壳。 */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
@@ -60,5 +77,7 @@ fun AppTheme(content: @Composable () -> Unit) {
             }
         }
     }
-    com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme(darkTheme = dark, content = content)
+    com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme(darkTheme = dark) {
+        ProvidePressIndication(content = content)
+    }
 }
