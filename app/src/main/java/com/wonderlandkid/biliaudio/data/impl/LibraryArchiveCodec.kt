@@ -361,7 +361,7 @@ class LibraryArchiveCodec(
 
     companion object {
         private const val SOURCE_BILIBILI = "bilibili"
-        private const val MAX_TEXT_LENGTH = 5 * 1024 * 1024
+        private const val MAX_TEXT_LENGTH = 64 * 1024 * 1024
         private const val MAX_COVER_BYTES = 2 * 1024 * 1024
         private const val MAX_ALBUMS = 2000
         private const val MAX_SEGMENTS = 500

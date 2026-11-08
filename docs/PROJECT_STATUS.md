@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.9.0）
+# 项目现状与交接（v0.9.1）
 
-> 最后更新：2026-11-08 · 版本 v0.9.0 · tag `v0.9.0`（release commit 以 `git rev-parse v0.9.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.9.1 · tag `v0.9.1`（release commit 以 `git rev-parse v0.9.1` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -77,6 +77,7 @@
 - **v0.8.2** 参考 SPICaMusic_Android 统一导航：一级 Tab 瞬时切换（无滑动），层级页面统一 push/pop（右进右出、旧页 1/4 视差、无淡入/缩放）
 - **v0.8.3** 一级 Tab 内容入场动画（Entrance.kt）、迷你条底部 spring 过渡；确认分割时间支持 01:22:23（新增单测）
 - **v0.8.4** 修复 v0.8.3 闪退（负 padding）、入场动画初始进度 bug、predictive back 默认缩小淡出（全局覆盖返回转场）
+- **v0.9.1** 归档单文件上限 5MB→64MB（不改 schema；大库用目录归档）
 - **v0.9.0** 归档数据层 v2：DB v3（source + (source,bvid,page) 唯一键 + tracks.uid）、v2 schema/kind/features/cover hash/空语义；
   v1 归档不再兼容，旧快捷导入文本仍归一化为 v2
 
