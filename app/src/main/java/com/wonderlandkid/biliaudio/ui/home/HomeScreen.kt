@@ -44,6 +44,8 @@ import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.ListBottomSpacer
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.ui.theme.entrance
+import com.wonderlandkid.biliaudio.ui.theme.rememberPageEntrancePlay
 
 /** 「最近播放」卡片内最多展示的专辑条数（其余走「查看全部」）。 */
 private const val RECENT_VISIBLE_COUNT = 3
@@ -105,9 +107,12 @@ private fun HomeContent(
 ) {
     // 两列网格：按 2 个一行切块，避免 LazyColumn 内再嵌套可滚动网格
     val albumRows = remember(state.albums) { state.albums.chunked(2) }
+    val playEntrance = rememberPageEntrancePlay()
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .entrance(order = 0, play = playEntrance),
         contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {

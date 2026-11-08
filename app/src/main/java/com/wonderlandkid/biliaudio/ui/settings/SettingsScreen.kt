@@ -71,6 +71,7 @@ import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.ui.theme.entrance
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -156,7 +157,9 @@ fun SettingsScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .entrance(order = 0),
             contentPadding = PaddingValues(
                 // 与发现/音乐库一致：页头由 BiliPageHeader 自带水平 Spacing.lg
                 top = Spacing.md,

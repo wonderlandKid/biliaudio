@@ -53,6 +53,8 @@ class TimeUtilsTest {
     fun `parseTimeToMs supports hh mm ss`() {
         assertEquals(3_723_000L, TimeUtils.parseTimeToMs("1:02:03"))
         assertEquals(3_723_500L, TimeUtils.parseTimeToMs("01:02:03.5"))
+        // 1 小时以上的分割点（如 01:22:23）
+        assertEquals(4_943_000L, TimeUtils.parseTimeToMs("01:22:23"))
     }
 
     @Test

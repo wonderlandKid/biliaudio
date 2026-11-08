@@ -59,6 +59,8 @@ import com.wonderlandkid.biliaudio.ui.components.SearchField
 import com.wonderlandkid.biliaudio.ui.components.SongRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.ui.theme.entrance
+import com.wonderlandkid.biliaudio.ui.theme.rememberPageEntrancePlay
 import kotlinx.coroutines.launch
 
 /**
@@ -146,40 +148,52 @@ private fun LibraryContent(
                 text = { Text("艺术家 ${state.artists.size}") },
             )
         }
-        when {
-            state.isLoading -> LoadingBox(modifier = Modifier.padding(top = Spacing.xxl))
-            state.errorMessage != null -> EmptyState(
-                title = "加载失败",
-                description = state.errorMessage,
-                modifier = Modifier.padding(top = Spacing.xl),
-            )
+        val playEntrance = rememberPageEntrancePlay()
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .entrance(
+                    order = 0,
+                    play = playEntrance,
+                    replayKey = state.tab.ordinal,
+                ),
+        ) {
+            when {
+                    state.isLoading -> LoadingBox(modifier = Modifier.padding(top = Spacing.xxl))
+                state.errorMessage != null -> EmptyState(
+                    title = "加载失败",
+                    description = state.errorMessage,
+                    modifier = Modifier.padding(top = Spacing.xl),
+                )
 
-            state.tab == LibraryTab.SONGS -> SongsTab(
-                songs = state.songs,
-                isSearchActive = state.isSearchActive,
-                query = state.query,
-                currentTrackId = state.currentTrackId,
-                isPlaying = state.isPlaying,
-                onPlaySong = onPlaySong,
-                onPlayAll = onPlayAll,
-                onClearSearch = onClearQuery,
-            )
+                state.tab == LibraryTab.SONGS -> SongsTab(
+                    songs = state.songs,
+                    isSearchActive = state.isSearchActive,
+                    query = state.query,
+                    currentTrackId = state.currentTrackId,
+                    isPlaying = state.isPlaying,
+                    onPlaySong = onPlaySong,
+                    onPlayAll = onPlayAll,
+                    onClearSearch = onClearQuery,
+                )
 
-            state.tab == LibraryTab.ALBUMS -> AlbumsTab(
-                albums = state.albums,
-                isSearchActive = state.isSearchActive,
-                query = state.query,
-                onOpenAlbum = onOpenAlbum,
-                onClearSearch = onClearQuery,
-            )
+                state.tab == LibraryTab.ALBUMS -> AlbumsTab(
+                    albums = state.albums,
+                    isSearchActive = state.isSearchActive,
+                    query = state.query,
+                    onOpenAlbum = onOpenAlbum,
+                    onClearSearch = onClearQuery,
+                )
 
-            else -> ArtistsTab(
-                artists = state.artists,
-                isSearchActive = state.isSearchActive,
-                query = state.query,
-                onOpenArtist = onOpenArtist,
-                onClearSearch = onClearQuery,
-            )
+                else -> ArtistsTab(
+                    artists = state.artists,
+                    isSearchActive = state.isSearchActive,
+                    query = state.query,
+                    onOpenArtist = onOpenArtist,
+                    onClearSearch = onClearQuery,
+                )
+            }
         }
     }
 }

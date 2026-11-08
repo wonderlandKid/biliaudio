@@ -403,3 +403,18 @@
   4. Tab 不参与详情页转场（exit/enter 为 None），从而底层页面保持静止，不再往右撤/缩小。
 - **影响**：一级页面切换干脆无方向歧义；所有层级页面共享同一套 push/pop 节奏；详情页返回不再出现缩放/淡出。
 
+---
+
+## D31 一级 Tab 内容入场 + 迷你条底部过渡（v0.8.3）
+
+- **日期**：2026-11-08
+- **背景**：Tab 瞬时切换后显得生硬；进入非一级页面时迷你条瞬间掉到屏幕底部；并确认 1 小时以上的分割时间。
+- **参考**：SPICaMusic_Android 的 `ui/theme/EntranceModifier.kt`：每个页面内容用 `Modifier.entrance(order, play)`，
+  35ms 交错、上浮 28dp、时长 250–550ms、Emphasized decelerate 风格曲线；Tab 本身无转场，靠内容入场消除突兀。
+- **决策**：
+  - 新增 `ui/theme/Entrance.kt`：`Modifier.entrance(order, play, replayKey)`（淡入 + 24dp 上浮，只写 layer）；
+    发现/音乐库/设置的内容出现时播放；音乐库内部 Tab 切换用 replayKey 重播；
+  - 迷你条底部 padding 从「底部导航高度」到「系统手势区」用 spring 动画过渡，避免进入详情页时瞬间掉落；
+  - 分割时间：`parseTimeToMs`/`SplitTextParser` 已支持 `h:mm:ss`；补充 `01:22:23` 单测（4,943,000ms）。
+- **影响**：Tab 切换更柔和；页面层级切换时迷你条位置连续；长专辑（>1h）可直接用 `01:22:23` 格式分割。
+

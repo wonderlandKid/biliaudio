@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
@@ -15,10 +16,12 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -104,6 +108,15 @@ fun AppNavHost() {
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    // 非 Tab 页面没有底部导航时，迷你条平滑下移到系统手势区上方，而不是瞬间掉落
+    val systemBottomInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    val miniBottomPadding: Dp by animateDpAsState(
+        targetValue = if (showChrome) with(density) { bottomBarHeightPx.toDp() } else systemBottomInset,
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f),
+        label = "miniBottomPadding",
+    )
 
     // ---------------- 播放页连续展开状态 ----------------
     val scope = rememberCoroutineScope()
@@ -373,13 +386,7 @@ fun AppNavHost() {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .graphicsLayer { alpha = miniAlpha }
-                        .then(
-                            if (showChrome) {
-                                Modifier.padding(bottom = with(density) { bottomBarHeightPx.toDp() })
-                            } else {
-                                Modifier.navigationBarsPadding()
-                            },
-                        ),
+                        .padding(bottom = miniBottomPadding),
                 )
             }
 

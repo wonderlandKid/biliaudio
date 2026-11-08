@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.8.2）
+# 项目现状与交接（v0.8.3）
 
-> 最后更新：2026-11-08 · 版本 v0.8.2 · tag `v0.8.2`（release commit 以 `git rev-parse v0.8.2` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.8.3 · tag `v0.8.3`（release commit 以 `git rev-parse v0.8.3` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -75,6 +75,7 @@
 - **v0.8.0** 全导航改为纯左右滑动（无淡入淡出）、播放页改为迷你条跟手连续展开的覆盖卡片（playerProgress 0→1 + spring）
 - **v0.8.1** 修复转场重影（不透明 Page + 整页推挤）、迷你条黑边与更深模糊、播放页顶部栏下滑关闭
 - **v0.8.2** 参考 SPICaMusic_Android 统一导航：一级 Tab 瞬时切换（无滑动），层级页面统一 push/pop（右进右出、旧页 1/4 视差、无淡入/缩放）
+- **v0.8.3** 一级 Tab 内容入场动画（Entrance.kt）、迷你条底部 spring 过渡；确认分割时间支持 01:22:23（新增单测）
 
 ## 5. 最近验证状态（截至 v0.4.0）
 
