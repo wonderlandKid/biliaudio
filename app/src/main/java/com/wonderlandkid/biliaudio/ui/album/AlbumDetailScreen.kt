@@ -161,10 +161,6 @@ fun AlbumDetailScreen(
                     menuExpanded = false
                     state.album?.let { album -> exportLauncher.launch(buildExportFileName(album.title)) }
                 },
-                onChangeCover = {
-                    menuExpanded = false
-                    showCoverPicker = true
-                },
                 onDelete = {
                     menuExpanded = false
                     showDeleteDialog = true
@@ -257,7 +253,6 @@ private fun RowScope.AlbumDetailActions(
     onMenuDismiss: () -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
-    onChangeCover: () -> Unit,
     onDelete: () -> Unit,
 ) {
     if (isRefreshing || isExporting) {
@@ -283,12 +278,6 @@ private fun RowScope.AlbumDetailActions(
             leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
             enabled = menuEnabled && !isExporting,
             onClick = onExport,
-        )
-        DropdownMenuItem(
-            text = { Text("更换封面") },
-            leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
-            enabled = menuEnabled,
-            onClick = onChangeCover,
         )
         DropdownMenuItem(
             text = { Text("删除专辑", color = MaterialTheme.colorScheme.error) },

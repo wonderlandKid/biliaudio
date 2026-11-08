@@ -90,7 +90,8 @@ fun BiliDetailScaffold(
 - 一级 Tab：瞬时切换，内容入场；三个 Tab 行为平级；
 - 层级页：push 新页从右整页进入、旧页整页向左退出；pop 当前页整页向右退出、上一页从左整页回位；
   Tab↔详情也走这条；Tab↔Tab 才瞬时；无 alpha/scale；
-- 预测式返回：`predictivePop* = None`，手势预输入不预演，真正完成后才转场；
+- 预测式返回：Manifest 关闭 predictive back（`enableOnBackInvokedCallback=false`），
+  手势只提交普通 back，由 NavHost 播放正常 pop；不做手势预演；
 - 深色模式系统栏：`AppTheme` 根据 App 深色设置调整状态栏/导航栏图标明暗；
 - 一级 Tab 根返回：第一次 Toast“再返回一次退出应用”，2 秒内第二次才退出；
 - 播放页：迷你条 ↔ 播放页上下跟手；播放页内弹层返回优先关弹层。
