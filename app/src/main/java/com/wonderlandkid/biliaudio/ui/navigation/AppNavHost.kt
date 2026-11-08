@@ -5,8 +5,13 @@ import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -207,8 +212,35 @@ fun AppNavHost() {
 
     Scaffold(
         bottomBar = {
-            // 播放页展开时隐藏底部导航（不再拦截点击）；Tab 页内容 padding 由 innerPadding 提供
-            if (showChrome && playerProgress < 0.02f) {
+            // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
+            // Scaffold 会跟着测量高度，Tab 内容与迷你条避让同步过渡。
+            AnimatedVisibility(
+                visible = showChrome && playerProgress < 0.02f,
+                enter = expandVertically(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarEnterMs,
+                        easing = BiliMotion.EmphasizedDecelerate,
+                    ),
+                    expandFrom = Alignment.Bottom,
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarEnterMs,
+                        easing = BiliMotion.EmphasizedDecelerate,
+                    ),
+                ),
+                exit = shrinkVertically(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarExitMs,
+                        easing = BiliMotion.EmphasizedAccelerate,
+                    ),
+                    shrinkTowards = Alignment.Bottom,
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarExitMs,
+                        easing = BiliMotion.EmphasizedAccelerate,
+                    ),
+                ),
+            ) {
                 Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
                     BiliBottomBar(
                         current = currentTab,
@@ -257,9 +289,9 @@ fun AppNavHost() {
                 }
                 composable(
                     Routes.LIBRARY,
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
+                    enterTransition = { tabEnterTransition() },
+                    exitTransition = { tabExitTransition() },
+                    popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
@@ -271,9 +303,9 @@ fun AppNavHost() {
                 }
                 composable(
                     Routes.SETTINGS,
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
+                    enterTransition = { tabEnterTransition() },
+                    exitTransition = { tabExitTransition() },
+                    popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
@@ -497,20 +529,21 @@ private fun Page(content: @Composable () -> Unit) {
 //   一级 Tab 不参与转场（EnterTransition.None），避免平级页面出现方向/速度差异。
 // ---------------------------------------------------------------------------
 
+// 对称转场：进入/退出用完全相同的时长与曲线，只改变方向；
+// 不能一个 Decelerate 一个 Accelerate，否则同一对手势会觉得两侧速度不一致。
+private val PageSlideSpec = tween<androidx.compose.ui.unit.IntOffset>(
+    durationMillis = BiliMotion.AxisTotalMs,
+    easing = BiliMotion.Emphasized,
+)
+
 private fun slideInFromRight(): EnterTransition =
-    slideInHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { it }
+    slideInHorizontally(animationSpec = PageSlideSpec) { it }
 
 private fun slideInFromLeft(): EnterTransition =
-    slideInHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { -it }
+    slideInHorizontally(animationSpec = PageSlideSpec) { -it }
 
 private fun slideOutToLeft(): ExitTransition =
-    slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { -it }
+    slideOutHorizontally(animationSpec = PageSlideSpec) { -it }
 
 // 一级 Tab 的转场只在「Tab ↔ 详情页」时生效：
 // - 从 Tab 进入详情：Tab 整页向左退出（新页从右进入）；
@@ -528,9 +561,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabPopEnterTransit
 private val TAB_ROUTE_SET = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
 
 private fun slideOutToRight(): ExitTransition =
-    slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { it }
+    slideOutHorizontally(animationSpec = PageSlideSpec) { it }
 
 // ---------------------------------------------------------------------------
 // 迷你播放条宿主

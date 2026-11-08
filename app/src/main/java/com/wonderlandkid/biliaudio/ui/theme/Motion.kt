@@ -66,6 +66,9 @@ object BiliMotion {
     /** 歌词视频控制层显隐。 */
     const val VideoControlsEnterMs = 260
     const val VideoControlsExitMs = 200
+    /** 底部导航出现/消失。 */
+    const val BottomBarEnterMs = 300
+    const val BottomBarExitMs = 250
     /** 歌词视频封面占位淡出。 */
     const val VideoCoverEnterMs = 300
     const val VideoCoverExitMs = 250

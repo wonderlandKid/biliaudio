@@ -550,3 +550,21 @@
   - 新增 docs/MOTION.md，所有新动效必须登记时长/曲线。
 - **影响**：整体节奏更慢更统一，避免匀速/线性观感；页面转场 500ms 是刻意取舍，后续要提速只改 token。
 
+---
+
+## D40 转场完全对称 + 三个 Tab 统一动态转场 + 底栏动画（v0.15.0）
+
+- **日期**：2026-11-08
+- **问题**：
+  1. 发现→专辑旧页左滑，音乐库→专辑旧页不动：LIBRARY/SETTINGS 两个 composable 还残留写死的
+     `ExitTransition.None`，只有 HOME 改了动态转场；
+  2. 页面进入用 Decelerate、退出用 Accelerate，方向相反且速度曲线不同，不满足“对称”；
+  3. 底部导航在 Tab/详情切换时直接出现/消失，太突兀，且要和迷你条底部避让协调。
+- **决策**：
+  - 三个 Tab 全部使用 `tabEnter/tabExit/tabPopEnter` 动态转场；Tab↔Tab 瞬时，Tab↔详情完整滑；
+  - 页面进入/退出统一 `PageTransitionMs=500` + `Emphasized` 同一条曲线，只是方向相反；
+  - 底部导航用 `AnimatedVisibility` 做高度 expand/shrink + fade（300/250ms），Scaffold 高度随之动画，
+    迷你条避让 spring 跟随，不会跳变；
+  - 规范同步到 MOTION/AGENTS。
+- **影响**：三个 Tab 进入详情行为一致；同一对手势进出速度完全对称；底栏出现更柔和。
+
