@@ -60,7 +60,6 @@ import com.wonderlandkid.biliaudio.ui.components.SongRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
-import com.wonderlandkid.biliaudio.ui.theme.rememberPageEntrancePlay
 import kotlinx.coroutines.launch
 
 /**
@@ -148,14 +147,12 @@ private fun LibraryContent(
                 text = { Text("艺术家 ${state.artists.size}") },
             )
         }
-        val playEntrance = rememberPageEntrancePlay()
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .entrance(
                     order = 0,
-                    play = playEntrance,
                     replayKey = state.tab.ordinal,
                 ),
         ) {

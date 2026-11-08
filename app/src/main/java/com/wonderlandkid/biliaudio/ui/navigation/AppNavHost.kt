@@ -1,5 +1,8 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import android.app.Activity
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -18,6 +21,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -88,6 +95,7 @@ import kotlinx.coroutines.launch
  *
  * 布局：NavHost 作为 Haze source；悬浮迷你条 + 播放页卡片覆盖在内容层上；底部导航在播放页展开时隐藏。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppNavHost() {
     val navController = rememberNavController()
@@ -187,6 +195,7 @@ fun AppNavHost() {
             MainTab.LIBRARY -> Routes.LIBRARY
             MainTab.SETTINGS -> Routes.SETTINGS
         }
+        if (route == currentRoute) return
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -221,11 +230,10 @@ fun AppNavHost() {
                 exitTransition = { slideOutToLeftPart() },
                 popEnterTransition = { slideInFromLeftPart() },
                 popExitTransition = { slideOutToRight() },
-                // 关键：Navigation Compose 默认的「预测式返回」是 scaleOut(0.7)+fade，
-                // 会在系统返回手势/返回键时把页面缩小淡出（用户看到的“缩小退出”）。
-                // 这里统一覆盖为与普通返回相同的整页右滑，彻底去掉该老动画。
-                predictivePopEnterTransition = { slideInFromLeftPart() },
-                predictivePopExitTransition = { slideOutToRight() },
+                // 预测式返回（预输入）只做“无变化”预览：手势滑动过程中页面不动，
+                // 真正完成返回后才走普通 pop 转场；取消手势不会看到页面已经退了一半。
+                predictivePopEnterTransition = { EnterTransition.None },
+                predictivePopExitTransition = { ExitTransition.None },
             ) {
                 // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
                 composable(
@@ -418,6 +426,11 @@ fun AppNavHost() {
                         )
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
+                    // 先于 NowPlayingScreen 注册：播放页内的弹层（播放列表 ModalBottomSheet）
+                    // 自己的返回处理会晚于这里注册，从而优先关闭弹层而不是收起播放页。
+                    BackHandler(enabled = playerProgress > 0.01f) {
+                        animatePlayerTo(false)
+                    }
                     NowPlayingScreen(
                         onBack = { animatePlayerTo(false) },
                         dragModifier = playerDragModifier,
@@ -441,9 +454,21 @@ fun AppNavHost() {
                             .then(playerDragModifier),
                     )
                 }
-                // 注册在 NavHost/播放页之后：返回键优先收起播放页卡片，而不是 pop 导航栈
-                BackHandler(enabled = playerProgress > 0.01f) {
-                    animatePlayerTo(false)
+            }
+
+            // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。
+            val context = LocalContext.current
+            var lastBackAt by remember { mutableLongStateOf(0L) }
+            val isTabRoot = currentRoute in tabRoutes &&
+                playerProgress <= 0.01f &&
+                !WindowInsets.isImeVisible
+            BackHandler(enabled = isTabRoot) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastBackAt in 1..2_000L) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBackAt = now
+                    Toast.makeText(context, "再返回一次退出应用", Toast.LENGTH_SHORT).show()
                 }
             }
         }

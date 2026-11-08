@@ -40,6 +40,8 @@ fun Modifier.entrance(
     }
     LaunchedEffect(play, replayKey) {
         if (play) {
+            // 关键：从 false 切到 true 时先回到 0，否则会从 1→1 无动画。
+            progress.snapTo(0f)
             progress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(

@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.10.0**（tag `v0.10.0`，2026-11-08；release commit 以 `git rev-parse v0.10.0` 为准）
+- **版本：v0.11.0**（tag `v0.11.0`，2026-11-08；release commit 以 `git rev-parse v0.11.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.10.0；归档 v3 测试重写）
+- 单元测试：**126 个**（v0.11.0；归档 v3 测试）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.10.0: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.11.0: 126 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -54,11 +54,13 @@ scripts/screenshot.sh home 8
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
    - **层级页面统一 push/pop**：push = 新页从右侧整页滑入、旧页向左 1/4 视差；pop = 当前页向右整页滑出、
      上一页从左侧 1/4 回位；无 alpha、无 scale；每个目的地外包不透明 `Page` Surface；
-   - **必须覆盖 predictive back 转场**：navigation-compose 默认 predictive pop 是 scaleOut(0.7)+fade，
-     系统返回手势会触发；已在 AppNavHost 统一覆盖为整页右滑；
+   - **预测式返回不预演**：`predictivePopEnter/ExitTransition = None`，手势滑动期间页面不动，
+     真正完成返回才走普通 pop；取消手势无残留；
+   - **一级 Tab 行为平级**：音乐库/设置返回不回到发现，进入退出流程；根 Tab 返回需 2 秒内连续两次
+     （第一次 Toast 提示「再返回一次退出应用」）；键盘弹出时 BackHandler 让位给键盘；
    - 歌词页同样按层级页面处理；迷你条 ↔ 播放页是上下关系（连续跟手展开，顶部栏可下滑关闭）；
-   - 一级 Tab 内容进入时播放「淡入 + 上浮」入场动画（`ui/theme/Entrance.kt` 的 `Modifier.entrance`，
-     参考 SPICaMusic_Android；Tab 切换本身无转场，靠内容入场消除突兀感）。
+   - 一级 Tab 内容进入时统一播放「淡入 + 上浮」入场动画（`ui/theme/Entrance.kt` 的 `Modifier.entrance`，
+     发现/音乐库/设置都用默认 `play=true`；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）。
 7. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
@@ -74,7 +76,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.10.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.11.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
