@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.library
 
+import androidx.compose.runtime.Immutable
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
@@ -56,6 +58,7 @@ internal data class PlaybackHighlight(
 )
 
 /** 音乐库 UI 状态。 */
+@Immutable
 data class LibraryUiState(
     val query: String = "",
     val tab: LibraryTab = LibraryTab.SONGS,

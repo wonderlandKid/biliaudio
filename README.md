@@ -77,6 +77,18 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 - Room（专辑与分曲持久化）、Coil（封面加载）、Navigation Compose
 - 最低 Android 7.0（API 24），targetSdk 37
 
+## 构建（重要：日常/性能测试用 release）
+
+```bash
+export JAVA_HOME=/opt/android-studio/jbr
+./gradlew :app:assembleRelease    # 日常安装/性能验收：R8 优化，滚动明显更顺
+./gradlew :app:assembleDebug      # 仅开发调试（debug 包滚动会明显偏慢，不代表真实性能）
+./gradlew :app:testDebugUnitTest
+```
+
+- release APK 用 debug 签名，可直接安装：`app/build/outputs/apk/release/app-release.apk`
+- 性能参考（真机 Xiaomi Android 16，音乐库滚动）：release 90th≈8ms / janky 0.12%；debug 90th≈53ms / janky 7.14%
+
 ## 构建
 
 ```bash

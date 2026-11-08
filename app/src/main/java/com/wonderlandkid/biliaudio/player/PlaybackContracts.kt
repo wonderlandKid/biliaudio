@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.player
 
+import androidx.compose.runtime.Immutable
+
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
@@ -8,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 enum class RepeatMode { OFF, ALL, ONE }
 
 /** 队列中的一首（已带上展示所需的专辑信息，避免 UI 反复查库）。 */
+@Immutable
 data class QueueEntry(
     val track: Track,
     val albumId: Long,
@@ -21,6 +24,7 @@ data class QueueEntry(
     val durationMs: Long get() = track.durationMs
 }
 
+@Immutable
 data class PlaybackState(
     val currentTrack: Track? = null,
     val currentAlbumId: Long? = null,

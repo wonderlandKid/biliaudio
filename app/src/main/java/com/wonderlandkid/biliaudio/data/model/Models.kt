@@ -1,9 +1,12 @@
 package com.wonderlandkid.biliaudio.data.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * 一张“B 站专辑” = 一个 B 站视频（或视频的一个分 P）。
  * 专辑本身是一首歌的合集，靠 [Track] 的时间点切分成多首。
  */
+@Immutable
 data class Album(
     val id: Long = 0L,
     val bvid: String,
@@ -26,6 +29,7 @@ data class Album(
 )
 
 /** 专辑中的一首歌：在专辑音频流中的 [startMs, endMs) 区间。 */
+@Immutable
 data class Track(
     val id: Long = 0L,
     val albumId: Long,
@@ -37,12 +41,14 @@ data class Track(
     val durationMs: Long get() = (endMs - startMs).coerceAtLeast(0L)
 }
 
+@Immutable
 data class AlbumWithTracks(
     val album: Album,
     val tracks: List<Track>,
 )
 
 /** 音乐库列表用的“歌曲 + 所属专辑”组合。 */
+@Immutable
 data class TrackWithAlbum(
     val track: Track,
     val album: Album,

@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.library
 
+import androidx.compose.runtime.Immutable
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** 艺术家详情 UI 状态。 */
+@Immutable
 data class ArtistDetailUiState(
     val isLoading: Boolean = true,
     /** 艺术家展示名（空艺术家统一为「未知艺术家」） */

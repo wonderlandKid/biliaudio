@@ -1,5 +1,28 @@
 # 版本记录
 
+## v0.6.3（2026-11-08 · tag `v0.6.3`）
+
+**列表卡顿最终定位并修复：发布构建改用 R8 release（+ 参考项目做法对齐）**
+
+- 真机（Xiaomi 23113RKC6C / Android 16）用同一滚动手势对比：
+  | 指标 | debug v0.6.2 | release v0.6.3 |
+  | --- | --- | --- |
+  | Total frames | 238 | 838 |
+  | Janky frames | 7.14% | **0.12%** |
+  | 90th / 95th / 99th | 53 / 69 / 93 ms | **8 / 8 / 11 ms** |
+  | Slow UI thread | 15 | **0** |
+  | Missed Vsync | 9 | **0** |
+- 根因：此前交付/安装的都是 **debug 包（无 R8、可调试）**，Compose 在 debug 下重得多；
+  `release { isMinifyEnabled = true; isShrinkResources = true; signingConfig = debug }`，
+  ProGuard 补 kotlinx.serialization / Room keep 规则；release APK 仅 3.4MB。
+- 对齐参考项目 `SPICaMusic_Android` 的列表性能做法：
+  - 使用 release + R8（参考项目 release 开启 minify）；
+  - 对 `Album/Track/TrackWithAlbum/QueueEntry/PlaybackState/LibraryUiState/HomeUiState/ArtistDetailUiState`
+    加 `@Immutable`，提升 Compose 跳过重组；
+  - 参考项目还使用 baseline profile（Macrobenchmark 生成）；本版先不做，若启动/首屏仍需优化可再加。
+- 发布产物改为 release APK：`dist/biliaudio-v0.6.3-release.apk`（debug 保留给开发调试）。
+- 单测 152 全绿；v0.6.2 的 Material Motion 动效在 release 下同样生效且更顺滑。
+
 ## v0.6.2（2026-11-08 · tag `v0.6.2`）
 
 **全局动效重写（依据 Material Design 3 Motion 官方规范）**

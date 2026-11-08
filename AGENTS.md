@@ -5,20 +5,22 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.6.2**（tag `v0.6.2`，2026-11-08；release commit 以 `git rev-parse v0.6.2` 为准）
+- **版本：v0.6.3**（tag `v0.6.3`，2026-11-08；release commit 以 `git rev-parse v0.6.3` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**152 个**（v0.6.2）
+- 单元测试：**152 个**（v0.6.3）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.6.2: 152 个）
-# 产物：app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.6.3: 152 个）
+./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
+# 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
+#       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
 
 # 模拟器（AVD: biliaudio_api36，headless）
 scripts/emulator.sh start
@@ -35,9 +37,11 @@ scripts/screenshot.sh home 8
    `player/PlaybackContracts.kt`、`player/VideoContracts.kt`、`di/AppContainer.kt`、
    `ui/navigation/**`、`ui/theme/**`、`ui/components/**`、`AndroidManifest.xml`、`build.gradle.kts`
    属于集成层，改动前先确认影响面（或按 docs/DECISIONS.md 的架构约定来）。
-2. **每次发版**：`versionCode +1`、`versionName` 升级 → 构建 + 全量单测 → 提交（feat/fix/docs/chore + 详情）
-   → annotated tag `vX.Y.Z` → 复制产物到 `dist/biliaudio-vX.Y.Z-debug.apk` 并
-   `git archive` 生成 `dist/biliaudio-vX.Y.Z-source.zip`（`dist/` 被 .gitignore 忽略，不进仓库）。
+2. **每次发版**：`versionCode +1`、`versionName` 升级 → 全量单测 + **构建 release**（性能验收/交付用；
+   debug 包仅开发调试）→ 提交（feat/fix/docs/chore + 详情）
+   → annotated tag `vX.Y.Z` → 复制 release 产物到 `dist/biliaudio-vX.Y.Z-release.apk`
+   （需要排查时再附 debug）并 `git archive` 生成 `dist/biliaudio-vX.Y.Z-source.zip`
+   （`dist/` 被 .gitignore 忽略，不进仓库）。
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/毛玻璃**；
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
 4. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
@@ -58,7 +62,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.6.2 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.6.3 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | 音乐库归档 JSON 格式规范（备份/恢复/分割点文件） |

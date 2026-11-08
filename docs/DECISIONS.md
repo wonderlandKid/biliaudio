@@ -279,3 +279,22 @@
   - 可交互尺寸变化（迷你条收起/展开）用 M3 spatial 弹簧；
   - 动画仅使用 alpha/translation/scale（GPU 友好），并依赖 Compose 对系统「动画时长缩放/移除动画」设置的处理。
 - **验证**：模拟器录屏逐帧检查 Tab/详情/播放页转场无叠影、无长时间空白；单测 152 全绿。
+
+---
+
+## D24 列表性能与交付构建：日常/验收必须用 release（R8），debug 只用于开发（v0.6.3）
+
+- **日期**：2026-11-08
+- **背景**：用户多次反馈「列表仍然很卡」，检查发现此前安装/交付的都是 debug APK（无 R8、可调试），
+  真机同滚动脚本对比：debug 90th=53ms / janky 7.14%，release 90th=8ms / janky 0.12%。
+- **参考项目做法**（/home/wonderlandkid/code/SPICaMusic_Android）：
+  - `release { minifyEnabled = true }`，日常使用/发布走 release；
+  - 自定义 `baselineprofile` 模块（Macrobenchmark）生成 baseline profile；
+  - 实体与 UI 状态大量使用 `@Immutable`（以及 `ImmutableList`）稳定 Compose 参数。
+- **决策**：
+  - 本项目 release 开启 `isMinifyEnabled`/`isShrinkResources`，用 debug 签名便于个人安装；
+    ProGuard 补充 kotlinx.serialization、Room 规则；
+  - 交付/性能验收统一用 release APK（`dist/biliaudio-vX.Y.Z-release.apk`）；
+  - 关键 UI 模型/状态加 `@Immutable`；列表继续遵守 D19；
+  - baseline profile 暂不引入（当前 release 滚动已达标），作为后续启动/首屏优化项。
+- **影响**：以后不能再拿 debug 包判断流畅度；Android Studio 开发时可用 debug，但性能结论必须用 release。

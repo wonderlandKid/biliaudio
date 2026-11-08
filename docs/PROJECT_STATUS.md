@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.6.2）
+# 项目现状与交接（v0.6.3）
 
-> 最后更新：2026-11-08 · 版本 v0.6.2 · tag `v0.6.2`（release commit 以 `git rev-parse v0.6.2` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.6.3 · tag `v0.6.3`（release commit 以 `git rev-parse v0.6.3` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -17,7 +17,7 @@
 | App 名称 | 哔哩专辑 |
 | 技术栈 | Kotlin 2.3.21 / Compose BOM 2026.09 / AGP 9.5.0 / Gradle 9.6（腾讯镜像）/ Media3 1.11.1 / Room / OkHttp / Coil / zxing |
 | 最低支持 | Android 7.0（API 24），targetSdk 37 |
-| 构建 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:assembleDebug` |
+| 构建 | 交付/性能验收：`./gradlew :app:assembleRelease`（R8，debug 签名可安装）；开发调试用 `assembleDebug` |
 | 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 152 个全绿） |
 | APK 产物 | `app/build/outputs/apk/debug/app-debug.apk`；发布放置 `dist/biliaudio-vX.Y.Z-debug.apk` |
 
@@ -69,6 +69,8 @@
 - **v0.6.0** 三主页面统一页头/导航转场重做、迷你播放条上/下手势、音乐库三分栏+#A-Z索引+艺术家详情、归档目录形态（顶层/艺术家/专辑/分割）
 - **v0.6.1** 音乐库滚动性能修复（播放 tick/索引栏/列表 contentType）、搜索框 UI 统一、Tab 切换闪白修复、维测日志开关
 - **v0.6.2** 全局动效按 Material Design 3 Motion 规范重写：BiliMotion token、Fade through/Shared axis X/Y/Fade、M3 弹簧、移除页面内叠加动画；导航壳播放状态订阅隔离
+- **v0.6.3** 列表卡顿根因定位：debug 包无 R8；交付改为 release（R8+debug 签名），关键 UI 状态加 @Immutable；
+  真机滚动 90/95/99th 从 53/69/93ms → 8/8/11ms，janky 7.14% → 0.12%
 
 ## 5. 最近验证状态（截至 v0.4.0）
 
@@ -93,6 +95,10 @@
   - 迷你条：上滑→播放页（底部上滑转场）、下滑→收起细条、点击/上滑→展开，截图确认；
   - 专辑详情进入/返回为横向推入/退出，无缩放；
   - 设置页目录导出到 SAF 文件夹成功生成 `biliaudio-library.json` + `Fallious/.../album.json+segments.json` + `索尼音乐中国/...`；从文件夹导入（合并）结果「新建 0 · 更新 2 · 分曲更新 0 · 跳过 0 · 失败 0」。
+- v0.6.3 真机（Xiaomi 23113RKC6C / Android 16）滚动对比（同一手势脚本、音乐库列表）：
+  debug v0.6.2：238 frames / janky 7.14% / 90-95-99th 53-69-93ms / Slow UI 15 / Missed Vsync 9；
+  release v0.6.3：838 frames / janky 0.12% / 90-95-99th 8-8-11ms / Slow UI 0 / Missed Vsync 0。
+  进一步对齐参考项目：release R8 + 关键模型 @Immutable；baseline profile 暂未引入（作为后续可选优化）。
 - v0.6.2 模拟器验证（录屏逐帧，截图 `docs/screenshots/v062_motion_*.png`）：
   - Tab 切换为 Material Fade through（旧页淡出→新页 92%→100% 淡入），无两页不透明叠影；
   - 详情页为 Shared axis X（30dp 平移 + 100/200ms 淡入淡出），无长时间整页空白；
@@ -113,16 +119,16 @@
 
 ## 6. 待办 / 下一步（按优先级）
 
-1. **P1** 真机 v0.6.1 回归（本轮真机未连接，模拟器验证）：音乐库**播放中**上下滑手感、
-   Tab 切换动画（真机 GPU）、维测日志开关持久化、搜索框一致性、目录归档 SAF（MIUI 需「允许访问」确认）。
-2. **P1** 本地相册上传封面 + 归档封面恢复的真机 UI 走查（数据层已测；Photo Picker 分支未端到端）。
-3. **P1** 真机扫码登录成功路径 QA（头像昵称、音质/画质提升）。
-4. **P2** 网易云封面接口为**非官方接口**，未来可能变更/限流；失败时静默降级（只影响在线搜封面），
+1. **P1** 真机 v0.6.3 回归（release 包）：滑动/动画/归档 SAF/维测日志开关；**以后性能结论一律用 release 包**。
+2. **P2** 可选：引入 baseline profile（参考 SPICaMusic_Android 的 Macrobenchmark 模块）进一步优化启动/首屏。
+3. **P1** 本地相册上传封面 + 归档封面恢复的真机 UI 走查（数据层已测；Photo Picker 分支未端到端）。
+4. **P1** 真机扫码登录成功路径 QA（头像昵称、音质/画质提升）。
+5. **P2** 网易云封面接口为**非官方接口**，未来可能变更/限流；失败时静默降级（只影响在线搜封面），
    可后续加备用源（如 QQ 音乐/豆瓣）或内置占位图选择。
-5. **P2** 歌词页 CDN 节点慢的兜底：目前 8s 提示可手动重试（会作废旧流地址重新解析）；可考虑用 playurl 的 backupUrl 自动切换线路。
-6. **P2** 音乐库大数据量（数千首）索引滚动性能与分组重算（当前用 remember 缓存，需实测）。
-7. **P2** 多 P 视频自动分曲（若做：需 Track 增加 cid，归档/播放映射扩展）。
-8. **P3** 路线图：B 站收藏夹导入、离线缓存、自动静音切分、播放历史/歌单、YAML 只读导入、画质设置项。
+6. **P2** 歌词页 CDN 节点慢的兜底：目前 8s 提示可手动重试（会作废旧流地址重新解析）；可考虑用 playurl 的 backupUrl 自动切换线路。
+7. **P2** 音乐库大数据量（数千首）索引滚动性能与分组重算（当前用 remember 缓存，需实测）。
+8. **P2** 多 P 视频自动分曲（若做：需 Track 增加 cid，归档/播放映射扩展）。
+9. **P3** 路线图：B 站收藏夹导入、离线缓存、自动静音切分、播放历史/歌单、YAML 只读导入、画质设置项。
 
 ## 7. 关键设计约束（务必遵守）
 

@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.home
 
+import androidx.compose.runtime.Immutable
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
  *
  * 数据全部来自 [AlbumRepository] / [AuthRepository] 的 Flow，不写死假数据。
  */
+@Immutable
 data class HomeUiState(
     val isLoading: Boolean = true,
     /** 音乐库歌曲总数 */
