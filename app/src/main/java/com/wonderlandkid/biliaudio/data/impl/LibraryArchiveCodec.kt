@@ -6,9 +6,6 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
 import com.wonderlandkid.biliaudio.data.model.ArchiveKind
 import com.wonderlandkid.biliaudio.data.model.ArchiveParseError
 import com.wonderlandkid.biliaudio.data.model.ArchiveSegment
-import com.wonderlandkid.biliaudio.data.model.ArchiveSettings
-import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
-import com.wonderlandkid.biliaudio.data.model.LIBRARY_ARCHIVE_FEATURES
 import com.wonderlandkid.biliaudio.data.model.LIBRARY_ARCHIVE_FORMAT
 import com.wonderlandkid.biliaudio.data.model.LIBRARY_ARCHIVE_MIN_READER_VERSION
 import com.wonderlandkid.biliaudio.data.model.LIBRARY_ARCHIVE_VERSION
@@ -29,13 +26,11 @@ data class ArchiveParseResult(
 )
 
 /**
- * 音乐库归档 v2 编解码器（docs/ARCHIVE_SCHEMA_V2.md）。
+ * library 域 v3 编解码器（docs/ARCHIVE_LAYOUT_V3.md）。
  *
- * - 只支持 v2：旧 v1 归档明确拒绝并提示重新导出；
- * - `kind` 区分整库/单专辑/分割点/目录索引；
- * - `version + minReaderVersion + features` 做前向兼容门禁；
- * - 封面带 MIME/SHA-256/字节数校验；
- * - 输入永远不可信：大小、bvid、URL、分曲边界、封面均校验。
+ * - 只支持 v3（分域 bundle 的 library.json，或单 album/segments 分享文件）；
+ * - 不再包含 settings/playlists/封面 base64 的整库形态；
+ * - 封面在 bundle 中用 hash 引用，单专辑分享可内嵌 base64。
  */
 class LibraryArchiveCodec(
     private val json: Json = defaultJson,
@@ -44,7 +39,7 @@ class LibraryArchiveCodec(
 
     /**
      * 解析文本。无法识别时抛 [ArchiveFormatException]；
-     * 旧批量导入格式（JSON 数组/CSV/文本）仍归一化成 v2 归档（这不是 v1 归档兼容）。
+     * 旧“快捷导入”文本格式仍归一化成 v3 归档（不是旧归档兼容）。
      */
     fun parse(text: String, expectedKind: ArchiveKind? = null): ArchiveParseResult {
         val trimmed = text.trim().trimStart('\uFEFF').trim()
@@ -60,19 +55,16 @@ class LibraryArchiveCodec(
                     .getOrElse { e ->
                         throw ArchiveFormatException("归档文件解析失败：${e.message ?: "格式不正确"}")
                     }
-                val normalized = validateAndNormalize(archive).let { checked ->
-                    if (expectedKind != null && checked.kind != expectedKind) {
-                        throw ArchiveFormatException(
-                            "归档类型不匹配：期望 $expectedKind，实际 ${checked.kind}",
-                        )
-                    }
-                    checked
+                val normalized = validateAndNormalize(archive)
+                if (expectedKind != null && normalized.kind != expectedKind) {
+                    throw ArchiveFormatException(
+                        "归档类型不匹配：期望 $expectedKind，实际 ${normalized.kind}",
+                    )
                 }
-                return ArchiveParseResult(archive = normalized, recognizedAs = "biliaudio-v2")
+                return ArchiveParseResult(archive = normalized, recognizedAs = "biliaudio-v3")
             }
         }
 
-        // 旧「快捷导入」文本格式（不是 v1 归档）：归一化成 v2 归档
         val legacy = legacyParser.parse(trimmed)
         val errors = legacy.errors.map { ArchiveParseError(it.source, it.message) }
         if (legacy.items.isEmpty()) {
@@ -80,28 +72,20 @@ class LibraryArchiveCodec(
                 errors.firstOrNull()?.message ?: "无法识别的文件格式（既不是归档 JSON，也不是支持的批量导入格式）",
             )
         }
-        val archive = legacyToArchive(legacy.items)
         return ArchiveParseResult(
-            archive = validateAndNormalize(archive),
+            archive = validateAndNormalize(legacyToArchive(legacy.items)),
             recognizedAs = "legacy-batch",
             errors = errors,
         )
     }
 
-    /** 序列化为归档 JSON。 */
+    /** 序列化为 library/album/segments 域 JSON。 */
     fun encode(archive: LibraryArchive): String {
-        val normalized = validateAndNormalize(
-            archive.copy(
-                format = LIBRARY_ARCHIVE_FORMAT,
-                version = LIBRARY_ARCHIVE_VERSION,
-                minReaderVersion = LIBRARY_ARCHIVE_MIN_READER_VERSION,
-                features = LIBRARY_ARCHIVE_FEATURES,
-            ),
-        )
+        val normalized = validateAndNormalize(archive)
         return json.encodeToString(LibraryArchive.serializer(), normalized)
     }
 
-    /** 生成一份「最小分割点文件」示例，供 UI 展示/复制。 */
+    /** 生成“仅分割点”示例。 */
     fun sampleSegmentJson(): String = encode(
         LibraryArchive.create(
             kind = ArchiveKind.SEGMENTS,
@@ -119,7 +103,7 @@ class LibraryArchiveCodec(
         ),
     )
 
-    /** 目录导入合并后做一次全局校验（供 Repository 调用）。 */
+    /** 目录 bundle 合并/单独文件导入前做一次校验。 */
     fun validateAndNormalize(archive: LibraryArchive): LibraryArchive {
         if (archive.format != LIBRARY_ARCHIVE_FORMAT) {
             throw ArchiveFormatException("不是 $LIBRARY_ARCHIVE_FORMAT 文件")
@@ -139,23 +123,15 @@ class LibraryArchiveCodec(
                 "文件要求最低读取版本 v${archive.minReaderVersion}，请升级 App",
             )
         }
-        val unknownFeatures = archive.features.filterNot { it in LIBRARY_ARCHIVE_FEATURES }
-        if (unknownFeatures.isNotEmpty()) {
-            throw ArchiveFormatException("文件包含当前 App 不支持的数据特性：${unknownFeatures.joinToString()}")
-        }
         when (archive.kind) {
-            ArchiveKind.INDEX -> if (archive.albums.isNotEmpty()) {
-                throw ArchiveFormatException("目录索引文件不能包含专辑数据（kind=index）")
-            }
+            ArchiveKind.LIBRARY -> Unit
             ArchiveKind.ALBUM, ArchiveKind.SEGMENTS -> if (archive.albums.size != 1) {
                 throw ArchiveFormatException("${archive.kind} 文件必须且只能包含 1 张专辑")
             }
-            ArchiveKind.LIBRARY -> Unit
         }
         if (archive.albums.size > MAX_ALBUMS) {
             throw ArchiveFormatException("专辑数量超过上限（最多 $MAX_ALBUMS 张）")
         }
-
         val seen = HashSet<String>()
         val albums = archive.albums.mapIndexed { index, album ->
             val normalized = normalizeAlbum(album, index + 1)
@@ -168,26 +144,13 @@ class LibraryArchiveCodec(
         return archive.copy(
             version = LIBRARY_ARCHIVE_VERSION,
             minReaderVersion = LIBRARY_ARCHIVE_MIN_READER_VERSION,
-            features = LIBRARY_ARCHIVE_FEATURES,
-            settings = archive.settings?.let(::normalizeSettings),
             albums = albums,
         )
     }
 
     // ------------------------------------------------------------------
-    // 校验 + 归一化
+    // 校验
     // ------------------------------------------------------------------
-
-    private fun normalizeSettings(settings: ArchiveSettings): ArchiveSettings {
-        val quality = settings.audioQuality?.trim()?.takeIf { it.isNotEmpty() }
-        if (quality != null && AudioQualityPreference.entries.none { it.name == quality }) {
-            throw ArchiveFormatException("未知音质设置：$quality")
-        }
-        return settings.copy(
-            version = settings.version.coerceAtLeast(1),
-            audioQuality = quality,
-        )
-    }
 
     private fun normalizeAlbum(album: ArchiveAlbum, position: Int): ArchiveAlbum {
         val source = album.source.trim().ifBlank { SOURCE_BILIBILI }
@@ -233,18 +196,12 @@ class LibraryArchiveCodec(
             val ids = HashSet<String>()
             list.mapIndexed { segIndex, segment ->
                 val startMs = segment.startMs
-                if (startMs < 0) {
-                    throw ArchiveFormatException("第 $position 张专辑第 ${segIndex + 1} 个分曲时间点不能为负")
-                }
+                if (startMs < 0) throw ArchiveFormatException("第 $position 张专辑第 ${segIndex + 1} 个分曲时间点不能为负")
                 if (startMs <= lastStart) {
-                    throw ArchiveFormatException(
-                        "第 $position 张专辑的分曲时间点必须严格递增（第 ${segIndex + 1} 个分曲 $startMs ms）",
-                    )
+                    throw ArchiveFormatException("第 $position 张专辑的分曲时间点必须严格递增（第 ${segIndex + 1} 个分曲 $startMs ms）")
                 }
                 if (durationMs != null && startMs >= durationMs) {
-                    throw ArchiveFormatException(
-                        "第 $position 张专辑第 ${segIndex + 1} 个分曲超出专辑时长（${startMs}ms ≥ ${durationMs}ms）",
-                    )
+                    throw ArchiveFormatException("第 $position 张专辑第 ${segIndex + 1} 个分曲超出专辑时长（${startMs}ms ≥ ${durationMs}ms）")
                 }
                 previousEnd?.let { prevEnd ->
                     if (startMs < prevEnd) {
@@ -260,12 +217,8 @@ class LibraryArchiveCodec(
                     }
                 }
                 val id = segment.id?.trim()?.takeIf { it.isNotEmpty() }?.also {
-                    if (it.length > MAX_TRACK_ID_LENGTH) {
-                        throw ArchiveFormatException("第 $position 张专辑第 ${segIndex + 1} 个分曲 id 过长")
-                    }
-                    if (!ids.add(it)) {
-                        throw ArchiveFormatException("第 $position 张专辑存在重复的分曲 id：$it")
-                    }
+                    if (it.length > MAX_TRACK_ID_LENGTH) throw ArchiveFormatException("分曲 id 过长")
+                    if (!ids.add(it)) throw ArchiveFormatException("第 $position 张专辑存在重复的分曲 id：$it")
                 }
                 val segTitle = segment.title.cleanText(MAX_TITLE_LENGTH, "第 $position 张专辑第 ${segIndex + 1} 个分曲名")
                 previousEnd = endMs
@@ -294,47 +247,37 @@ class LibraryArchiveCodec(
         )
     }
 
-    /** 校验封面：MIME、base64、原始字节数 ≤2MB、SHA-256 一致。 */
     private fun normalizeCover(cover: ArchiveCover, position: Int): ArchiveCover {
         if (cover.mime !in ALLOWED_COVER_MIMES) {
             throw ArchiveFormatException("第 $position 张专辑的封面类型不支持：${cover.mime}")
         }
-        if (!SHA256_REGEX.matches(cover.sha256)) {
-            throw ArchiveFormatException("第 $position 张专辑的封面 sha256 格式不正确")
+        if (!SHA256_REGEX.matches(cover.hash)) {
+            throw ArchiveFormatException("第 $position 张专辑的封面 hash 格式不正确")
         }
-        val bytes = runCatching {
-            cover.dataBase64.filterNot { it.isWhitespace() }.decodeBase64()
+        if (cover.byteLength !in 1..MAX_COVER_BYTES) {
+            throw ArchiveFormatException("第 $position 张专辑的封面字节数超出范围")
+        }
+        val base64 = cover.dataBase64?.takeIf { it.isNotBlank() }
+        if (base64 != null) {
+            val bytes = runCatching { base64.filterNot { it.isWhitespace() }.decodeBase64() }.getOrNull()
                 ?: throw ArchiveFormatException("第 $position 张专辑的封面 base64 无效")
-        }.getOrElse { e ->
-            if (e is ArchiveFormatException) throw e
-            throw ArchiveFormatException("第 $position 张专辑的封面 base64 无效")
-        }.toByteArray()
-        if (bytes.isEmpty()) throw ArchiveFormatException("第 $position 张专辑的封面为空")
-        if (bytes.size > MAX_COVER_BYTES) {
-            throw ArchiveFormatException("第 $position 张专辑的封面超过 2MB 上限")
+            if (bytes.size != cover.byteLength) {
+                throw ArchiveFormatException("第 $position 张专辑的封面 byteLength 与实际不一致")
+            }
+            val actual = bytes.sha256().hex()
+            if (!actual.equals(cover.hash, ignoreCase = true)) {
+                throw ArchiveFormatException("第 $position 张专辑的封面 hash 校验失败")
+            }
         }
-        if (bytes.size != cover.byteLength) {
-            throw ArchiveFormatException("第 $position 张专辑的封面 byteLength 与实际字节数不一致")
-        }
-        val actualSha = bytes.toByteString().sha256().hex()
-        if (!actualSha.equals(cover.sha256, ignoreCase = true)) {
-            throw ArchiveFormatException("第 $position 张专辑的封面 sha256 校验失败")
-        }
-        return cover
+        return cover.copy(hash = cover.hash.lowercase())
     }
 
     private fun String?.cleanText(maxLength: Int, fieldName: String): String? {
         val trimmed = this?.trim().orEmpty()
         if (trimmed.isEmpty()) return null
-        if (trimmed.length > maxLength) {
-            throw ArchiveFormatException("${fieldName}过长（最多 $maxLength 个字符）")
-        }
+        if (trimmed.length > maxLength) throw ArchiveFormatException("${fieldName}过长（最多 $maxLength 个字符）")
         return trimmed
     }
-
-    // ------------------------------------------------------------------
-    // 旧「快捷导入」归一化（文本/CSV/JSON 数组 → v2 归档）
-    // ------------------------------------------------------------------
 
     private fun legacyToArchive(items: List<BatchImportItem>): LibraryArchive {
         val albums = items.map { item ->
@@ -353,10 +296,7 @@ class LibraryArchiveCodec(
                 segments = item.segments.map { ArchiveSegment(startMs = it.startMs, title = it.title) },
             )
         }
-        return LibraryArchive.create(
-            kind = ArchiveKind.LIBRARY,
-            albums = albums,
-        )
+        return LibraryArchive.create(kind = ArchiveKind.LIBRARY, albums = albums)
     }
 
     companion object {
@@ -371,7 +311,6 @@ class LibraryArchiveCodec(
         private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
         private val ALLOWED_COVER_MIMES = setOf("image/jpeg", "image/png", "image/webp")
 
-        /** 导出用配置：pretty、写默认值（kind/version 等必须落盘）。 */
         val defaultJson: Json = Json {
             prettyPrint = true
             prettyPrintIndent = "  "

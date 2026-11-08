@@ -171,7 +171,7 @@ data class AppSettings(
     /** null = 跟随系统 */
     val darkTheme: Boolean? = null,
     /** 维测日志开关（关闭后 Diag 不再记录/打印） */
-    val diagnosticLogsEnabled: Boolean = true,
+    val diagnosticLogsEnabled: Boolean = false,
 )
 
 /**

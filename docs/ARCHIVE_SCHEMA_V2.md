@@ -1,6 +1,6 @@
 # 归档数据格式 v2 设计与兼容策略（提案）
 
-> 状态：**已实施（v0.9.0）**。实现见 [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)；与提案的差异见文末。
+> 状态：**已被 v3 分域布局取代（v0.10.0）**。实现见 [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)；与提案的差异见文末。
 > 目标：在继续加功能之前，把「身份 / 版本 / 可演进」定死，避免以后导入导出互相破坏。
 > 现有 v1 格式见 [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)。
 

@@ -12,16 +12,19 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveImportReport
 import com.wonderlandkid.biliaudio.data.model.ArchiveItemAction
 import com.wonderlandkid.biliaudio.data.model.ArchiveItemResult
 import com.wonderlandkid.biliaudio.data.model.ArchiveKind
+import com.wonderlandkid.biliaudio.data.model.ArchiveManifest
 import com.wonderlandkid.biliaudio.data.model.ArchiveParseError
+import com.wonderlandkid.biliaudio.data.model.ArchivePlaylist
 import com.wonderlandkid.biliaudio.data.model.ArchivePreview
 import com.wonderlandkid.biliaudio.data.model.ArchivePreviewItem
 import com.wonderlandkid.biliaudio.data.model.ArchiveSegment
-import com.wonderlandkid.biliaudio.data.model.ArchiveSettings
+import com.wonderlandkid.biliaudio.data.model.ArchiveSettingsDocument
 import com.wonderlandkid.biliaudio.data.model.ArchiveTreeEntry
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.model.LibraryArchive
+import com.wonderlandkid.biliaudio.data.model.PlaylistsArchive
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.net.BiliUrlParser
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
@@ -39,12 +42,12 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * 音乐库归档仓库实现（v2，docs/ARCHIVE_SCHEMA_V2.md）。
+ * 音乐库归档仓库（v3 分域 bundle）。
  *
- * - 导出：Room 专辑/分曲 → v2 归档（albumKey / segment.id / cover sha256 / kind / settings）；
- * - 目录形态：根索引 kind=index + 每专辑 album.json / segments.json；
- * - 导入：按 albumKey=source:bvid#page upsert，覆盖全库前自动备份；
- * - v2 不兼容旧 v1 归档（旧文件请用旧版 App 重新导出）。
+ * - 整库导出 = 目录 bundle：manifest.json + library.json + settings.json(可选) + covers/；
+ * - 单专辑/分割点仍支持单 JSON 分享；
+ * - 导入按 albumKey upsert；REPLACE 前自动备份为私有目录下的 bundle；
+ * - 设置只在 REPLACE 恢复时应用（默认不覆盖本地设置）。
  */
 class LibraryArchiveRepositoryImpl(
     private val backupDir: File?,
@@ -53,6 +56,7 @@ class LibraryArchiveRepositoryImpl(
     private val settingsRepository: SettingsRepository,
     private val albumCoverRepository: AlbumCoverRepository = NoopAlbumCoverRepository,
     private val codec: LibraryArchiveCodec = LibraryArchiveCodec(),
+    private val bundleCodec: ArchiveBundleCodec = ArchiveBundleCodec(codec),
 ) : LibraryArchiveRepository {
 
     constructor(
@@ -75,157 +79,180 @@ class LibraryArchiveRepositoryImpl(
     // 导出
     // ------------------------------------------------------------------
 
-    override suspend fun exportAllJson(): String {
-        val albums = albumRepository.albums.first().map { album ->
-            album.toArchiveAlbum(albumRepository.getTracks(album.id), withSegments = true)
-        }
-        val archive = LibraryArchive.create(
-            kind = ArchiveKind.LIBRARY,
-            albums = albums,
-            settings = currentArchiveSettings(),
-            exportedAt = nowIso(),
-            appVersion = BuildConfig.VERSION_NAME,
-        )
-        return codec.encode(archive).also { Diag.log(TAG, "archive export all size=${it.length}B") }
-    }
-
+    /** 单专辑分享 JSON（kind=album，封面内嵌 base64 以保持单文件可分享）。 */
     override suspend fun exportAlbumJson(albumId: Long): String? {
         val album = albumRepository.getAlbum(albumId) ?: return null
-        val archive = LibraryArchive.create(
-            kind = ArchiveKind.ALBUM,
-            albums = listOf(album.toArchiveAlbum(albumRepository.getTracks(albumId), withSegments = true)),
-            exportedAt = nowIso(),
-            appVersion = BuildConfig.VERSION_NAME,
-        )
-        return codec.encode(archive)
-    }
-
-    /** 目录形态：根索引 kind=index；专辑元信息与分割点分文件。 */
-    override suspend fun exportTreeEntries(): List<ArchiveTreeEntry> {
-        val albums = albumRepository.albums.first()
-        val entries = ArrayList<ArchiveTreeEntry>(albums.size * 2 + 1)
-        entries += treeEntry(
-            relativePath = ROOT_INDEX_FILE,
-            archive = LibraryArchive.create(
-                kind = ArchiveKind.INDEX,
-                albums = emptyList(),
-                settings = currentArchiveSettings(),
+        val tracks = albumRepository.getTracks(albumId)
+        val albumEntry = album.toArchiveAlbum(tracks, inlineCover = true)
+        return codec.encode(
+            LibraryArchive.create(
+                kind = ArchiveKind.ALBUM,
+                albums = listOf(albumEntry),
                 exportedAt = nowIso(),
                 appVersion = BuildConfig.VERSION_NAME,
             ),
         )
+    }
 
-        val usedAlbumDirNames = HashMap<String, MutableSet<String>>()
+    /** 整库 bundle 的全部文件（manifest/library/settings/covers）。 */
+    override suspend fun exportTreeEntries(): List<ArchiveTreeEntry> {
+        val albums = albumRepository.albums.first()
+        val archiveAlbums = ArrayList<ArchiveAlbum>(albums.size)
+        val coverBytes = LinkedHashMap<String, ByteArray>()
         for (album in albums) {
             val tracks = albumRepository.getTracks(album.id)
-            val fullAlbum = album.toArchiveAlbum(tracks, withSegments = true)
-            val artistDir = sanitizePathSegment(album.artist, FALLBACK_ARTIST)
-            val albumDirBase = sanitizePathSegment(album.title, FALLBACK_ALBUM)
-            val usedNames = usedAlbumDirNames.getOrPut(artistDir.lowercase(Locale.ROOT)) { mutableSetOf() }
-            val albumDir = uniqueChildName(albumDirBase, album.bvid, usedNames)
-            val dir = "$artistDir/$albumDir"
-
-            // album.json：元信息（segments 字段省略 = 更新时保留；也是目录形态的分工约定）
-            entries += treeEntry(
-                relativePath = "$dir/$ALBUM_FILE",
-                archive = LibraryArchive.create(
-                    kind = ArchiveKind.ALBUM,
-                    albums = listOf(fullAlbum.copy(segments = null)),
-                    exportedAt = nowIso(),
-                    appVersion = BuildConfig.VERSION_NAME,
-                ),
-            )
-            // segments.json：仅定位信息 + 分割点；未分割专辑写空数组（=清空/未分割）
-            entries += treeEntry(
-                relativePath = "$dir/$SEGMENTS_FILE",
-                archive = LibraryArchive.create(
-                    kind = ArchiveKind.SEGMENTS,
-                    albums = listOf(
-                        ArchiveAlbum(
-                            albumKey = fullAlbum.albumKey,
-                            source = fullAlbum.source,
-                            bvid = fullAlbum.bvid,
-                            page = fullAlbum.page,
-                            segments = fullAlbum.segments ?: emptyList(),
-                        ),
-                    ),
-                    exportedAt = nowIso(),
-                    appVersion = BuildConfig.VERSION_NAME,
-                ),
-            )
+            val entry = album.toArchiveAlbum(tracks, inlineCover = false)
+            entry.cover?.let { cover ->
+                readCoverBytes(album.coverLocalPath)?.let { bytes ->
+                    coverBytes[cover.hash] = bytes
+                }
+            }
+            archiveAlbums += entry
         }
-        return entries.sortedBy { it.relativePath }
+        val library = LibraryArchive.create(
+            kind = ArchiveKind.LIBRARY,
+            albums = archiveAlbums,
+            exportedAt = nowIso(),
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        val settings = ArchiveSettingsDocument(
+            audioQuality = settingsRepository.settings.value.audioQuality.name,
+            darkTheme = settingsRepository.settings.value.darkTheme,
+            diagnosticLogsEnabled = settingsRepository.settings.value.diagnosticLogsEnabled,
+        )
+        return bundleCodec.buildEntries(
+            library = library,
+            settings = settings,
+            playlists = null,
+            coverBytes = coverBytes,
+            appVersion = BuildConfig.VERSION_NAME,
+        ).also { Diag.log(TAG, "archive export bundle files=${it.size}") }
     }
 
-    private fun treeEntry(relativePath: String, archive: LibraryArchive): ArchiveTreeEntry =
-        ArchiveTreeEntry(
-            relativePath = relativePath,
-            bytes = codec.encode(archive).toByteArray(Charsets.UTF_8),
-            mimeType = MIME_TYPE_JSON,
-        )
-
-    private fun Album.toArchiveAlbum(tracks: List<Track>, withSegments: Boolean): ArchiveAlbum = ArchiveAlbum(
-        albumKey = sourceKey(source, bvid, page),
-        source = source,
-        bvid = bvid,
-        page = page,
-        pageCount = pageCount,
-        cidHint = cid,
-        title = title,
-        artist = artist,
-        durationMs = durationMs,
-        updatedAt = updatedAt,
-        createdAt = createdAt,
-        lastPlayedAt = lastPlayedAt,
-        playCount = playCount,
-        cover = readCover(coverLocalPath),
-        segments = if (!withSegments) null else tracks.sortedBy { it.startMs }.map { track ->
-            ArchiveSegment(
-                id = track.uid.ifBlank { UUID.randomUUID().toString() },
-                startMs = track.startMs,
-                endMs = track.endMs.takeIf { it > track.startMs },
-                title = track.title,
+    private fun Album.toArchiveAlbum(tracks: List<Track>, inlineCover: Boolean): ArchiveAlbum {
+        val coverFile = readCoverBytes(coverLocalPath)
+        val hash = coverFile?.let(LibraryArchiveCodec::sha256Hex)
+        val cover = if (hash != null && coverFile != null) {
+            val mime = detectMime(coverFile)
+            ArchiveCover(
+                hash = hash,
+                mime = mime,
+                byteLength = coverFile.size,
+                dataBase64 = if (inlineCover) okio.ByteString.of(*coverFile).base64() else null,
             )
-        },
-    )
+        } else {
+            null
+        }
+        return ArchiveAlbum(
+            albumKey = "$source:$bvid#$page",
+            source = source,
+            bvid = bvid,
+            page = page,
+            pageCount = pageCount,
+            cidHint = cid,
+            title = title,
+            artist = artist,
+            durationMs = durationMs,
+            updatedAt = updatedAt,
+            createdAt = createdAt,
+            lastPlayedAt = lastPlayedAt,
+            playCount = playCount,
+            cover = cover,
+            segments = tracks.sortedBy { it.startMs }.map { track ->
+                ArchiveSegment(
+                    id = track.uid.ifBlank { UUID.randomUUID().toString() },
+                    startMs = track.startMs,
+                    endMs = track.endMs.takeIf { it > track.startMs },
+                    title = track.title,
+                )
+            },
+        )
+    }
 
-    private fun readCover(path: String?): ArchiveCover? {
+    private fun readCoverBytes(path: String?): ByteArray? {
         val file = path?.let(::File) ?: return null
         if (!file.isFile) return null
-        val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
-        if (bytes.isEmpty() || bytes.size > MAX_COVER_BYTES) return null
-        val mime = when {
-            bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() -> "image/jpeg"
-            bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() -> "image/png"
-            bytes.size >= 12 && bytes.copyOfRange(0, 4).contentEquals("RIFF".toByteArray()) -> "image/webp"
-            else -> "image/jpeg"
-        }
-        return ArchiveCover(
-            mime = mime,
-            sha256 = LibraryArchiveCodec.sha256Hex(bytes),
-            byteLength = bytes.size,
-            dataBase64 = okio.ByteString.of(*bytes).base64(),
-        )
+        return runCatching { file.readBytes() }.getOrNull()?.takeIf { it.isNotEmpty() && it.size <= MAX_COVER_BYTES }
     }
 
-    private fun currentArchiveSettings(): ArchiveSettings {
-        val settings = settingsRepository.settings.value
-        return ArchiveSettings(
-            version = 1,
-            audioQuality = settings.audioQuality.name,
-            darkTheme = settings.darkTheme,
-            diagnosticLogsEnabled = settings.diagnosticLogsEnabled,
-        )
+    private fun detectMime(bytes: ByteArray): String = when {
+        bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() -> "image/jpeg"
+        bytes.size >= 4 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() -> "image/png"
+        bytes.size >= 12 && bytes.copyOfRange(0, 4).contentEquals("RIFF".toByteArray()) -> "image/webp"
+        else -> "image/jpeg"
     }
 
     // ------------------------------------------------------------------
-    // 预览
+    // 单 JSON 预览/导入（仅 album / segments 分享文件）
     // ------------------------------------------------------------------
 
     override suspend fun preview(text: String, mode: ArchiveImportMode): ArchivePreview {
         val parsed = codec.parse(text)
-        requireImportableKind(parsed.archive)
-        val items = parsed.archive.albums.map { album ->
+        requireShareKind(parsed.archive)
+        return previewLibrary(parsed.archive, mode, parsed.recognizedAs, parsed.errors)
+    }
+
+    override suspend fun importArchive(text: String, mode: ArchiveImportMode): ArchiveImportReport {
+        val parsed = codec.parse(text)
+        requireShareKind(parsed.archive)
+        return importParsed(
+            library = parsed.archive,
+            settings = null,
+            covers = emptyMap(),
+            errors = parsed.errors,
+            mode = mode,
+        )
+    }
+
+    private fun requireShareKind(archive: LibraryArchive) {
+        if (archive.kind == ArchiveKind.LIBRARY) {
+            throw ArchiveFormatException("整库备份现在是目录 bundle（manifest/library/settings/covers），不支持单 JSON 导入")
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 目录 bundle 导出/导入
+    // ------------------------------------------------------------------
+
+    override suspend fun importTreeEntries(
+        entries: List<ArchiveTreeEntry>,
+        mode: ArchiveImportMode,
+    ): ArchiveImportReport {
+        val contents = try {
+            bundleCodec.parseEntries(entries)
+        } catch (e: ArchiveFormatException) {
+            return ArchiveImportReport(
+                mode = mode,
+                items = emptyList(),
+                parseErrors = listOf(ArchiveParseError("", e.message ?: "bundle 校验失败")),
+            )
+        }
+        val playlistWarnings = if (contents.playlists?.playlists.isNullOrEmpty()) {
+            emptyList()
+        } else {
+            listOf(
+                ArchiveParseError(
+                    "playlists.json",
+                    "当前版本还不支持导入歌单，已忽略 ${contents.playlists!!.playlists.size} 个歌单",
+                ),
+            )
+        }
+        return importParsed(
+            library = contents.library,
+            settings = contents.settings,
+            covers = contents.covers,
+            errors = playlistWarnings,
+            mode = mode,
+        )
+    }
+
+    private suspend fun previewLibrary(
+        library: LibraryArchive,
+        mode: ArchiveImportMode,
+        recognizedAs: String,
+        errors: List<ArchiveParseError>,
+    ): ArchivePreview {
+        val items = library.albums.map { album ->
             val offlineBvid = resolveBvidOffline(album)
             val existing = offlineBvid?.let {
                 albumRepository.getAlbumBySourceKey(album.source, it, album.page)
@@ -246,130 +273,25 @@ class LibraryArchiveRepositoryImpl(
             )
         }
         return ArchivePreview(
-            recognizedAs = parsed.recognizedAs,
-            kind = parsed.archive.kind,
-            albumCount = parsed.archive.albums.size,
-            trackCount = parsed.archive.albums.sumOf { it.segments?.size ?: 0 },
-            hasSettings = parsed.archive.settings != null,
+            recognizedAs = recognizedAs,
+            kind = library.kind,
+            albumCount = library.albums.size,
+            trackCount = library.albums.sumOf { it.segments?.size ?: 0 },
+            hasSettings = false,
             items = items,
-            parseErrors = parsed.errors,
+            parseErrors = errors,
         )
     }
 
-    // ------------------------------------------------------------------
-    // 导入
-    // ------------------------------------------------------------------
-
-    override suspend fun importArchive(text: String, mode: ArchiveImportMode): ArchiveImportReport {
-        val parsed = codec.parse(text)
-        requireImportableKind(parsed.archive)
-        return importParsed(parsed, mode)
-    }
-
-    private fun requireImportableKind(archive: LibraryArchive) {
-        if (archive.kind == ArchiveKind.INDEX) {
-            throw ArchiveFormatException("这是目录归档的索引文件，不能作为音乐库/专辑直接导入")
-        }
-    }
-
-    /**
-     * 目录形态导入：
-     * 1. 根索引只取 settings；
-     * 2. 每个目录合并 album.json（kind=album）+ segments.json（kind=segments）；
-     * 3. 合并后做一次全局 v2 校验（重复 albumKey、分曲边界等）；
-     * 4. 错误逐条记录，不中断整体导入。
-     */
-    override suspend fun importTreeEntries(
-        entries: List<ArchiveTreeEntry>,
+    private suspend fun importParsed(
+        library: LibraryArchive,
+        settings: ArchiveSettingsDocument?,
+        covers: Map<String, ByteArray>,
+        errors: List<ArchiveParseError>,
         mode: ArchiveImportMode,
     ): ArchiveImportReport {
-        val parseErrors = mutableListOf<ArchiveParseError>()
-        var rootSettings: ArchiveSettings? = null
-        val filesByDir = LinkedHashMap<String, MutableList<Pair<String, ArchiveTreeEntry>>>()
-
-        for (entry in entries) {
-            val path = normalizeTreePath(entry.relativePath) ?: continue
-            val fileName = path.substringAfterLast('/')
-            if (fileName.equals(ROOT_INDEX_FILE, ignoreCase = true)) {
-                val archive = parseTreeFile(entry, path, parseErrors) ?: continue
-                if (archive.kind != ArchiveKind.INDEX) {
-                    parseErrors += ArchiveParseError(path, "根索引文件 kind 应为 index，实际 ${archive.kind}")
-                    continue
-                }
-                rootSettings = archive.settings
-                continue
-            }
-            if (!fileName.equals(ALBUM_FILE, ignoreCase = true) && !fileName.equals(SEGMENTS_FILE, ignoreCase = true)) {
-                continue
-            }
-            val dir = path.substringBeforeLast('/', missingDelimiterValue = "")
-            filesByDir.getOrPut(dir) { mutableListOf() } += path to entry
-        }
-
-        val mergedAlbums = ArrayList<ArchiveAlbum>(filesByDir.size)
-        for ((dir, files) in filesByDir.entries.sortedBy { it.key }) {
-            var meta: ArchiveAlbum? = null
-            var segments: ArchiveAlbum? = null
-            for ((path, entry) in files) {
-                val isAlbum = path.substringAfterLast('/').equals(ALBUM_FILE, ignoreCase = true)
-                val expectedKind = if (isAlbum) ArchiveKind.ALBUM else ArchiveKind.SEGMENTS
-                val archive = parseTreeFile(entry, path, parseErrors, expectedKind) ?: continue
-                when {
-                    isAlbum && meta == null -> meta = archive.albums.first()
-                    !isAlbum && segments == null -> segments = archive.albums.first()
-                }
-            }
-            when {
-                meta != null && segments != null -> {
-                    if (!sameAlbum(meta, segments)) {
-                        parseErrors += ArchiveParseError(
-                            "$dir/$SEGMENTS_FILE",
-                            "与 album.json 不是同一张专辑，已按 album.json 合并",
-                        )
-                    }
-                    mergedAlbums += meta.copy(segments = segments.segments)
-                }
-                meta != null -> mergedAlbums += meta
-                segments != null -> mergedAlbums += segments
-            }
-        }
-
-        if (filesByDir.isEmpty()) {
-            parseErrors += ArchiveParseError("", "目录中未找到 album.json 或 segments.json")
-            return ArchiveImportReport(mode = mode, items = emptyList(), parseErrors = parseErrors)
-        }
-        if (mergedAlbums.isEmpty() && mode == ArchiveImportMode.REPLACE) {
-            parseErrors += ArchiveParseError("", "没有可导入的有效专辑，已取消覆盖全库")
-            return ArchiveImportReport(mode = mode, items = emptyList(), parseErrors = parseErrors)
-        }
-
-        val mergedArchive = try {
-            codec.validateAndNormalize(
-                LibraryArchive.create(
-                    kind = ArchiveKind.LIBRARY,
-                    albums = mergedAlbums,
-                    settings = rootSettings,
-                    exportedAt = nowIso(),
-                    appVersion = BuildConfig.VERSION_NAME,
-                ),
-            )
-        } catch (e: ArchiveFormatException) {
-            parseErrors += ArchiveParseError("", e.message ?: "目录归档校验失败")
-            if (mode == ArchiveImportMode.REPLACE) {
-                return ArchiveImportReport(mode = mode, items = emptyList(), parseErrors = parseErrors)
-            }
-            LibraryArchive.create(kind = ArchiveKind.LIBRARY, albums = emptyList(), settings = rootSettings)
-        }
-        Diag.log(TAG, "archive tree import dirs=${filesByDir.size} albums=${mergedArchive.albums.size} errors=${parseErrors.size}")
-        return importParsed(
-            ArchiveParseResult(archive = mergedArchive, recognizedAs = "tree-directory", errors = parseErrors),
-            mode,
-        )
-    }
-
-    private suspend fun importParsed(parsed: ArchiveParseResult, mode: ArchiveImportMode): ArchiveImportReport {
         val startMs = System.currentTimeMillis()
-        Diag.log(TAG, "archive import START mode=$mode kind=${parsed.archive.kind} albums=${parsed.archive.albums.size}")
+        Diag.log(TAG, "archive import START mode=$mode albums=${library.albums.size}")
         var backupFilePath: String? = null
 
         if (mode == ArchiveImportMode.REPLACE) {
@@ -378,20 +300,18 @@ class LibraryArchiveRepositoryImpl(
                 runCatching { albumRepository.deleteAlbum(album.id) }
             }
         }
-        if (mode != ArchiveImportMode.SEGMENTS_ONLY) {
-            parsed.archive.settings?.let { settings ->
-                applySettings(settings)
-            }
+        if (mode == ArchiveImportMode.REPLACE && settings != null) {
+            applySettings(settings)
         }
 
-        val results = ArrayList<ArchiveItemResult>(parsed.archive.albums.size)
-        for (archiveAlbum in parsed.archive.albums) {
-            results += importOne(archiveAlbum, mode)
+        val results = ArrayList<ArchiveItemResult>(library.albums.size)
+        for (archiveAlbum in library.albums) {
+            results += importOne(archiveAlbum, covers, mode)
         }
         val report = ArchiveImportReport(
             mode = mode,
             items = results,
-            parseErrors = parsed.errors,
+            parseErrors = errors,
             backupFilePath = backupFilePath,
         )
         Diag.log(
@@ -403,13 +323,14 @@ class LibraryArchiveRepositoryImpl(
         return report
     }
 
-    private suspend fun importOne(archiveAlbum: ArchiveAlbum, mode: ArchiveImportMode): ArchiveItemResult {
+    private suspend fun importOne(
+        archiveAlbum: ArchiveAlbum,
+        covers: Map<String, ByteArray>,
+        mode: ArchiveImportMode,
+    ): ArchiveItemResult {
         val bvid = resolveBvidOnline(archiveAlbum)
             ?: return itemResult(archiveAlbum, ArchiveItemAction.FAILED, "无法解析视频地址（需要联网获取 BV 号）")
-        val source = archiveAlbum.source
-        val page = archiveAlbum.page
-        val existing = albumRepository.getAlbumBySourceKey(source, bvid, page)
-
+        val existing = albumRepository.getAlbumBySourceKey(archiveAlbum.source, bvid, archiveAlbum.page)
         return when {
             mode == ArchiveImportMode.SEGMENTS_ONLY -> {
                 if (existing == null) {
@@ -429,12 +350,16 @@ class LibraryArchiveRepositoryImpl(
                     }
                 }
             }
-            existing == null -> createNew(archiveAlbum, bvid)
-            else -> updateExisting(existing, archiveAlbum)
+            existing == null -> createNew(archiveAlbum, bvid, covers)
+            else -> updateExisting(existing, archiveAlbum, covers)
         }
     }
 
-    private suspend fun createNew(archiveAlbum: ArchiveAlbum, bvid: String): ArchiveItemResult {
+    private suspend fun createNew(
+        archiveAlbum: ArchiveAlbum,
+        bvid: String,
+        covers: Map<String, ByteArray>,
+    ): ArchiveItemResult {
         val request = AlbumImportRequest(
             bvidOrUrl = bvid,
             albumTitle = archiveAlbum.title,
@@ -460,28 +385,30 @@ class LibraryArchiveRepositoryImpl(
                     albumRepository.updateAlbum(merged)
                     archiveAlbum.segments?.let { applyTracks(merged, it) }
                 }
-                applyCover(result.albumId, archiveAlbum.cover)
+                applyCover(result.albumId, archiveAlbum.cover, covers)
                 itemResult(archiveAlbum, ArchiveItemAction.CREATED, "已创建，共 ${archiveAlbum.segments?.size ?: 0} 首")
             }
             is ImportResult.Failure -> itemResult(archiveAlbum, ArchiveItemAction.FAILED, result.message)
         }
     }
 
-    private suspend fun updateExisting(existing: Album, archiveAlbum: ArchiveAlbum): ArchiveItemResult {
-        val duration = archiveAlbum.durationMs ?: existing.durationMs
+    private suspend fun updateExisting(
+        existing: Album,
+        archiveAlbum: ArchiveAlbum,
+        covers: Map<String, ByteArray>,
+    ): ArchiveItemResult {
         val merged = existing.copy(
             title = archiveAlbum.title ?: existing.title,
             artist = archiveAlbum.artist ?: existing.artist,
             pageCount = archiveAlbum.pageCount ?: existing.pageCount,
-            durationMs = duration,
+            durationMs = archiveAlbum.durationMs ?: existing.durationMs,
             updatedAt = archiveAlbum.updatedAt ?: System.currentTimeMillis(),
             createdAt = archiveAlbum.createdAt ?: existing.createdAt,
             lastPlayedAt = maxOf(existing.lastPlayedAt ?: 0L, archiveAlbum.lastPlayedAt ?: 0L).takeIf { it > 0 },
             playCount = maxOf(existing.playCount, archiveAlbum.playCount ?: 0),
         )
         albumRepository.updateAlbum(merged)
-        applyCover(existing.id, archiveAlbum.cover)
-
+        applyCover(existing.id, archiveAlbum.cover, covers)
         val segments = archiveAlbum.segments
         val message = when {
             segments == null -> "已更新元信息（文件未包含分曲，保留原分曲）"
@@ -492,7 +419,6 @@ class LibraryArchiveRepositoryImpl(
         return itemResult(archiveAlbum, ArchiveItemAction.UPDATED, message)
     }
 
-    /** 用归档分曲替换本地 tracks；segments 为空数组表示清空。 */
     private suspend fun applyTracks(album: Album, segments: List<ArchiveSegment>): Boolean {
         if (segments.isEmpty()) {
             albumRepository.replaceTracks(album.id, emptyList())
@@ -500,9 +426,7 @@ class LibraryArchiveRepositoryImpl(
         }
         val duration = album.durationMs
         val tracks = segments.mapIndexed { index, segment ->
-            val endMs = segment.endMs
-                ?: segments.getOrNull(index + 1)?.startMs
-                ?: duration
+            val endMs = segment.endMs ?: segments.getOrNull(index + 1)?.startMs ?: duration
             if (endMs <= segment.startMs) return false
             Track(
                 id = 0L,
@@ -518,13 +442,16 @@ class LibraryArchiveRepositoryImpl(
         return true
     }
 
-    private suspend fun applyCover(albumId: Long, cover: ArchiveCover?) {
+    private suspend fun applyCover(albumId: Long, cover: ArchiveCover?, covers: Map<String, ByteArray>) {
         cover ?: return
-        val bytes = runCatching {
-            cover.dataBase64.filterNot { it.isWhitespace() }.decodeBase64()
-        }.getOrNull()?.toByteArray() ?: return
+        val bytes = if (cover.dataBase64 != null) {
+            runCatching { cover.dataBase64.filterNot { it.isWhitespace() }.decodeBase64() }
+                .getOrNull()?.toByteArray()
+        } else {
+            covers[cover.hash]
+        } ?: return
         if (bytes.isEmpty() || bytes.size > MAX_COVER_BYTES) return
-        if (!LibraryArchiveCodec.sha256Hex(bytes).equals(cover.sha256, ignoreCase = true)) {
+        if (!LibraryArchiveCodec.sha256Hex(bytes).equals(cover.hash, ignoreCase = true)) {
             Diag.log(TAG, "archive cover hash mismatch album=$albumId, skipped")
             return
         }
@@ -533,46 +460,41 @@ class LibraryArchiveRepositoryImpl(
         Diag.log(TAG, "archive cover applied album=$albumId bytes=${bytes.size}")
     }
 
-    private suspend fun applySettings(settings: ArchiveSettings) {
-        settings.audioQuality?.let { name ->
-            runCatching { AudioQualityPreference.valueOf(name) }.getOrNull()?.let {
-                settingsRepository.setAudioQuality(it)
-            }
+    private suspend fun applySettings(settings: ArchiveSettingsDocument) {
+        val quality = settings.audioQuality?.let { name ->
+            runCatching { AudioQualityPreference.valueOf(name) }.getOrNull()
         }
         settings.darkTheme?.let { settingsRepository.setDarkTheme(it) }
         settings.diagnosticLogsEnabled?.let { settingsRepository.setDiagnosticLogsEnabled(it) }
+        quality?.let { settingsRepository.setAudioQuality(it) }
     }
 
     // ------------------------------------------------------------------
-    // 工具
+    // 自动备份 / 工具
     // ------------------------------------------------------------------
 
-    private suspend fun parseTreeFile(
-        entry: ArchiveTreeEntry,
-        path: String,
-        errors: MutableList<ArchiveParseError>,
-        expectedKind: ArchiveKind? = null,
-    ): LibraryArchive? {
-        val text = runCatching { entry.bytes.toString(Charsets.UTF_8) }.getOrNull()
-        if (text.isNullOrBlank()) {
-            errors += ArchiveParseError(path, "文件内容为空")
-            return null
+    private suspend fun createAutoBackup(): String? {
+        val root = backupDir ?: return null
+        val dir = File(root, "biliaudio-backup-${timestampForFile()}")
+        dir.mkdirs()
+        val entries = exportTreeEntries()
+        for (entry in entries) {
+            val file = File(dir, entry.relativePath)
+            file.parentFile?.mkdirs()
+            file.writeBytes(entry.bytes)
         }
-        return try {
-            codec.parse(text, expectedKind).archive
-        } catch (e: ArchiveFormatException) {
-            errors += ArchiveParseError(path, e.message ?: "文件格式不正确")
-            null
-        } catch (e: Exception) {
-            errors += ArchiveParseError(path, "解析失败：${e.message ?: "未知错误"}")
-            null
-        }
+        pruneBackups(root)
+        return dir.absolutePath
     }
 
-    private fun sameAlbum(meta: ArchiveAlbum, segments: ArchiveAlbum): Boolean {
-        val metaKey = meta.albumKey ?: meta.bvid ?: meta.url
-        val segKey = segments.albumKey ?: segments.bvid ?: segments.url
-        return metaKey == segKey && meta.page == segments.page
+    override fun lastAutoBackupAt(): Long? =
+        backupDir?.listFiles()?.filter { it.isDirectory }?.maxOfOrNull { it.lastModified() }
+
+    private fun pruneBackups(root: File) {
+        root.listFiles()?.filter { it.isDirectory }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(10)
+            ?.forEach { runCatching { it.deleteRecursively() } }
     }
 
     private suspend fun resolveBvidOnline(archiveAlbum: ArchiveAlbum): String? {
@@ -590,9 +512,7 @@ class LibraryArchiveRepositoryImpl(
     }
 
     private fun displayKey(album: ArchiveAlbum): String =
-        album.bvid?.let { sourceKey(album.source, it, album.page) } ?: album.url.orEmpty()
-
-    private fun sourceKey(source: String, bvid: String, page: Int): String = "$source:$bvid#$page"
+        album.bvid?.let { "${album.source}:$it#${album.page}" } ?: album.url.orEmpty()
 
     private fun itemResult(album: ArchiveAlbum, action: ArchiveItemAction, message: String? = null): ArchiveItemResult =
         ArchiveItemResult(
@@ -602,75 +522,6 @@ class LibraryArchiveRepositoryImpl(
             message = message,
         )
 
-    private suspend fun createAutoBackup(): String? {
-        val dir = backupDir ?: return null
-        dir.mkdirs()
-        val file = File(dir, "biliaudio-before-import-${timestampForFile()}.json")
-        file.writeText(exportAllJson())
-        pruneBackups(dir)
-        return file.absolutePath
-    }
-
-    override fun lastAutoBackupAt(): Long? =
-        backupDir?.listFiles()?.maxOfOrNull { it.lastModified() }
-
-    private fun pruneBackups(dir: File) {
-        val keep = 10
-        dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(keep)?.forEach {
-            runCatching { it.delete() }
-        }
-    }
-
-    private fun normalizeTreePath(rawPath: String): String? {
-        val parts = rawPath.replace('\\', '/').split('/')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it != "." && it != ".." }
-        if (parts.isEmpty()) return null
-        return parts.joinToString("/")
-    }
-
-    private fun sanitizePathSegment(raw: String?, fallback: String): String {
-        val source = raw?.trim().orEmpty()
-        val cleaned = buildString(source.length) {
-            for (char in source) {
-                when {
-                    char.code < 0x20 || char.code == 0x7F -> Unit
-                    char in ILLEGAL_PATH_CHARS -> Unit
-                    else -> append(char)
-                }
-            }
-        }.replace(WHITESPACE_REGEX, " ").trim().trim('.', ' ')
-        return truncateCodePoints(cleaned, MAX_PATH_SEGMENT_LENGTH).ifBlank { fallback }
-    }
-
-    private fun truncateCodePoints(text: String, maxCodePoints: Int): String {
-        if (text.length <= maxCodePoints) return text
-        var end = 0
-        var count = 0
-        while (end < text.length && count < maxCodePoints) {
-            end += Character.charCount(text.codePointAt(end))
-            count++
-        }
-        return text.substring(0, end)
-    }
-
-    private fun uniqueChildName(desired: String, bvid: String, usedNames: MutableSet<String>): String {
-        fun reserve(candidate: String): Boolean = usedNames.add(candidate.lowercase(Locale.ROOT))
-        if (reserve(desired)) return desired
-        for (index in 2..99) {
-            val candidate = "$desired ($index)"
-            if (reserve(candidate)) return candidate
-        }
-        val withBvid = "$desired (${bvid.ifBlank { "album" }})"
-        if (reserve(withBvid)) return withBvid
-        var index = 2
-        while (true) {
-            val candidate = "$withBvid ($index)"
-            if (reserve(candidate)) return candidate
-            index++
-        }
-    }
-
     private fun nowIso(): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())
 
@@ -679,16 +530,7 @@ class LibraryArchiveRepositoryImpl(
 }
 
 private const val TAG = "Archive"
-private const val MIME_TYPE_JSON = "application/json"
-private const val ROOT_INDEX_FILE = "biliaudio-library.json"
-private const val ALBUM_FILE = "album.json"
-private const val SEGMENTS_FILE = "segments.json"
-private const val FALLBACK_ARTIST = "未知艺术家"
-private const val FALLBACK_ALBUM = "未命名专辑"
-private const val MAX_PATH_SEGMENT_LENGTH = 60
 private const val MAX_COVER_BYTES = 2 * 1024 * 1024
-private val ILLEGAL_PATH_CHARS = charArrayOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
-private val WHITESPACE_REGEX = Regex("\\s+")
 
 /** 无封面仓库：用于不关心封面的测试/纯数据场景。 */
 internal object NoopAlbumCoverRepository : AlbumCoverRepository {

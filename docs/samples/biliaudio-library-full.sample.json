@@ -1,18 +1,8 @@
 {
   "format": "biliaudio-library",
-  "version": 2,
-  "minReaderVersion": 2,
+  "version": 3,
+  "minReaderVersion": 3,
   "kind": "library",
-  "archiveId": "4f1c2b7e-8a3d-4b6e-9c21-0d7e5a9b1c33",
-  "exportedAt": "2026-11-08T13:47:10+08:00",
-  "app": { "name": "BiliAudio", "version": "0.9.0" },
-  "features": ["stable-album-key", "stable-track-id", "cover-sha256", "explicit-end-ms"],
-  "settings": {
-    "version": 1,
-    "audioQuality": "AUTO",
-    "darkTheme": null,
-    "diagnosticLogsEnabled": true
-  },
   "albums": [
     {
       "albumKey": "bilibili:BV1GJ411x7h7#p1",

@@ -1,0 +1,12 @@
+{
+  "format": "biliaudio-archive",
+  "version": 1,
+  "kind": "library",
+  "createdAt": "2026-11-08T14:30:00+08:00",
+  "app": { "name": "BiliAudio", "version": "0.10.0" },
+  "files": [
+    { "path": "library.json", "type": "library", "version": 3, "sha256": "<sha256>", "bytes": 12345 },
+    { "path": "settings.json", "type": "settings", "version": 1, "optional": true, "sha256": "<sha256>", "bytes": 200 },
+    { "path": "covers/<sha256>.jpg", "type": "cover", "sha256": "<sha256>", "bytes": 183421 }
+  ]
+}

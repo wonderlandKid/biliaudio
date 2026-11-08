@@ -50,7 +50,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
             ?: AudioQualityPreference.AUTO
         // 未设置过 → null（跟随系统）
         val dark = if (prefs.contains(KEY_DARK_THEME)) prefs.getBoolean(KEY_DARK_THEME, false) else null
-        val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, true)
+        val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, false)
         return AppSettings(
             audioQuality = quality,
             darkTheme = dark,

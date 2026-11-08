@@ -10,7 +10,6 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportReport
 import com.wonderlandkid.biliaudio.data.model.ArchiveTreeEntry
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
-import com.wonderlandkid.biliaudio.data.model.LibraryArchive
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -48,10 +47,6 @@ class SettingsViewModel(
     /** 最近一次「覆盖全库」前的自动备份时间（毫秒），null 表示暂无。 */
     private val _lastAutoBackupAt = MutableStateFlow<Long?>(null)
     val lastAutoBackupAt: StateFlow<Long?> = _lastAutoBackupAt.asStateFlow()
-
-    /** 是否正在导出音乐库（导出按钮 loading）。 */
-    private val _isExporting = MutableStateFlow(false)
-    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
 
     /** 是否正在导出「目录形态归档」到文件夹。 */
     private val _isExportingTree = MutableStateFlow(false)
@@ -93,53 +88,13 @@ class SettingsViewModel(
         }
     }
 
-    /**
-     * 导出整个音乐库到用户通过 SAF 选择的目标文件（JSON）。
-     *
-     * @param uri ActivityResultContracts.CreateDocument 返回的目标文件 uri
-     */
-    fun exportLibrary(uri: Uri) {
-        if (_isExporting.value) return
-        _isExporting.value = true
-        viewModelScope.launch {
-            try {
-                val albumCount = withContext(Dispatchers.IO) {
-                    val json = libraryArchiveRepository.exportAllJson()
-                    // 解析一次只为统计专辑数（导出内容本身已由数据层保证格式）
-                    val albumCount = runCatching {
-                        com.wonderlandkid.biliaudio.data.impl.LibraryArchiveCodec.defaultJson
-                            .decodeFromString<LibraryArchive>(json)
-                            .albums.size
-                    }.getOrDefault(0)
-                    val resolver = appContext.contentResolver
-                    val output = resolver.openOutputStream(uri)
-                        ?: throw IOException("无法打开目标文件")
-                    output.use { stream ->
-                        stream.write(json.toByteArray(Charsets.UTF_8))
-                        stream.flush()
-                    }
-                    albumCount
-                }
-                _isExporting.value = false
-                _messages.tryEmit("已导出（$albumCount 张专辑）")
-            } catch (ce: CancellationException) {
-                throw ce
-            } catch (t: Throwable) {
-                _isExporting.value = false
-                _messages.tryEmit("导出失败：${t.message?.takeIf { it.isNotBlank() } ?: "未知错误"}")
-            }
-        }
-    }
-
     // ------------------------------------------------------------------
-    // 目录形态归档（顶层 → 艺术家 → 专辑 → 分割）
+    // 整库 bundle（目录）
     // ------------------------------------------------------------------
-
     /**
-     * 导出「目录形态归档」到用户选择的文件夹（SAF OpenDocumentTree）。
+     * 导出整库 bundle 到用户选择的文件夹（SAF OpenDocumentTree）。
      *
-     * 按 [ArchiveTreeEntry.relativePath] 自动创建子目录并写入文件（JSON UTF-8），
-     * 已存在的同名文件会覆盖内容。
+     * 按 [ArchiveTreeEntry.relativePath] 创建 manifest/library/settings/covers 文件。
      */
     fun exportTreeToFolder(treeUri: Uri) {
         if (_isExportingTree.value) return
@@ -165,22 +120,17 @@ class SettingsViewModel(
                     written
                 }
                 _isExportingTree.value = false
-                _messages.tryEmit("已导出到文件夹：$fileCount 个文件")
+                _messages.tryEmit("已导出归档 bundle：$fileCount 个文件")
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
                 _isExportingTree.value = false
-                _messages.tryEmit("导出到文件夹失败：${messageOf(t)}")
+                _messages.tryEmit("导出归档 bundle 失败：${messageOf(t)}")
             }
         }
     }
 
-    /**
-     * 从文件夹导入「目录形态归档」。
-     *
-     * 递归读取所选目录下的 *.json（深度/文件数/单文件大小均有限制），
-     * 以相对路径构造 [ArchiveTreeEntry] 后交给数据层按 [mode] 导入。
-     */
+    /** 从文件夹导入整库 bundle（递归读取所有文件，限制深度/数量/单文件大小）。 */
     fun importTreeFromFolder(treeUri: Uri, mode: ArchiveImportMode) {
         if (_isImportingTree.value) return
         _isImportingTree.value = true
@@ -191,7 +141,7 @@ class SettingsViewModel(
                         ?: throw IOException("无法访问所选文件夹")
                     val entries = readTreeEntries(root)
                     if (entries.isEmpty()) {
-                        throw IOException("所选文件夹中没有找到 .json 归档文件（请选择「导出到文件夹」生成的目录或其中一级）")
+                        throw IOException("所选文件夹中没有找到归档文件（请选择「导出到文件夹」生成的 bundle 目录）")
                     }
                     libraryArchiveRepository.importTreeEntries(entries, mode)
                 }
@@ -258,7 +208,7 @@ class SettingsViewModel(
                     walk(child, relativePath, depth + 1)
                     continue
                 }
-                if (!name.endsWith(".json", ignoreCase = true)) continue
+                // bundle 里既有 JSON 也有 covers 二进制，全部读取（由 manifest 定位）
                 val bytes = runCatching { readDocumentBytes(child.uri) }.getOrNull() ?: continue
                 if (bytes.isEmpty()) continue
                 entries += ArchiveTreeEntry(
@@ -356,6 +306,6 @@ class SettingsViewModel(
         /** 目录导入递归深度 / 文件数 / 单文件大小限制（防止误选超大目录）。 */
         const val MAX_TREE_DEPTH = 8
         const val MAX_TREE_FILES = 3000
-        const val MAX_TREE_FILE_BYTES = 8 * 1024 * 1024
+        const val MAX_TREE_FILE_BYTES = 64 * 1024 * 1024
     }
 }

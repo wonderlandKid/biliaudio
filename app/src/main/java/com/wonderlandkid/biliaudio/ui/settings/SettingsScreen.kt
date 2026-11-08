@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.History
@@ -107,16 +106,9 @@ fun SettingsScreen(
     }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
     val lastAutoBackupAt by viewModel.lastAutoBackupAt.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
-    // 导出音乐库：SAF 选择保存位置（默认文件名带时间戳）
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri ->
-        if (uri != null) viewModel.exportLibrary(uri)
-    }
     val isExportingTree by viewModel.isExportingTree.collectAsStateWithLifecycle()
     val isImportingTree by viewModel.isImportingTree.collectAsStateWithLifecycle()
     val treeImportReport by viewModel.treeImportResult.collectAsStateWithLifecycle()
@@ -204,12 +196,10 @@ fun SettingsScreen(
             item {
                 SettingsPadded {
                     BackupRestoreCard(
-                        isExporting = isExporting,
                         isExportingTree = isExportingTree,
                         isImportingTree = isImportingTree,
                         lastAutoBackupAt = lastAutoBackupAt,
-                        onExportSingleClick = { exportLauncher.launch(defaultBackupFileName()) },
-                        onImportSingleClick = onOpenBackupImport,
+                        onImportShareClick = onOpenBackupImport,
                         onExportTreeClick = { treeExportLauncher.launch(null) },
                         onImportTreeClick = { treeImportLauncher.launch(null) },
                     )
@@ -704,86 +694,34 @@ private fun AboutCard() {
 // 备份与恢复
 // ---------------------------------------------------------------------------
 
-/** 备份与恢复卡片：单文件 JSON 备份 + 目录形态归档（顶层 → 艺术家 → 专辑 → 分割）。 */
+/** 备份与恢复卡片：整库 bundle（manifest + library + settings + covers）+ 单分享文件导入。 */
 @Composable
 private fun BackupRestoreCard(
-    isExporting: Boolean,
     isExportingTree: Boolean,
     isImportingTree: Boolean,
     lastAutoBackupAt: Long?,
-    onExportSingleClick: () -> Unit,
-    onImportSingleClick: () -> Unit,
+    onImportShareClick: () -> Unit,
     onExportTreeClick: () -> Unit,
     onImportTreeClick: () -> Unit,
 ) {
     SettingsCard {
-        // ---- 单文件备份 ----
         Text(
-            text = "单文件备份",
+            text = "整库备份（bundle）",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = Spacing.sm),
         )
-        SettingsActionRow(
-            icon = Icons.Rounded.FileDownload,
-            title = "导出音乐库",
-            description = "导出全部专辑与分曲时间点为一个 JSON 备份文件",
-            action = {
-                Button(
-                    onClick = onExportSingleClick,
-                    enabled = !isExporting,
-                    shape = RoundedCornerShape(50),
-                    contentPadding = PaddingValues(horizontal = Spacing.md),
-                ) {
-                    if (isExporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(Spacing.xs))
-                        Text("导出中")
-                    } else {
-                        Text("导出")
-                    }
-                }
-            },
-        )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        SettingsActionRow(
-            icon = Icons.Rounded.FileUpload,
-            title = "导入 / 恢复",
-            description = "从单文件备份恢复，或导入分享的专辑 / 分割点文件",
-            action = {
-                OutlinedButton(
-                    onClick = onImportSingleClick,
-                    shape = RoundedCornerShape(50),
-                    contentPadding = PaddingValues(horizontal = Spacing.md),
-                ) {
-                    Text("导入")
-                }
-            },
-        )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-        // ---- 目录形态归档 ----
         Text(
-            text = "目录归档（顶层 → 艺术家 → 专辑 → 分割）",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = Spacing.md),
-        )
-        Text(
-            text = "按「顶层 / 艺术家 / 专辑 / album.json + segments.json」目录结构导出，" +
-                "便于浏览、分享与跨设备恢复。",
+            text = "按「manifest.json + library.json + settings.json + covers/」分域目录备份，" +
+                "可人工浏览、跨设备恢复；zip 只是传输层。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs),
         )
         SettingsActionRow(
             icon = Icons.Rounded.Save,
-            title = "导出到文件夹",
-            description = "选择文件夹，按艺术家 / 专辑生成目录与 JSON 文件（同名文件覆盖）",
+            title = "导出整库到文件夹",
+            description = "生成 manifest/library/settings/covers（同名文件覆盖）",
             action = {
                 OutlinedButton(
                     onClick = onExportTreeClick,
@@ -807,8 +745,8 @@ private fun BackupRestoreCard(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         SettingsActionRow(
             icon = Icons.Rounded.FolderOpen,
-            title = "从文件夹导入",
-            description = "选择导出的目录，递归读取 *.json 后按所选模式导入",
+            title = "从文件夹恢复",
+            description = "选择 bundle 目录，校验 manifest/hash 后按所选模式导入",
             action = {
                 OutlinedButton(
                     onClick = onImportTreeClick,
@@ -826,6 +764,21 @@ private fun BackupRestoreCard(
                     } else {
                         Text("选择文件夹")
                     }
+                }
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        SettingsActionRow(
+            icon = Icons.Rounded.FileUpload,
+            title = "导入分享文件",
+            description = "导入单专辑 / 分割点 JSON（整库恢复请用上面的 bundle 目录）",
+            action = {
+                OutlinedButton(
+                    onClick = onImportShareClick,
+                    shape = RoundedCornerShape(50),
+                    contentPadding = PaddingValues(horizontal = Spacing.md),
+                ) {
+                    Text("导入")
                 }
             },
         )
@@ -858,7 +811,7 @@ private fun BackupRestoreCard(
             }
         }
         Text(
-            text = "「覆盖全库」导入前会自动备份当前音乐库，自动备份保留最近 10 份。",
+            text = "「覆盖全库」前会自动备份为 bundle 目录，保留最近 10 份；设置默认不覆盖本地。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(bottom = Spacing.sm),
@@ -951,10 +904,6 @@ private fun TreeImportModeOption(
     }
 }
 
-/** 默认导出文件名：biliaudio-library-yyyyMMdd-HHmm.json */
-private fun defaultBackupFileName(): String =
-    "biliaudio-library-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())}.json"
-
 /** 自动备份时间展示：yyyy-MM-dd HH:mm */
 private fun formatBackupTime(timestamp: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
@@ -989,7 +938,7 @@ private fun DiagnosticsToggleCard(
                 )
                 Text(
                     text = if (enabled) {
-                        "开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
+                        "默认关闭；开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
                     } else {
                         "已关闭：不再记录/打印诊断日志（历史日志仍可查看/导出）"
                     },

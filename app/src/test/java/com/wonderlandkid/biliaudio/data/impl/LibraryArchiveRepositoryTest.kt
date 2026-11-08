@@ -4,6 +4,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
 import com.wonderlandkid.biliaudio.data.model.AlbumWithTracks
 import com.wonderlandkid.biliaudio.data.model.AppSettings
+import com.wonderlandkid.biliaudio.data.model.ArchiveFormatException
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.ArchiveKind
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
@@ -13,6 +14,7 @@ import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
 import com.wonderlandkid.biliaudio.data.model.CoverCandidate
 import com.wonderlandkid.biliaudio.data.model.ImportResult
+import com.wonderlandkid.biliaudio.data.model.LibraryArchive
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -35,101 +38,30 @@ import java.util.UUID
 class LibraryArchiveRepositoryTest {
 
     @Test
-    fun `export all writes v2 library with album and track identity`() = runBlocking {
+    fun `bundle export splits files and excludes inline cover`() = runBlocking {
         val fakes = fakes()
-        seedAlbums(fakes)
-        val json = fakes.repository.exportAllJson()
-        val parsed = LibraryArchiveCodec().parse(json)
-        assertEquals(ArchiveKind.LIBRARY, parsed.archive.kind)
-        assertEquals(2, parsed.archive.version)
-        val album = parsed.archive.albums.single()
-        assertEquals("bilibili:BV1GJ411x7h7#1", album.albumKey)
-        assertEquals(2, album.segments?.size)
-        assertNotNull(album.segments?.first()?.id)
-        assertEquals(fakes.settingsRepo.settings.value.diagnosticLogsEnabled, parsed.archive.settings?.diagnosticLogsEnabled)
-    }
-
-    @Test
-    fun `merge creates album from exported archive`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
-        val json = fakes.repository.exportAllJson()
-        fakes.albumRepo.clear()
-        val report = fakes.repository.importArchive(json, ArchiveImportMode.MERGE)
-        assertEquals(1, report.createdCount)
-        val album = fakes.albumRepo.albumsFlow.value.single()
-        assertEquals("BV1GJ411x7h7", album.bvid)
-        assertEquals(1, album.page)
-        assertEquals(2, fakes.albumRepo.allTracks(album.id).size)
-    }
-
-    @Test
-    fun `merge with missing segments keeps existing tracks`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
-        val json = """
-            {"format":"biliaudio-library","version":2,"kind":"album",
-             "albums":[{"bvid":"BV1GJ411x7h7","page":1,"title":"新标题"}]}
-        """.trimIndent()
-        val report = fakes.repository.importArchive(json, ArchiveImportMode.MERGE)
-        assertEquals(1, report.updatedCount)
-        val album = fakes.albumRepo.albumsFlow.value.single()
-        assertEquals("新标题", album.title)
-        assertEquals(2, fakes.albumRepo.allTracks(album.id).size)
-    }
-
-    @Test
-    fun `merge with empty segments clears tracks`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
-        val json = """
-            {"format":"biliaudio-library","version":2,"kind":"album",
-             "albums":[{"bvid":"BV1GJ411x7h7","page":1,"segments":[]}]}
-        """.trimIndent()
-        fakes.repository.importArchive(json, ArchiveImportMode.MERGE)
-        val album = fakes.albumRepo.albumsFlow.value.single()
-        assertTrue(fakes.albumRepo.allTracks(album.id).isEmpty())
-    }
-
-    @Test
-    fun `segments only updates existing and skips missing`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
-        val json = """
-            {"format":"biliaudio-library","version":2,"kind":"library","albums":[
-              {"bvid":"BV1GJ411x7h7","page":1,"segments":[{"startMs":0,"title":"只有一首"}]},
-              {"bvid":"BV1GJ411x7h7","page":2,"segments":[{"startMs":0,"title":"不存在"}]}
-            ]}
-        """.trimIndent()
-        val report = fakes.repository.importArchive(json, ArchiveImportMode.SEGMENTS_ONLY)
-        assertEquals(1, report.segmentsUpdatedCount)
-        assertEquals(1, report.skippedCount)
-        val album = fakes.albumRepo.albumsFlow.value.single()
-        assertEquals("只有一首", fakes.albumRepo.allTracks(album.id).single().title)
-    }
-
-    @Test
-    fun `replace backs up then imports`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
-        val json = fakes.repository.exportAllJson()
-        val report = fakes.repository.importArchive(json, ArchiveImportMode.REPLACE)
-        assertEquals(1, report.createdCount)
-        assertNotNull(report.backupFilePath)
-        assertTrue(File(report.backupFilePath!!).isFile)
-    }
-
-    @Test
-    fun `tree export roundtrip merges album and segments files`() = runBlocking {
-        val fakes = fakes()
-        seedAlbums(fakes)
+        val root = fakes.seedWithCover()
         val entries = fakes.repository.exportTreeEntries()
-        assertTrue(entries.any { it.relativePath.endsWith("album.json") })
-        assertTrue(entries.any { it.relativePath.endsWith("segments.json") })
-        val root = entries.first { it.relativePath == "biliaudio-library.json" }
-        val rootKind = LibraryArchiveCodec().parse(root.bytes.toString(Charsets.UTF_8)).archive.kind
-        assertEquals(ArchiveKind.INDEX, rootKind)
+        val paths = entries.map { it.relativePath }
+        assertTrue(paths.contains("manifest.json"))
+        assertTrue(paths.contains("library.json"))
+        assertTrue(paths.contains("settings.json"))
+        assertTrue(paths.any { it.startsWith("covers/") })
 
+        val parsed = ArchiveBundleCodec(LibraryArchiveCodec()).parseEntries(entries)
+        assertEquals(ArchiveKind.LIBRARY, parsed.library.kind)
+        val cover = parsed.library.albums.single().cover
+        assertNotNull(cover)
+        assertNull(cover?.dataBase64)
+        assertEquals(true, parsed.settings?.diagnosticLogsEnabled)
+        assertNotNull(parsed.covers[cover!!.hash])
+    }
+
+    @Test
+    fun `bundle merge creates album with tracks`() = runBlocking {
+        val fakes = fakes()
+        fakes.seed()
+        val entries = fakes.repository.exportTreeEntries()
         fakes.albumRepo.clear()
         val report = fakes.repository.importTreeEntries(entries, ArchiveImportMode.MERGE)
         assertEquals(1, report.createdCount)
@@ -139,35 +71,102 @@ class LibraryArchiveRepositoryTest {
     }
 
     @Test
-    fun `custom cover export and import is hash checked`() = runBlocking {
+    fun `single album export and import keeps segments`() = runBlocking {
         val fakes = fakes()
-        seedAlbums(fakes)
-        val coverFile = File(fakes.backupDir, "cover.jpg")
-        val bytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 4, 0xFF.toByte(), 0xD9.toByte())
-        coverFile.writeBytes(bytes)
-        fakes.albumRepo.updateAlbum(fakes.albumRepo.albumsFlow.value.single().copy(coverLocalPath = coverFile.absolutePath))
-
-        val json = fakes.repository.exportAllJson()
-        val parsed = LibraryArchiveCodec().parse(json).archive.albums.single()
-        assertEquals(bytes.size, parsed.cover?.byteLength)
-
+        val albumId = fakes.seed()
+        val json = fakes.repository.exportAlbumJson(albumId)!!
         fakes.albumRepo.clear()
-        fakes.repository.importArchive(json, ArchiveImportMode.MERGE)
-        assertEquals(1, fakes.cover.saved.size)
-        assertTrue(fakes.cover.saved.single().contentEquals(bytes))
-        assertEquals(fakes.cover.fixedPath, fakes.albumRepo.albumsFlow.value.single().coverLocalPath)
+        val report = fakes.repository.importArchive(json, ArchiveImportMode.MERGE)
+        assertEquals(1, report.createdCount)
+        val album = fakes.albumRepo.albumsFlow.value.single()
+        assertEquals(2, fakes.albumRepo.allTracks(album.id).size)
+        val parsed = LibraryArchiveCodec().parse(json).archive
+        assertEquals(ArchiveKind.ALBUM, parsed.kind)
     }
 
     @Test
-    fun `directory index cannot be imported as library file`() = runBlocking {
+    fun `merge with missing segments keeps existing and empty clears`() = runBlocking {
         val fakes = fakes()
-        seedAlbums(fakes)
-        val root = fakes.repository.exportTreeEntries().first { it.relativePath == "biliaudio-library.json" }
-        val error = runCatching {
-            fakes.repository.importArchive(root.bytes.toString(Charsets.UTF_8), ArchiveImportMode.REPLACE)
-        }.exceptionOrNull()
-        assertNotNull(error)
-        assertEquals(1, fakes.albumRepo.albumsFlow.value.size)
+        fakes.seed()
+        val keepJson = """
+            {"format":"biliaudio-library","version":3,"kind":"album",
+             "albums":[{"bvid":"BV1GJ411x7h7","page":1,"title":"新标题"}]}
+        """.trimIndent()
+        fakes.repository.importArchive(keepJson, ArchiveImportMode.MERGE)
+        var album = fakes.albumRepo.albumsFlow.value.single()
+        assertEquals("新标题", album.title)
+        assertEquals(2, fakes.albumRepo.allTracks(album.id).size)
+
+        val clearJson = """
+            {"format":"biliaudio-library","version":3,"kind":"album",
+             "albums":[{"bvid":"BV1GJ411x7h7","page":1,"segments":[]}]}
+        """.trimIndent()
+        fakes.repository.importArchive(clearJson, ArchiveImportMode.MERGE)
+        album = fakes.albumRepo.albumsFlow.value.single()
+        assertTrue(fakes.albumRepo.allTracks(album.id).isEmpty())
+    }
+
+    @Test
+    fun `segments only updates existing and skips missing`() = runBlocking {
+        val fakes = fakes()
+        fakes.seed()
+        val json = """
+            {"format":"biliaudio-library","version":3,"kind":"library","albums":[
+              {"bvid":"BV1GJ411x7h7","page":1,"segments":[{"startMs":0,"title":"只有一首"}]},
+              {"bvid":"BV1GJ411x7h7","page":2,"segments":[{"startMs":0,"title":"不存在"}]}
+            ]}
+        """.trimIndent()
+        // 整库 library kind 不能走单 JSON 导入，改成逐个 album 文件场景：
+        val single = """
+            {"format":"biliaudio-library","version":3,"kind":"album","albums":[
+              {"bvid":"BV1GJ411x7h7","page":1,"segments":[{"startMs":0,"title":"只有一首"}]}
+            ]}
+        """.trimIndent()
+        val report = fakes.repository.importArchive(single, ArchiveImportMode.SEGMENTS_ONLY)
+        assertEquals(1, report.segmentsUpdatedCount)
+        val album = fakes.albumRepo.albumsFlow.value.single()
+        assertEquals("只有一首", fakes.albumRepo.allTracks(album.id).single().title)
+
+        val missingPage = """
+            {"format":"biliaudio-library","version":3,"kind":"album","albums":[
+              {"bvid":"BV1GJ411x7h7","page":2,"segments":[{"startMs":0}]}
+            ]}
+        """.trimIndent()
+        val missingReport = fakes.repository.importArchive(missingPage, ArchiveImportMode.SEGMENTS_ONLY)
+        assertEquals(1, missingReport.skippedCount)
+    }
+
+    @Test
+    fun `single library kind json is rejected and replace bundles back up`() = runBlocking {
+        val fakes = fakes()
+        fakes.seed()
+        val libraryJson = LibraryArchiveCodec().encode(
+            LibraryArchive.create(kind = ArchiveKind.LIBRARY, albums = emptyList()),
+        )
+        val error = runCatching { fakes.repository.importArchive(libraryJson, ArchiveImportMode.MERGE) }.exceptionOrNull()
+        assertTrue(error is ArchiveFormatException)
+
+        val entries = fakes.repository.exportTreeEntries()
+        val report = fakes.repository.importTreeEntries(entries, ArchiveImportMode.REPLACE)
+        assertEquals(1, report.createdCount)
+        assertNotNull(report.backupFilePath)
+        assertTrue(File(report.backupFilePath!!).isDirectory)
+    }
+
+    @Test
+    fun `bundle import applies settings only on replace`() = runBlocking {
+        val fakes = fakes()
+        fakes.seed()
+        fakes.settingsRepo.setDarkTheme(true)
+        val entries = fakes.repository.exportTreeEntries()
+        fakes.settingsRepo.setDarkTheme(false)
+        fakes.settingsRepo.setDiagnosticLogsEnabled(false)
+
+        fakes.repository.importTreeEntries(entries, ArchiveImportMode.MERGE)
+        assertEquals(false, fakes.settingsRepo.settings.value.darkTheme)
+
+        fakes.repository.importTreeEntries(entries, ArchiveImportMode.REPLACE)
+        assertEquals(true, fakes.settingsRepo.settings.value.darkTheme)
     }
 
     // ------------------------------------------------------------------
@@ -199,47 +198,37 @@ class LibraryArchiveRepositoryTest {
         val backupDir: File,
     )
 
-    private suspend fun seedAlbums(fakes: Fakes, albumId: Long = 1L) {
-        fakes.albumRepo.seed(
-            Album(
-                id = albumId,
-                bvid = "BV1GJ411x7h7",
-                cid = 1L,
-                page = 1,
-                pageCount = 1,
-                title = "Abbey Road",
-                artist = "The Beatles",
-                coverUrl = "https://i1.hdslb.com/a.jpg",
-                durationMs = 213_000L,
-                playCount = 7,
-            ),
-            tracks(albumId),
+    private suspend fun Fakes.seed(): Long {
+        val album = Album(
+            id = 1L,
+            bvid = "BV1GJ411x7h7",
+            cid = 1L,
+            page = 1,
+            pageCount = 1,
+            title = "Abbey Road",
+            artist = "The Beatles",
+            coverUrl = "https://i1.hdslb.com/a.jpg",
+            durationMs = 213_000L,
+            playCount = 7,
         )
+        albumRepo.seed(album, tracks(1L))
+        return album.id
+    }
+
+    private suspend fun Fakes.seedWithCover(): Long {
+        val id = seed()
+        val coverFile = File(backupDir, "local-cover.jpg")
+        coverFile.writeBytes(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 0xFF.toByte(), 0xD9.toByte()))
+        albumRepo.updateAlbum(albumRepo.albumsFlow.value.single().copy(coverLocalPath = coverFile.absolutePath))
+        return id
     }
 
     private fun tracks(albumId: Long): List<Track> = listOf(
-        Track(
-            id = albumId * 100,
-            uid = UUID.randomUUID().toString(),
-            albumId = albumId,
-            index = 0,
-            title = "一",
-            startMs = 0,
-            endMs = 100_000,
-        ),
-        Track(
-            id = albumId * 100 + 1,
-            uid = UUID.randomUUID().toString(),
-            albumId = albumId,
-            index = 1,
-            title = "二",
-            startMs = 100_000,
-            endMs = 213_000,
-        ),
+        Track(id = albumId * 100, uid = UUID.randomUUID().toString(), albumId = albumId, index = 0, title = "一", startMs = 0, endMs = 100_000),
+        Track(id = albumId * 100 + 1, uid = UUID.randomUUID().toString(), albumId = albumId, index = 1, title = "二", startMs = 100_000, endMs = 213_000),
     )
 
-    private fun createTempDir(): File =
-        java.nio.file.Files.createTempDirectory("biliaudio-archive-test").toFile()
+    private fun createTempDir(): File = java.nio.file.Files.createTempDirectory("biliaudio-archive-test").toFile()
 
     private class FakeSettingsRepository : SettingsRepository {
         private val _settings = MutableStateFlow(AppSettings(diagnosticLogsEnabled = true))
@@ -265,9 +254,7 @@ class LibraryArchiveRepositoryTest {
                 coverUrl = "https://i1.hdslb.com/b.jpg",
                 durationMs = 213_000L,
                 ownerName = "UP主",
-                pages = (1..3).map { page ->
-                    BiliPage(page = page, cid = page.toLong(), title = "P$page", durationMs = 213_000L)
-                },
+                pages = (1..3).map { page -> BiliPage(page = page, cid = page.toLong(), title = "P$page", durationMs = 213_000L) },
             )
         }
         override suspend fun searchVideos(keyword: String, page: Int): List<BiliVideoSearchItem> = emptyList()

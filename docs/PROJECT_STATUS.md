@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.9.1）
+# 项目现状与交接（v0.10.0）
 
-> 最后更新：2026-11-08 · 版本 v0.9.1 · tag `v0.9.1`（release commit 以 `git rev-parse v0.9.1` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.10.0 · tag `v0.10.0`（release commit 以 `git rev-parse v0.10.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -37,7 +37,7 @@
 | BV 号/链接导入（预览、改专辑名/艺术家） | ✅ | 未分割导入=0 首（不再有占位曲） |
 | 导入时粘贴分曲文本自动生成分曲 | ✅ | 三种格式：编号+歌名+时间 / 时间+歌名 / 歌名+时间，可混用 |
 | 文件/文本批量导入（旧 JSON数组/CSV/文本块） | ✅ 兼容 | 统一归一化为归档模型入库 |
-| 归档导入/导出（整库 / 单专辑 / 分割点文件） | ✅ | `.biliaudio.json` **v2**；合并/仅更新分割点/覆盖全库（自动备份）；`albumKey`/分曲 uid/kind/封面 SHA-256；v1 不再兼容 |
+| 归档导入/导出 | ✅ | **v3 分域 bundle**：manifest + library + settings + covers；合并/仅更新分割点/覆盖全库（自动备份）；单专辑/分割点仍可单 JSON；v1/v2 整库不再兼容 |
 | **自定义专辑封面** | ✅ | 导入预览/专辑详情可「换封面」：相册上传、网易云搜索、恢复 B 站封面；本地文件存储优先 |
 | 分曲编辑（手动/播放打点/文本导入/排序/保存） | ✅ | 未分割专辑显示「未分割」空态 |
 | 播放（ExoPlayer 分曲裁剪、专辑连续、单曲点播） | ✅ | 点歌/专辑播放=单专辑队列；「播放全部歌曲」=全库 |
@@ -77,6 +77,7 @@
 - **v0.8.2** 参考 SPICaMusic_Android 统一导航：一级 Tab 瞬时切换（无滑动），层级页面统一 push/pop（右进右出、旧页 1/4 视差、无淡入/缩放）
 - **v0.8.3** 一级 Tab 内容入场动画（Entrance.kt）、迷你条底部 spring 过渡；确认分割时间支持 01:22:23（新增单测）
 - **v0.8.4** 修复 v0.8.3 闪退（负 padding）、入场动画初始进度 bug、predictive back 默认缩小淡出（全局覆盖返回转场）
+- **v0.10.0** 归档/配置 v3 分域 bundle（manifest/library/settings/covers）；维测日志默认关闭；控制中心用自定义封面
 - **v0.9.1** 归档单文件上限 5MB→64MB（不改 schema；大库用目录归档）
 - **v0.9.0** 归档数据层 v2：DB v3（source + (source,bvid,page) 唯一键 + tracks.uid）、v2 schema/kind/features/cover hash/空语义；
   v1 归档不再兼容，旧快捷导入文本仍归一化为 v2
@@ -209,7 +210,7 @@ app/src/main/java/com/wonderlandkid/biliaudio
 | 长专辑（47:13，用于导入换封面） | `BV1Hj411t7Zn`（The Beatles - Abbey Road 整轨） |
 | v0.6 索引测试 | 音乐库现有 2 专辑/18 分曲（Fallious→F、索尼音乐中国→S 验证拼音分组） |
 | 分曲文本样例 | [docs/samples/tracklist-formats.sample.txt](samples/tracklist-formats.sample.txt)（三种格式真实样例） |
-| 归档样例 | [docs/samples/biliaudio-library-full.sample.json](samples/biliaudio-library-full.sample.json)、[biliaudio-segments.sample.json](samples/biliaudio-segments.sample.json) |
+| 归档样例 | [docs/samples/biliaudio-library-full.sample.json](samples/biliaudio-library-full.sample.json)（library.json）、[biliaudio-segments.sample.json](samples/biliaudio-segments.sample.json)、[biliaudio-settings.sample.json](samples/biliaudio-settings.sample.json)、[biliaudio-archive-manifest.sample.json](samples/biliaudio-archive-manifest.sample.json) |
 | 模拟器 | `scripts/emulator.sh start` / `scripts/screenshot.sh <name> <wait>` |
 
 ## 10. 文档索引

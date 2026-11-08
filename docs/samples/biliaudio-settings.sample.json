@@ -1,0 +1,8 @@
+{
+  "format": "biliaudio-settings",
+  "version": 1,
+  "minReaderVersion": 1,
+  "audioQuality": "AUTO",
+  "darkTheme": null,
+  "diagnosticLogsEnabled": false
+}

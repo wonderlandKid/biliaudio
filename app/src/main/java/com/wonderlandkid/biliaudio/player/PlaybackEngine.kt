@@ -202,6 +202,8 @@ class PlaybackEngine private constructor(
     override fun playAlbum(albumId: Long, startTrackIndex: Int) {
         launchOperation {
             Diag.log(TAG, "playAlbum album=$albumId startIndex=$startTrackIndex")
+            // 重新播放时从 DB 取最新专辑（换封面后控制中心 artwork 要跟着变）
+            albumCache.remove(albumId)
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
             // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
@@ -235,6 +237,7 @@ class PlaybackEngine private constructor(
     override fun playTrack(albumId: Long, trackId: Long) {
         launchOperation {
             Diag.log(TAG, "playTrack album=$albumId track=$trackId")
+            albumCache.remove(albumId)
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
             // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
@@ -444,7 +447,7 @@ class PlaybackEngine private constructor(
     /** 解析专辑音频流并预取封面（并行，封面失败不影响播放）。 */
     private suspend fun loadAlbumPlaybackData(album: Album): AlbumPlaybackData = coroutineScope {
         val streamDeferred = async { resolveStream(album) }
-        val artworkDeferred = async { loadArtwork(album.coverUrl) }
+        val artworkDeferred = async { loadArtwork(album) }
         AlbumPlaybackData(
             album = album,
             stream = streamDeferred.await(),
@@ -486,8 +489,27 @@ class PlaybackEngine private constructor(
         return stream
     }
 
-    /** 用 OkHttp 预取封面字节：通知栏 / 锁屏用 artworkData，避免图床缺 Referer 403。 */
-    private suspend fun loadArtwork(coverUrl: String): ByteArray? {
+    /**
+     * 取专辑封面字节给媒体通知/锁屏（控制中心）。
+     *
+     * 优先用户自定义封面（本地文件，能立即反映换封面）；否则回退 B 站远程封面。
+     * 远程图床需要 UA/Referer，所以这里用 OkHttp 预取再塞 artworkData。
+     */
+    private suspend fun loadArtwork(album: Album): ByteArray? {
+        val localPath = album.coverLocalPath
+        if (!localPath.isNullOrBlank()) {
+            val local = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = java.io.File(localPath)
+                    if (file.isFile && file.length() in 1..MAX_ARTWORK_BYTES.toLong()) file.readBytes() else null
+                }.getOrNull()
+            }
+            if (local != null) return local
+        }
+        return loadRemoteArtwork(album.coverUrl)
+    }
+
+    private suspend fun loadRemoteArtwork(coverUrl: String): ByteArray? {
         if (coverUrl.isBlank()) return null
         artworkCache[coverUrl]?.let { return it }
         return withContext(Dispatchers.IO) {
@@ -665,7 +687,7 @@ class PlaybackEngine private constructor(
                     ?: albumRepository.getAlbum(albumId)
                     ?: throw IllegalStateException("专辑不存在或已被删除")
                 val stream = resolveStream(album, forceRefresh = true)
-                val artwork = loadArtwork(album.coverUrl)
+                val artwork = loadArtwork(album)
                 // 只替换当前专辑的媒体项，其它专辑的队列保持不变
                 val indices = queueEntries.indices.filter { queueEntries[it].albumId == albumId }
                 if (indices.isNotEmpty()) {

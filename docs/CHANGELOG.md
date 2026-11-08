@@ -1,5 +1,24 @@
 # 版本记录
 
+## v0.10.0（2026-11-08 · tag `v0.10.0`）
+
+**归档/配置 v3：分域 bundle（manifest + library + settings + covers）；维测默认关闭；控制中心自定义封面**
+
+- 归档按域拆分，不再把整库塞进一个 JSON：
+  - 整库 = 目录 bundle：`manifest.json` + `library.json` + `settings.json`(可选) + `covers/<sha256>.<ext>`；
+  - library 只放专辑/分曲，封面只写 hash 引用；
+  - settings 独立文件，默认不覆盖本地，仅覆盖全库恢复时应用；
+  - playlists 域 schema 预留，当前导入会提示忽略；
+  - 单专辑/分割点仍支持单 JSON 分享（album 可内嵌封面）。
+- 数据层：`ArchiveBundleCodec`（manifest/hash/域校验）、`LibraryArchiveCodec` v3（library/album/segments）、
+  仓库导出/导入/自动备份/预览全部切到 bundle；单 JSON library 导入明确拒绝。
+- UI：设置页“备份与恢复”改为整库 bundle（导出到文件夹 / 从文件夹恢复）+ 导入分享文件入口；
+  移除整库单文件导出；自动备份路径改为目录 bundle。
+- 维测日志默认关闭：`AppSettings.diagnosticLogsEnabled=false`，SharedPreferences 默认 false；仍可手动开启。
+- 控制中心/锁屏封面：播放引擎与歌词视频播放器优先读取 `coverLocalPath` 自定义封面字节作为
+  MediaMetadata artworkData，换封面后媒体控制中心随之更新；无自定义封面仍回退 B 站封面。
+- 单测 126 全绿（codec/bundle/repository 测试按 v3 重写）。
+
 ## v0.9.1（2026-11-08 · tag `v0.9.1`）
 
 **归档单文件大小上限修正（数据 schema 不变）**

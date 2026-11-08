@@ -65,6 +65,9 @@ class AlbumVideoPlayer(
         /** 单次 prepare 最多记录的加载事件条数，避免日志噪音。 */
         private const val MAX_LOAD_LOGS = 3
 
+        /** 控制中心封面字节上限（与 PlaybackEngine 保持一致）。 */
+        private const val MAX_ARTWORK_BYTES = 512 * 1024
+
         /** 软件解码器名特征（诊断「首帧慢」是否因为走软解）。 */
         private val SOFTWARE_DECODER_MARKERS = listOf("c2.android", "ffmpeg", "sw.", "software")
     }
@@ -156,6 +159,12 @@ class AlbumVideoPlayer(
 
                 // 2) 注入请求头并下发播放器命令（同步耗时；真正的加载看后面的 BUFFERING/READY/load 日志）
                 videoDataSourceFactory.setDefaultRequestProperties(MediaHttp.mergeHeaders(streams.headers))
+                // 控制中心/通知封面优先用自定义封面（本地文件），否则回退 B 站远程封面
+                val localArtwork = runCatching {
+                    album.coverLocalPath?.let { path ->
+                        java.io.File(path).takeIf { it.isFile && it.length() in 1L..MAX_ARTWORK_BYTES.toLong() }?.readBytes()
+                    }
+                }.getOrNull()
                 val metadata = MediaMetadata.Builder()
                     .setTitle(album.title)
                     .setArtist(album.artist)
@@ -163,7 +172,11 @@ class AlbumVideoPlayer(
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .apply {
-                        if (album.coverUrl.isNotBlank()) setArtworkUri(Uri.parse(album.coverUrl))
+                        if (localArtwork != null) {
+                            setArtworkData(localArtwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                        } else if (album.coverUrl.isNotBlank()) {
+                            setArtworkUri(Uri.parse(album.coverUrl))
+                        }
                     }
                     .build()
                 val issuedStartMs = System.currentTimeMillis()
