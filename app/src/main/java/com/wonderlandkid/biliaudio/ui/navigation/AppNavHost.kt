@@ -200,19 +200,21 @@ fun AppNavHost() {
                     .fillMaxSize()
                     .hazeSource(hazeState)
                     .padding(innerPadding),
-                // 全部导航：纯左右滑动（无淡入淡出）；返回方向严格反向
+                // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
+                // 一级 Tab 自身无转场（见各 composable 的 None），所以底层不会“往右撤”或缩小。
                 enterTransition = { slideInFromRight() },
-                exitTransition = { slideOutToLeft() },
-                popEnterTransition = { slideInFromLeft() },
+                exitTransition = { slideOutToLeftPart() },
+                popEnterTransition = { slideInFromLeftPart() },
                 popExitTransition = { slideOutToRight() },
             ) {
                 // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
                 composable(
                     Routes.HOME,
-                    enterTransition = { tabEnter(Routes.HOME) },
-                    exitTransition = { tabExit(Routes.HOME) },
-                    popEnterTransition = { slideInFromLeft() },
-                    popExitTransition = { slideOutToRight() },
+                    // 一级 Tab 是平级页面：不做滑动/缩放（参考项目同级页面为瞬时切换）
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None },
+                    popEnterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
                         HomeScreen(
@@ -226,10 +228,10 @@ fun AppNavHost() {
                 }
                 composable(
                     Routes.LIBRARY,
-                    enterTransition = { tabEnter(Routes.LIBRARY) },
-                    exitTransition = { tabExit(Routes.LIBRARY) },
-                    popEnterTransition = { slideInFromLeft() },
-                    popExitTransition = { slideOutToRight() },
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None },
+                    popEnterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
                         LibraryScreen(
@@ -240,10 +242,10 @@ fun AppNavHost() {
                 }
                 composable(
                     Routes.SETTINGS,
-                    enterTransition = { tabEnter(Routes.SETTINGS) },
-                    exitTransition = { tabExit(Routes.SETTINGS) },
-                    popEnterTransition = { slideInFromLeft() },
-                    popExitTransition = { slideOutToRight() },
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None },
+                    popEnterTransition = { EnterTransition.None },
+                    popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
                         SettingsScreen(
@@ -348,8 +350,8 @@ fun AppNavHost() {
                 composable(
                     Routes.VIDEO,
                     enterTransition = { slideInFromRight() },
-                    exitTransition = { slideOutToLeft() },
-                    popEnterTransition = { slideInFromLeft() },
+                    exitTransition = { slideOutToLeftPart() },
+                    popEnterTransition = { slideInFromLeftPart() },
                     popExitTransition = { slideOutToRight() },
                 ) {
                     Page {
@@ -449,56 +451,31 @@ private fun Page(content: @Composable () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// 纯左右滑动转场（用户要求：不要淡入淡出，从哪来、回哪去）
+// 层级页面：统一 push/pop（Material/iOS 通用结构，无 alpha、无缩放）
+//   push：新页从右侧整页滑入；旧页向左 1/4 视差（像被压到下面）
+//   pop ：当前页向右整页滑出；上一页从左侧 1/4 回位
+//   一级 Tab 不参与转场（EnterTransition.None），避免平级页面出现方向/速度差异。
 // ---------------------------------------------------------------------------
-
-private fun tabIndex(route: String?): Int = when (route) {
-    Routes.HOME -> 0
-    Routes.LIBRARY -> 1
-    Routes.SETTINGS -> 2
-    else -> 0
-}
 
 private fun slideInFromRight(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { it }
 
-/** 返回时上一页从左侧整页推回（完整宽度，与当前页同步挤压，避免两页叠加）。 */
-private fun slideInFromLeft(): EnterTransition =
+private fun slideInFromLeftPart(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { -it }
+    ) { -it / 4 }
 
-private fun slideOutToLeft(): ExitTransition =
+private fun slideOutToLeftPart(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { -it }
+    ) { -it / 4 }
 
 private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
     ) { it }
-
-/** Tab 前进：目标序号更大 → 从右侧进入；否则从左侧进入（返回方向一致）。 */
-private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.tabEnter(
-    targetRoute: String,
-): EnterTransition {
-    val forward = tabIndex(targetRoute) >= tabIndex(initialState.destination.route)
-    return slideInHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { if (forward) it else -it }
-}
-
-private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.tabExit(
-    currentRoute: String,
-): ExitTransition {
-    val forward = tabIndex(targetState.destination.route) > tabIndex(currentRoute)
-    // 完整宽度退出：与进入页同步移动，像两张实体卡片挤压切换，不产生中间叠加
-    return slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { if (forward) -it else it }
-}
 
 // ---------------------------------------------------------------------------
 // 迷你播放条宿主
