@@ -500,7 +500,7 @@ fun VideoPreviewCard(
                             text = if (state.splitText.isBlank()) {
                                 "导入为未分割专辑"
                             } else {
-                                "导入到我的专辑"
+                                "导入到音乐库"
                             },
                         )
                     }

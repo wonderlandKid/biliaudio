@@ -26,6 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FileUpload
@@ -429,6 +432,41 @@ private fun SettingsCard(
     BiliGroup(modifier = modifier, content = content)
 }
 
+/** 设置卡片统一首行：图标 + 标题 + 副标题（或 trailing）。 */
+@Composable
+private fun SettingsHeaderRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
 /** 账号卡片：未登录 → 去登录；已登录 → 头像/昵称/退出。 */
 @Composable
 private fun AccountCard(
@@ -542,6 +580,11 @@ private fun AudioQualityCard(
     onSelect: (AudioQualityPreference) -> Unit,
 ) {
     SettingsCard {
+        SettingsHeaderRow(
+            icon = Icons.Rounded.GraphicEq,
+            title = "音质",
+            subtitle = "在线播放和缓存使用的音频档位",
+        )
         AudioQualityPreference.entries.forEachIndexed { index, preference ->
             Row(
                 modifier = Modifier
@@ -598,6 +641,11 @@ private fun DarkThemeCard(
         Triple("深色", true, "始终使用深色主题"),
     )
     SettingsCard {
+        SettingsHeaderRow(
+            icon = Icons.Rounded.DarkMode,
+            title = "深色模式",
+            subtitle = "跟随系统或固定主题",
+        )
         options.forEachIndexed { index, option ->
             val (label, value, description) = option
             val selected = darkTheme == value
@@ -641,6 +689,11 @@ private fun DarkThemeCard(
 @Composable
 private fun AboutCard() {
     SettingsCard {
+        SettingsHeaderRow(
+            icon = Icons.Rounded.Info,
+            title = "关于哔哩专辑",
+            subtitle = "版本、版权与技术栈",
+        )
         // 版本
         Row(
             modifier = Modifier
@@ -726,18 +779,10 @@ private fun BackupRestoreCard(
     onImportTreeClick: () -> Unit,
 ) {
     SettingsCard {
-        Text(
-            text = "整库备份（bundle）",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = Spacing.sm),
-        )
-        Text(
-            text = "按「manifest.json + library.json + settings.json + covers/」分域目录备份，" +
-                "可人工浏览、跨设备恢复；zip 只是传输层。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs),
+        SettingsHeaderRow(
+            icon = Icons.Rounded.Backup,
+            title = "整库备份（bundle）",
+            subtitle = "manifest + library + settings + covers 分域目录；zip 只是传输层",
         )
         SettingsActionRow(
             icon = Icons.Rounded.Save,
@@ -942,38 +987,21 @@ private fun DiagnosticsToggleCard(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     SettingsCard {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.BugReport,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "维测日志",
-                    style = MaterialTheme.typography.bodyLarge,
+        SettingsHeaderRow(
+            icon = Icons.Rounded.BugReport,
+            title = "维测日志",
+            subtitle = if (enabled) {
+                "默认关闭；开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
+            } else {
+                "已关闭：不再记录/打印诊断日志（历史日志仍可查看/导出）"
+            },
+            trailing = {
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onCheckedChange,
                 )
-                Text(
-                    text = if (enabled) {
-                        "默认关闭；开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
-                    } else {
-                        "已关闭：不再记录/打印诊断日志（历史日志仍可查看/导出）"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = enabled,
-                onCheckedChange = onCheckedChange,
-            )
-        }
+            },
+        )
     }
 }
 
@@ -990,23 +1018,11 @@ private fun UserDataBackupCard(
                 .padding(vertical = Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Rounded.Backup,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(Spacing.md))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "歌单与听歌统计备份", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "独立 JSON，不含音乐库专辑/分曲/封面/缓存",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SettingsHeaderRow(
+                icon = Icons.Rounded.Backup,
+                title = "歌单与听歌统计备份",
+                subtitle = "独立 JSON，不含音乐库专辑/分曲/封面/缓存",
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 androidx.compose.material3.OutlinedButton(
                     onClick = onExport,

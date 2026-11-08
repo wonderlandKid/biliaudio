@@ -1,43 +1,53 @@
 package com.wonderlandkid.biliaudio.ui.home
 
 import androidx.compose.runtime.Immutable
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
+import com.wonderlandkid.biliaudio.data.model.Playlist
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
+import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
-import com.wonderlandkid.biliaudio.player.PlaybackController
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlin.random.Random
+
+@Immutable
+data class HomeStatsAlbum(
+    val album: Album,
+    val listenedMs: Long,
+)
 
 /**
  * 发现页 UI 状态。
  *
- * 数据全部来自 [AlbumRepository] / [AuthRepository] 的 Flow，不写死假数据。
+ * 结构：头图 + 未登录提示 + 四个“只露前四”的听歌区块：
+ * 随机专辑 / 我的歌单 / 听歌统计 / 最近播放。
  */
 @Immutable
 data class HomeUiState(
     val isLoading: Boolean = true,
-    /** 音乐库歌曲总数 */
     val songCount: Int = 0,
-    /** 音乐库专辑总数 */
     val albumCount: Int = 0,
-    /** 最近播放的专辑（横向卡片） */
-    val recentAlbums: List<Album> = emptyList(),
-    /** 我的专辑（两列网格） */
-    val albums: List<Album> = emptyList(),
-    /** 用户自建歌单数量（发现页入口用） */
+    /** 随机专辑（最多 4 张） */
+    val randomAlbums: List<Album> = emptyList(),
+    /** 我的歌单预览（最多 4 个） */
+    val playlists: List<Playlist> = emptyList(),
     val playlistCount: Int = 0,
+    /** 听歌统计预览：按专辑累计时长取前 4 */
+    val statsAlbums: List<HomeStatsAlbum> = emptyList(),
+    /** 最近播放预览（最多 4 张，详情页展示 10 张） */
+    val recentAlbums: List<Album> = emptyList(),
     val isLoggedIn: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    /** 顶部统计行文案，空库时给引导文案。 */
     val statsText: String
         get() = when {
             isLoading -> "正在加载音乐库…"
@@ -46,15 +56,37 @@ data class HomeUiState(
         }
 }
 
-/** 发现页 ViewModel：组合专辑/歌曲/最近播放/登录态四个数据源。 */
+/** 发现页 ViewModel：组合专辑/歌曲/最近/歌单/统计/登录态。 */
 class HomeViewModel(
     albumRepository: AlbumRepository,
     authRepository: AuthRepository,
     playlistRepository: PlaylistRepository,
-    private val playbackController: PlaybackController,
+    statsRepository: PlaybackStatsRepository,
 ) : ViewModel() {
 
     private data class LibraryCounts(val songCount: Int, val albumCount: Int)
+
+    private val shuffleTick = MutableStateFlow(0)
+
+    /** 每次换一批或专辑列表变化时，用稳定随机序抽样 4 张。 */
+    private val randomAlbumsFlow = combine(albumRepository.albums, shuffleTick) { albums, tick ->
+        if (albums.size <= HOME_SECTION_LIMIT) {
+            albums
+        } else {
+            val seed = tick.toLong() * 1_000_003L + albums.size.toLong() * 31L
+            albums.shuffled(Random(seed)).take(HOME_SECTION_LIMIT)
+        }
+    }
+
+    private val statsAlbumsFlow = combine(
+        statsRepository.observeAlbumListening(HOME_SECTION_LIMIT),
+        albumRepository.albums,
+    ) { stats, albums ->
+        val albumsById = albums.associateBy { it.id }
+        stats.mapNotNull { stat ->
+            albumsById[stat.albumId]?.let { HomeStatsAlbum(it, stat.listenedMs) }
+        }.take(HOME_SECTION_LIMIT)
+    }
 
     val uiState: StateFlow<HomeUiState> = run {
         val countsFlow = combine(
@@ -64,21 +96,33 @@ class HomeViewModel(
             LibraryCounts(songCount = songs.size, albumCount = albums.size)
         }
 
-        combine(
+        val baseFlow = combine(
             albumRepository.recentAlbums,
-            albumRepository.albums,
+            randomAlbumsFlow,
             countsFlow,
             authRepository.authState,
             playlistRepository.playlists,
-        ) { recentAlbums, albums, counts, authState, playlists ->
+        ) { recentAlbums, randomAlbums, counts, authState, playlists ->
+            BaseHome(
+                recentAlbums = recentAlbums.take(HOME_SECTION_LIMIT),
+                randomAlbums = randomAlbums,
+                counts = counts,
+                isLoggedIn = authState is AuthState.LoggedIn,
+                playlists = playlists,
+            )
+        }
+
+        combine(baseFlow, statsAlbumsFlow) { base, statsAlbums ->
             HomeUiState(
                 isLoading = false,
-                songCount = counts.songCount,
-                albumCount = counts.albumCount,
-                recentAlbums = recentAlbums.take(MAX_RECENT_ALBUMS),
-                albums = albums.sortedByDescending { album -> album.createdAt },
-                playlistCount = playlists.size,
-                isLoggedIn = authState is AuthState.LoggedIn,
+                songCount = base.counts.songCount,
+                albumCount = base.counts.albumCount,
+                randomAlbums = base.randomAlbums,
+                playlists = base.playlists.take(HOME_SECTION_LIMIT),
+                playlistCount = base.playlists.size,
+                statsAlbums = statsAlbums,
+                recentAlbums = base.recentAlbums,
+                isLoggedIn = base.isLoggedIn,
             )
         }
             .catch { throwable ->
@@ -96,14 +140,21 @@ class HomeViewModel(
             )
     }
 
-    /** 「最近播放」卡片右上角播放按钮：播放最近一张专辑。 */
-    fun playRecentAlbum(albumId: Long) {
-        playbackController.playAlbum(albumId)
+    /** 随机专辑：换一批。 */
+    fun shuffleRandomAlbums() {
+        shuffleTick.update { it + 1 }
     }
 
+    private data class BaseHome(
+        val recentAlbums: List<Album>,
+        val randomAlbums: List<Album>,
+        val counts: LibraryCounts,
+        val isLoggedIn: Boolean,
+        val playlists: List<Playlist>,
+    )
+
     private companion object {
-        /** 卡片内只展示前几条，其余通过「查看全部」进入音乐库 */
-        const val MAX_RECENT_ALBUMS = 6
+        const val HOME_SECTION_LIMIT = 4
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }

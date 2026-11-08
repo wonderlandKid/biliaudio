@@ -80,6 +80,7 @@ import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
 import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
+import com.wonderlandkid.biliaudio.ui.home.RecentAlbumsScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportTab
 import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
@@ -125,6 +126,7 @@ fun AppNavHost() {
         Routes.SPLIT_EDITOR,
         Routes.PLAYLIST_DETAIL,
         Routes.STATS,
+        Routes.RECENT_ALBUMS,
     )
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
@@ -282,13 +284,15 @@ fun AppNavHost() {
                 ) {
                     Page {
                         HomeScreen(
-                            onOpenSearch = { switchTab(MainTab.LIBRARY) },
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
                             onOpenImport = { navController.navigate(Routes.IMPORT) },
-                            onOpenLibrary = { switchTab(MainTab.LIBRARY) },
                             onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
+                            onOpenPlaylist = { playlistId ->
+                                navController.navigate(Routes.playlist(playlistId))
+                            },
                             onOpenStats = { navController.navigate(Routes.STATS) },
+                            onOpenRecentAlbums = { navController.navigate(Routes.RECENT_ALBUMS) },
                         )
                     }
                 }
@@ -436,6 +440,14 @@ fun AppNavHost() {
                 composable(Routes.STATS) {
                     Page {
                         StatsScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                        )
+                    }
+                }
+                composable(Routes.RECENT_ALBUMS) {
+                    Page {
+                        RecentAlbumsScreen(
                             onBack = { navController.popBackStack() },
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                         )

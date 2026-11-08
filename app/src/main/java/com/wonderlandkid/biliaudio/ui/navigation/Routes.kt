@@ -12,6 +12,7 @@ object Routes {
     const val CACHE_MANAGEMENT = "cache_management"
     const val PLAYLISTS = "playlists"
     const val STATS = "stats"
+    const val RECENT_ALBUMS = "recent_albums"
 
     const val PLAYLIST_DETAIL = "playlist/{playlistId}"
     const val ARG_PLAYLIST_ID = "playlistId"

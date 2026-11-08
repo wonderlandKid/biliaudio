@@ -17,6 +17,13 @@
 - **T1 不再自己套 Scaffold**（底部导航/inset 由 `AppNavHost` 的 Scaffold 统一处理）；
   内容用 `BiliPageHeader` + 业务列表；**固定页头/搜索/登录卡等静态元素不做入场**，
   只有列表/内容区用 `Modifier.entrance`（发现逐项、设置逐卡、音乐库内容区）；
+- **发现页结构（v0.23.0）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块
+  「随机专辑 / 我的歌单 / 听歌统计 / 最近播放」只露前 4 条，统一用 `HomeSectionCard`
+  （`BiliGroup` + 右上角操作）；详情：
+  - 随机专辑：换一批/导入；单条打开专辑；
+  - 我的歌单：查看全部 → Playlists；
+  - 听歌统计：查看全部 → Stats；
+  - 最近播放：查看全部 → RecentAlbums（详情最多 10 张）；
 - **T2 一律用 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`）。禁止在页面里手写一行
   `Row { IconButton(back); Text(title) }` 的顶栏；
 - **T3 不使用 T1/T2 模板**：全屏、insets、关闭手势都由页面自己管；
@@ -96,6 +103,11 @@ fun BiliDetailScaffold(
 - 组内自定义内容（如统计时长条、缓存音频/视频 chips）只允许在 **BiliGroup 容器内部**做业务排版，
   不重新定义卡片背景/圆角/阴影；
 - 列表行统一复用 `TrackRow`/`SongRow`；页面壳统一 T2 模板；空态/加载态统一 `EmptyState`/`LoadingBox`。
+
+### 设置卡片首行模板
+
+设置卡片统一用 `SettingsHeaderRow`：22dp 图标 + `bodyLarge` 标题 + `bodySmall` 副标题，
+右侧可放 Switch/操作；账号头像属于身份例外。分组容器仍用 `BiliGroup`。
 
 ### 同类 Group/Item 的行为规则（v0.22.1 审计）
 

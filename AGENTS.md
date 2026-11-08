@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.22.1**（tag `v0.22.1`，2026-11-08；release commit 以 `git rev-parse v0.22.1` 为准）
+- **版本：v0.23.0**（tag `v0.23.0`，2026-11-08；release commit 以 `git rev-parse v0.23.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.22.1）
+- 单元测试：**126 个**（v0.23.0）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.22.1: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.23.0: 126 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -45,8 +45,9 @@ scripts/screenshot.sh home 8
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/大面积毛玻璃**；
    （v0.7.0 起用户明确要求：仅迷你播放条可使用 Haze 毛玻璃，其余页面保持扁平）
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **信息架构（v0.21.0）**：音乐库只做搜索；歌单/听歌统计等“听歌相关”入口放发现页
-   （发现页两张快捷卡）；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
+4. **信息架构（v0.23.0）**：音乐库只做搜索；发现页不放搜索栏，改为四个 4 条预览区块
+   （随机专辑 / 我的歌单 / 听歌统计 / 最近播放，详情从右上角进入；最近播放详情 10 张）；
+   设置卡片首行用 `SettingsHeaderRow` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
    （trackUid 关联，唯一防重复）；统计用 track_stats（播放次数+实际收听时长，5 秒批量落库）。
    歌单/统计持久化在 Room v4；**不进入音乐库归档**，通过设置 → 用户数据 →「歌单与听歌统计备份」
    独立 JSON 导出/导入（按专辑稳定键 + startMs 关联，统计恢复用 max 合并）；详见 [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md)。
@@ -101,7 +102,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.22.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.23.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
