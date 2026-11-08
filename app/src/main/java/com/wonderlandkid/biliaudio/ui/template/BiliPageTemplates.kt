@@ -19,7 +19,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.wonderlandkid.biliaudio.ui.LocalMiniPlayerSnackbarInset
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 /**
@@ -93,14 +92,7 @@ fun BiliDetailScaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = {
-            snackbarHostState?.let { state ->
-                // 迷你播放条悬浮在页面底部之上；Snackbar 需要抬到它上方，
-                // 否则会被毛玻璃遮住并在 Haze 采样里变成一块黑色。
-                SnackbarHost(
-                    hostState = state,
-                    modifier = Modifier.padding(bottom = LocalMiniPlayerSnackbarInset.current),
-                )
-            }
+            snackbarHostState?.let { SnackbarHost(it) }
         },
         topBar = {
             BiliTopBar(

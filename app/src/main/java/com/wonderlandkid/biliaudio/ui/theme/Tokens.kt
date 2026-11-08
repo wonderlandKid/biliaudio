@@ -86,4 +86,6 @@ object BiliLayout {
     val listCoverSize = 48.dp
     val listCoverCorner = 12.dp
     val contentBottomWithMiniPlayer = 96.dp
+    /** 迷你条实际占用的内容高度（悬浮层，不含底部导航/系统栏）。 */
+    val miniPlayerContentInset = 72.dp
 }

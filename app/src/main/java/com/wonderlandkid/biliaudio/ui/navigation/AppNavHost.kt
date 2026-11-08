@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -96,7 +97,7 @@ import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.stats.StatsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
-import com.wonderlandkid.biliaudio.ui.LocalMiniPlayerSnackbarInset
+import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -123,6 +124,7 @@ fun AppNavHost() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val container = rememberAppContainer()
+    val playbackState by container.playbackController.state.collectAsStateWithLifecycle()
 
     val tabRoutes = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
     val miniPlayerOnlyRoutes = setOf(
@@ -228,6 +230,21 @@ fun AppNavHost() {
         }
     }
 
+    // 全局底部安全区：
+    // - 迷你条可见时，所有页面内容整体抬到毛玻璃上方，避免最后一项被盖住；
+    // - 键盘弹出时改用 IME inset，不再叠加迷你条高度（此时迷你条本身被键盘遮住）。
+    val imeVisible = WindowInsets.isImeVisible
+    val miniPlayerContentInset = if (
+        showMiniPlayer &&
+        playbackState.currentTrack != null &&
+        playerProgress < 0.16f &&
+        !imeVisible
+    ) {
+        BiliLayout.miniPlayerContentInset
+    } else {
+        0.dp
+    }
+
     Scaffold(
         bottomBar = {
             // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
@@ -268,13 +285,6 @@ fun AppNavHost() {
             }
         },
     ) { innerPadding ->
-        // 页面内 Snackbar 的底部安全区：迷你条可见时抬到毛玻璃上方。
-        val snackbarBottomInset = if (showMiniPlayer && playerProgress < 0.16f) {
-            miniBottomPadding + Dimens.miniPlayerHeight + Spacing.sm
-        } else {
-            0.dp
-        }
-        CompositionLocalProvider(LocalMiniPlayerSnackbarInset provides snackbarBottomInset) {
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
@@ -282,7 +292,9 @@ fun AppNavHost() {
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(hazeState)
-                    .padding(innerPadding),
+                    .padding(innerPadding)
+                    .padding(bottom = miniPlayerContentInset)
+                    .imePadding(),
                 // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
                 // 一级 Tab 自身无转场（见各 composable 的 None），所以底层不会“往右撤”或缩小。
                 enterTransition = { slideInFromRight() },
@@ -599,7 +611,6 @@ fun AppNavHost() {
                     Toast.makeText(context, "再返回一次退出应用", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
         }
     }
 }

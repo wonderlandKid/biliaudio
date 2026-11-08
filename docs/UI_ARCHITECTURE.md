@@ -158,3 +158,12 @@ fun BiliDetailScaffold(
 | 正在播放 | T3 | 页面自管 |
 | 歌词视频 | T3 | 页面自管 |
 | 播放列表/封面选择/确认 | T4 | ModalBottomSheet/AlertDialog |
+
+
+### 全局底部安全区（v0.26.1）
+
+`AppNavHost` 统一给 NavHost 内容区加底部 inset：
+
+- 迷你条可见且未展开时：内容区整体上移 `BiliLayout.miniPlayerContentInset`，页面最后一项不会被 Haze 迷你条盖住；
+- 键盘弹出时：改用 `imePadding()`，并且迷你条 inset 归零，避免“迷你条 + IME”重复叠加；
+- 页面内部仍可保留自己的 contentPadding；不要再单独为 Snackbar 写迷你条避让（已由全局内容区处理）。

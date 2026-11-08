@@ -102,7 +102,7 @@ fun MultiPageTrackEditorScreen(
                     start = BiliLayout.pageHorizontal,
                     end = BiliLayout.pageHorizontal,
                     top = Spacing.sm,
-                    bottom = BiliLayout.pageBottom,
+                    bottom = BiliLayout.pageBottom + Spacing.xl,
                 ),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {

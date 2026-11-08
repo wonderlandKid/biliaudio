@@ -12,8 +12,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -49,10 +47,6 @@ inline fun <reified VM : ViewModel> appViewModel(
         },
     )
 }
-
-/** 页面内 Snackbar 需要避让的迷你播放条高度（0 = 当前页面没有迷你条）。 */
-val LocalMiniPlayerSnackbarInset: androidx.compose.runtime.ProvidableCompositionLocal<Dp> =
-    androidx.compose.runtime.staticCompositionLocalOf { 0.dp }
 
 /** 全局按压反馈：所有可点击组件统一水波纹 + 按压底色；禁用组件不触发。 */
 @OptIn(ExperimentalMaterial3Api::class)
