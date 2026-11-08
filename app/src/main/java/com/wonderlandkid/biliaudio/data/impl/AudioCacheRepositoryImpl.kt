@@ -5,6 +5,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.ResolvedStreams
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.CachedAudio
+import com.wonderlandkid.biliaudio.data.repository.CachedVideo
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +63,41 @@ class AudioCacheRepositoryImpl(
         }.getOrNull()
     }
 
+    override fun getCachedVideo(album: Album): CachedVideo? {
+        val key = keyOf(album)
+        val video = File(dir, "${key}_video.mp4")
+        val meta = File(dir, "${key}_video.properties")
+        if (!video.isFile || !meta.isFile || video.length() <= 0L) return null
+        return runCatching {
+            val props = Properties().apply { meta.inputStream().use { load(it) } }
+            CachedVideo(
+                albumId = props.getProperty("albumId")?.toLongOrNull() ?: album.id,
+                bvid = props.getProperty("bvid") ?: album.bvid,
+                cid = props.getProperty("cid")?.toLongOrNull() ?: album.cid,
+                filePath = video.absolutePath,
+                videoHeight = props.getProperty("videoHeight")?.toIntOrNull(),
+                bytes = video.length(),
+                cachedAtMs = props.getProperty("cachedAtMs")?.toLongOrNull() ?: 0L,
+            )
+        }.getOrNull()
+    }
+
+    override suspend fun cacheVideo(
+        album: Album,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ): CachedVideo = withContext(Dispatchers.IO) {
+        getCachedVideo(album)?.let { return@withContext it }
+        val key = keyOf(album)
+        val mutex = locks.getOrPut("$key:video") { Mutex() }
+        mutex.withLock {
+            getCachedVideo(album)?.let { return@withLock it }
+            val streams = streamResolver.resolve(album)
+            val videoUrl = streams.videoUrl?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("没有可用的视频流，无法缓存歌词视频")
+            downloadVideo(album, streams, videoUrl, key, onProgress)
+        }
+    }
+
     override suspend fun cache(
         album: Album,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
@@ -77,9 +113,17 @@ class AudioCacheRepositoryImpl(
     }
 
     override suspend fun remove(album: Album) = withContext(Dispatchers.IO) {
+        // 只删音频；歌词视频由 removeVideo 单独管理，避免删除音频时误删视频缓存。
         val key = keyOf(album)
         File(dir, "$key.m4a").delete()
         File(dir, "$key.properties").delete()
+        Unit
+    }
+
+    override suspend fun removeVideo(album: Album) = withContext(Dispatchers.IO) {
+        val key = keyOf(album)
+        File(dir, "${key}_video.mp4").delete()
+        File(dir, "${key}_video.properties").delete()
         Unit
     }
 
@@ -151,6 +195,76 @@ class AudioCacheRepositoryImpl(
                     filePath = target.absolutePath,
                     audioQualityId = streams.audioQualityId,
                     audioQualityLabel = streams.audioQualityLabel,
+                    bytes = target.length(),
+                    cachedAtMs = cachedAt,
+                )
+            }
+        } catch (t: Throwable) {
+            temp.delete()
+            throw t
+        }
+    }
+
+    private fun downloadVideo(
+        album: Album,
+        streams: ResolvedStreams,
+        videoUrl: String,
+        key: String,
+        onProgress: (Long, Long?) -> Unit,
+    ): CachedVideo {
+        val target = File(dir, "${key}_video.mp4")
+        val temp = File(dir, "${key}_video.part")
+        val request = Request.Builder()
+            .url(videoUrl)
+            .apply { streams.headers.forEach { (name, value) -> header(name, value) } }
+            .build()
+        temp.delete()
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IllegalStateException("视频下载失败：HTTP ${response.code}")
+                val body = response.body ?: throw IllegalStateException("视频下载失败：响应为空")
+                val total = body.contentLength().takeIf { it > 0L }
+                var downloaded = 0L
+                body.byteStream().use { input ->
+                    temp.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            downloaded += read
+                            onProgress(downloaded, total)
+                        }
+                    }
+                }
+                if (downloaded <= 0L) throw IllegalStateException("视频下载失败：文件为空")
+                if (total != null && downloaded != total) {
+                    throw IllegalStateException("视频下载不完整（$downloaded/$total 字节），请重试")
+                }
+                if (!temp.renameTo(target)) {
+                    temp.copyTo(target, overwrite = true)
+                    temp.delete()
+                }
+                val cachedAt = System.currentTimeMillis()
+                val props = Properties().apply {
+                    setProperty("albumId", album.id.toString())
+                    setProperty("bvid", album.bvid)
+                    setProperty("cid", album.cid.toString())
+                    setProperty("videoHeight", streams.videoHeight?.toString().orEmpty())
+                    setProperty("cachedAtMs", cachedAt.toString())
+                }
+                File(dir, "${key}_video.properties").outputStream().use { props.store(it, "BiliAudio video cache") }
+                Diag.log(
+                    "VideoCache",
+                    "cached album=${album.id} bvid=${album.bvid} cid=${album.cid} " +
+                        "height=${streams.videoHeight} bytes=${target.length()}",
+                )
+                return CachedVideo(
+                    albumId = album.id,
+                    bvid = album.bvid,
+                    cid = album.cid,
+                    filePath = target.absolutePath,
+                    videoHeight = streams.videoHeight,
                     bytes = target.length(),
                     cachedAtMs = cachedAt,
                 )

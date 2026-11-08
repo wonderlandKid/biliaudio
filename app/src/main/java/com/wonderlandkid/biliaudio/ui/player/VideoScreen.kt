@@ -3,6 +3,7 @@ package com.wonderlandkid.biliaudio.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -149,22 +150,27 @@ fun VideoScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 进入/退出全屏：隐藏系统栏 + 保持屏幕常亮；离开页面时恢复系统栏
+    // 进入/退出全屏：自动横屏 + 隐藏系统栏 + 保持屏幕常亮；离开页面时恢复
     DisposableEffect(isFullscreen) {
-        val window = context.findActivity()?.window
+        val activity = context.findActivity()
+        val window = activity?.window
         if (window != null) {
             val barsController = WindowCompat.getInsetsController(window, view)
             if (isFullscreen) {
+                // 自动进入横屏；退出全屏恢复系统方向（竖屏使用时会转回竖屏）
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 barsController.hide(WindowInsetsCompat.Type.systemBars())
                 barsController.systemBarsBehavior =
                     WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 barsController.show(WindowInsetsCompat.Type.systemBars())
             }
         }
         onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             if (window != null) {
                 WindowCompat.getInsetsController(window, view).show(WindowInsetsCompat.Type.systemBars())

@@ -1,8 +1,5 @@
 package com.wonderlandkid.biliaudio.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,10 +20,19 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
@@ -60,12 +67,7 @@ fun TrackRow(
     ) {
         when {
             leading != null -> leading()
-            isCurrent && isPlaying -> Icon(
-                imageVector = Icons.Rounded.GraphicEq,
-                contentDescription = "正在播放",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
+            isCurrent -> PlayingIndicator(isPlaying = isPlaying)
             index != null -> Text(
                 text = (index + 1).toString(),
                 style = MaterialTheme.typography.bodyMedium,
@@ -104,6 +106,78 @@ fun TrackRow(
                 text = TimeUtils.formatDuration(durationMs),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * 正在播放的均衡器指示器：
+ * - 播放中：三根柱子错峰起伏；
+ * - 暂停：保留静态柱，避免暂停后当前曲目突然消失成序号（列表里“看不出在播哪首”）。
+ */
+@Composable
+private fun PlayingIndicator(isPlaying: Boolean, modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.primary
+    if (!isPlaying) {
+        EqualizerBars(
+            color = color.copy(alpha = 0.7f),
+            heights = listOf(0.42f, 0.65f, 0.5f),
+            modifier = modifier,
+        )
+        return
+    }
+    val transition = rememberInfiniteTransition(label = "playingIndicator")
+    val h1 by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 420, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "bar1",
+    )
+    val h2 by transition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 520, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "bar2",
+    )
+    val h3 by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "bar3",
+    )
+    EqualizerBars(color = color, heights = listOf(h1, h2, h3), modifier = modifier)
+}
+
+@Composable
+private fun EqualizerBars(
+    color: Color,
+    heights: List<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .size(20.dp)
+            .semantics { contentDescription = "正在播放" },
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        heights.forEach { fraction ->
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight(fraction.coerceIn(0.15f, 1f))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color),
             )
         }
     }

@@ -486,7 +486,9 @@ fun AppNavHost() {
                     onDispose { videoViewModelStore.viewModelStore.clear() }
                 }
                 CompositionLocalProvider(LocalViewModelStoreOwner provides videoViewModelStore) {
-                    Page(modifier = Modifier.padding(innerPadding)) {
+                    // 视频页自己处理 systemBars inset；不要再叠加 Scaffold innerPadding，
+                    // 否则视频页顶部会留出一条浅色边。
+                    Page {
                         VideoScreen(onBack = { videoOpen = false })
                     }
                 }

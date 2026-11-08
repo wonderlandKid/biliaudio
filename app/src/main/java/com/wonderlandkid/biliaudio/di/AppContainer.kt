@@ -111,6 +111,7 @@ class AppContainer(context: Context) {
         AlbumVideoPlayer(
             context = context,
             streamResolver = streamResolver,
+            audioCacheRepository = audioCacheRepository,
             scope = appScope,
         )
 

@@ -9,6 +9,7 @@ import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.CachedAudio
+import com.wonderlandkid.biliaudio.data.repository.CachedVideo
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -48,6 +49,10 @@ data class AlbumDetailUiState(
     val isCaching: Boolean = false,
     /** 缓存进度 0..1（总大小未知时 null） */
     val cacheProgress: Float? = null,
+    /** 本专辑已缓存的歌词视频（null = 未缓存） */
+    val cachedVideo: CachedVideo? = null,
+    val isCachingVideo: Boolean = false,
+    val videoCacheProgress: Float? = null,
     /** 删除成功后由页面收口返回上一页 */
     val deleted: Boolean = false,
     /** 一次性提示（Snackbar） */
@@ -89,13 +94,15 @@ class AlbumDetailViewModel(
                     }
                 }
                 .collect { albumWithTracks ->
-                    val cached = albumWithTracks?.album?.let(audioCacheRepository::getCached)
+                    val cachedAudio = albumWithTracks?.album?.let(audioCacheRepository::getCached)
+                    val cachedVideo = albumWithTracks?.album?.let(audioCacheRepository::getCachedVideo)
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
                             album = albumWithTracks?.album,
                             tracks = albumWithTracks?.tracks.orEmpty().sortedBy { track -> track.startMs },
-                            cachedAudio = cached,
+                            cachedAudio = cachedAudio,
+                            cachedVideo = cachedVideo,
                         )
                     }
                 }
@@ -173,6 +180,53 @@ class AlbumDetailViewModel(
         }
     }
 
+    /**
+     * 更多菜单 → 缓存/删除歌词视频。
+     *
+     * 视频缓存的是整段原始视频（不是按曲目切段），文件可能很大；UI 层负责先弹确认。
+     */
+    fun toggleVideoCache() {
+        val album = _uiState.value.album ?: return
+        if (_uiState.value.isCachingVideo) return
+        viewModelScope.launch {
+            if (_uiState.value.cachedVideo != null) {
+                audioCacheRepository.removeVideo(album)
+                _uiState.update { it.copy(cachedVideo = null, message = "已删除歌词视频缓存") }
+                return@launch
+            }
+            _uiState.update { it.copy(isCachingVideo = true, videoCacheProgress = 0f) }
+            try {
+                val cached = audioCacheRepository.cacheVideo(album) { downloaded, total ->
+                    val progress = if (total != null && total > 0L) {
+                        downloaded.toFloat() / total.toFloat()
+                    } else {
+                        null
+                    }
+                    _uiState.update { it.copy(videoCacheProgress = progress) }
+                }
+                val size = android.text.format.Formatter.formatShortFileSize(appContext, cached.bytes)
+                _uiState.update {
+                    it.copy(
+                        isCachingVideo = false,
+                        videoCacheProgress = null,
+                        cachedVideo = cached,
+                        message = "已缓存歌词视频（${cached.videoHeight?.let { "${it}P" } ?: "视频"} · $size）",
+                    )
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        isCachingVideo = false,
+                        videoCacheProgress = null,
+                        message = "视频缓存失败：${t.message ?: "未知错误"}",
+                    )
+                }
+            }
+        }
+    }
+
     /** 更多菜单 → 刷新视频信息（标题/艺术家/封面/时长/分 P 信息）。 */
     fun refreshVideoInfo() {
         val album = _uiState.value.album ?: return
@@ -211,7 +265,10 @@ class AlbumDetailViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isDeleting = true) }
             try {
-                _uiState.value.album?.let { album -> audioCacheRepository.remove(album) }
+                _uiState.value.album?.let { album ->
+                    audioCacheRepository.remove(album)
+                    audioCacheRepository.removeVideo(album)
+                }
                 albumRepository.deleteAlbum(albumId)
                 _uiState.update { it.copy(isDeleting = false, deleted = true) }
             } catch (throwable: Exception) {

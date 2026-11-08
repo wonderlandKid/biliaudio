@@ -10,6 +10,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
@@ -18,6 +19,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import com.wonderlandkid.biliaudio.data.model.Album
+import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
@@ -50,6 +52,7 @@ import java.io.IOException
 class AlbumVideoPlayer(
     context: Context,
     private val streamResolver: MediaStreamResolver,
+    private val audioCacheRepository: AudioCacheRepository,
     private val scope: CoroutineScope,
 ) : AlbumVideoController {
 
@@ -75,8 +78,14 @@ class AlbumVideoPlayer(
     private val appContext: Context = context.applicationContext
     private val httpClient: OkHttpClient = MediaHttp.createClient()
 
-    /** 视频数据源（同一时刻只有一路视频流，直接在每次解析后设置请求头即可）。 */
-    private val videoDataSourceFactory = OkHttpDataSource.Factory(httpClient)
+    /** 视频 HTTP 数据源（在线流需要按解析结果注入 UA/Referer/Cookie）。 */
+    private val httpVideoDataSourceFactory = OkHttpDataSource.Factory(httpClient)
+
+    /** 视频数据源：在线走 http(s)，缓存走 file://。 */
+    private val videoDataSourceFactory = DefaultDataSource.Factory(
+        appContext,
+        httpVideoDataSourceFactory,
+    )
 
     private var exoPlayer: ExoPlayer? = null
     private var resolveJob: Job? = null
@@ -132,33 +141,49 @@ class AlbumVideoPlayer(
         resolveJob?.cancel()
         resolveJob = scope.launch {
             try {
-                // 1) 解析流（数据层有缓存，通常几十 ms 内返回；数据层自身会打 Resolver 日志）
+                // 1) 优先本地歌词视频缓存；没有缓存才联网解析
+                val cachedVideo = audioCacheRepository.getCachedVideo(album)
                 val resolveStartMs = System.currentTimeMillis()
-                val streams = streamResolver.resolve(album)
-                val resolveCostMs = System.currentTimeMillis() - resolveStartMs
+                val videoUrl: String
+                val videoHeight: Int?
+                val requestHeaders: Map<String, String>
+                if (cachedVideo != null) {
+                    videoUrl = Uri.fromFile(java.io.File(cachedVideo.filePath)).toString()
+                    videoHeight = cachedVideo.videoHeight
+                    requestHeaders = emptyMap()
+                    resolveElapsedMs = System.currentTimeMillis() - resolveStartMs
+                    currentVideoHost = "local-cache"
+                    Diag.log(
+                        TAG,
+                        "VIDEO CACHE HIT album=${album.id} bytes=${cachedVideo.bytes} " +
+                            "height=${videoHeight?.let { "${it}p" } ?: "-"}",
+                    )
+                } else {
+                    val streams = streamResolver.resolve(album)
+                    videoUrl = streams.videoUrl?.takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException(PlayerErrorMessages.VIDEO_STREAM_UNAVAILABLE)
+                    videoHeight = streams.videoHeight
+                    requestHeaders = streams.headers
+                    resolveElapsedMs = System.currentTimeMillis() - resolveStartMs
+                    currentVideoHost = runCatching { Uri.parse(videoUrl).host }.getOrNull().orEmpty()
+                    Diag.log(
+                        TAG,
+                        "resolve DONE in ${resolveElapsedMs}ms audio=${streams.audioQualityLabel}(id=${streams.audioQualityId}) " +
+                            "video=${videoHeight?.let { "${it}p" } ?: "-"} host=$currentVideoHost",
+                    )
+                }
                 if (session != prepareSession) return@launch
-
-                val videoUrl = streams.videoUrl?.takeIf { it.isNotBlank() }
-                    ?: throw IllegalStateException(PlayerErrorMessages.VIDEO_STREAM_UNAVAILABLE)
-                val host = runCatching { Uri.parse(videoUrl).host }.getOrNull().orEmpty()
-                resolveElapsedMs = resolveCostMs
-                currentVideoHost = host
-                Diag.log(
-                    TAG,
-                    "resolve DONE in ${resolveCostMs}ms audio=${streams.audioQualityLabel}(id=${streams.audioQualityId}) " +
-                        "video=${streams.videoHeight?.let { "${it}p" } ?: "-"} host=$host",
-                )
                 updateIfCurrent(session) {
                     it.copy(
                         albumId = album.id,
                         phase = VideoPhase.PREPARING,
-                        videoHeight = streams.videoHeight,
+                        videoHeight = videoHeight,
                         error = null,
                     )
                 }
 
                 // 2) 注入请求头并下发播放器命令（同步耗时；真正的加载看后面的 BUFFERING/READY/load 日志）
-                videoDataSourceFactory.setDefaultRequestProperties(MediaHttp.mergeHeaders(streams.headers))
+                httpVideoDataSourceFactory.setDefaultRequestProperties(MediaHttp.mergeHeaders(requestHeaders))
                 // 控制中心/通知封面优先用自定义封面（本地文件），否则回退 B 站远程封面
                 val localArtwork = runCatching {
                     album.coverLocalPath?.let { path ->
@@ -205,7 +230,7 @@ class AlbumVideoPlayer(
                         albumId = album.id,
                         phase = if (playerState == Player.STATE_READY) VideoPhase.READY else it.phase,
                         isPrepared = playerState == Player.STATE_READY,
-                        videoHeight = it.videoHeight ?: streams.videoHeight,
+                        videoHeight = it.videoHeight ?: videoHeight,
                         error = null,
                     )
                 }

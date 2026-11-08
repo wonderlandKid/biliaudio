@@ -3,6 +3,7 @@ package com.wonderlandkid.biliaudio.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,6 +63,7 @@ import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -257,10 +260,24 @@ private fun NowPlayingBody(
             contentAlignment = Alignment.Center,
         ) {
             val coverSize = minOf(maxWidth * 0.82f, maxHeight)
+            // 暂停时封面轻微缩小，播放时恢复；比“只换按钮图标”更有播放/暂停的体感。
+            val coverScale by animateFloatAsState(
+                targetValue = if (state.isPlaying) 1f else 0.92f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = BiliMotion.Medium2,
+                    easing = BiliMotion.EmphasizedDecelerate,
+                ),
+                label = "coverScale",
+            )
             // 封面优先用本机自定义封面（coverLocalPath），否则回退 B 站远程图
             CoverImage(
                 url = entry?.coverModel(),
-                modifier = Modifier.size(coverSize),
+                modifier = Modifier
+                    .size(coverSize)
+                    .graphicsLayer {
+                        scaleX = coverScale
+                        scaleY = coverScale
+                    },
                 cornerRadius = 22.dp,
             )
         }
