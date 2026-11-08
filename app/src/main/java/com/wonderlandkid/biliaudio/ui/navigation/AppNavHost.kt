@@ -112,11 +112,13 @@ fun AppNavHost() {
     val systemBottomInset = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
-    val miniBottomPadding: Dp by animateDpAsState(
+    val animatedMiniBottomPadding: Dp by animateDpAsState(
         targetValue = if (showChrome) with(density) { bottomBarHeightPx.toDp() } else systemBottomInset,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 500f),
+        animationSpec = spring(dampingRatio = 1f, stiffness = 500f),
         label = "miniBottomPadding",
     )
+    // spring 不能出现过冲：padding 为负会直接抛 IllegalArgumentException（真机 v0.8.3 闪退根因）
+    val miniBottomPadding: Dp = animatedMiniBottomPadding.coerceAtLeast(0.dp)
 
     // ---------------- 播放页连续展开状态 ----------------
     val scope = rememberCoroutineScope()
@@ -219,6 +221,11 @@ fun AppNavHost() {
                 exitTransition = { slideOutToLeftPart() },
                 popEnterTransition = { slideInFromLeftPart() },
                 popExitTransition = { slideOutToRight() },
+                // 关键：Navigation Compose 默认的「预测式返回」是 scaleOut(0.7)+fade，
+                // 会在系统返回手势/返回键时把页面缩小淡出（用户看到的“缩小退出”）。
+                // 这里统一覆盖为与普通返回相同的整页右滑，彻底去掉该老动画。
+                predictivePopEnterTransition = { slideInFromLeftPart() },
+                predictivePopExitTransition = { slideOutToRight() },
             ) {
                 // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
                 composable(

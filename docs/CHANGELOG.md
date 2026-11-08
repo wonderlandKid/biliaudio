@@ -1,5 +1,21 @@
 # 版本记录
 
+## v0.8.4（2026-11-08 · tag `v0.8.4`）
+
+**修复 v0.8.3 闪退 / 列表入场不统一 / 系统返回的缩小淡出**
+
+- **闪退根因修复**：进入非一级页面时，迷你条底部 offset 的 spring 动画在过冲时会给出负 padding，
+  Android 直接抛 `IllegalArgumentException: Padding must be non-negative`（真机堆栈已确认）。
+  修复：`animateDpAsState` 改为无过冲 spring（dampingRatio=1）+ `coerceAtLeast(0.dp)` 兜底；
+- **列表入场不统一**：`Modifier.entrance` 在 `play=false` 时初始进度是 1，之后 `play=true` 从 1→1 无动画；
+  发现/音乐库因此没有入场效果，设置页（默认 play=true）正常。修复为始终从 0 开始，发现/音乐库/设置
+  以及音乐库内部 Tab 现在都会播放「淡入 + 上浮」入场；
+- **“缩小退出”根因修复**：navigation-compose 2.10.2 的默认 **预测式返回（predictive pop）** 是
+  `scaleOut(0.7f)`！系统返回手势/返回键会触发它，导致音乐库→艺术家、专辑等页面退出时缩小淡出。
+  已在 NavHost 全局覆盖 `predictivePopEnterTransition` / `predictivePopExitTransition` 为与普通返回一致的
+  整页右滑，所有页面统一；代码里不再有页面级 scale/fade 转场（仅视频控件等局部显隐保留 fade）。
+- 单测保持 152 全绿。
+
 ## v0.8.3（2026-11-08 · tag `v0.8.3`）
 
 **一级 Tab 内容入场动画 + 迷你条底部位置平滑过渡 + 分割时间确认支持 1 小时以上**

@@ -32,8 +32,11 @@ fun Modifier.entrance(
     play: Boolean = true,
     replayKey: Int = 0,
 ): Modifier = composed {
+    // 始终从 0 开始：`play` 在页面首帧后才变 true 时仍能播放完整入场。
+    // （v0.8.3 的 bug：play=false 时初始化为 1，之后 play=true 动画从 1→1 无效果，
+    //   所以发现/音乐库没有列表入场，而设置页因为直接用默认 play=true 才有。）
     val progress = remember(replayKey) {
-        Animatable(if (play) 0f else 1f)
+        Animatable(0f)
     }
     LaunchedEffect(play, replayKey) {
         if (play) {

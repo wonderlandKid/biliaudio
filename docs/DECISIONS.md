@@ -418,3 +418,26 @@
   - 分割时间：`parseTimeToMs`/`SplitTextParser` 已支持 `h:mm:ss`；补充 `01:22:23` 单测（4,943,000ms）。
 - **影响**：Tab 切换更柔和；页面层级切换时迷你条位置连续；长专辑（>1h）可直接用 `01:22:23` 格式分割。
 
+---
+
+## D32 修复 v0.8.3 闪退、入场不统一与 predictive back 缩小退出（v0.8.4）
+
+- **日期**：2026-11-08
+- **问题**：
+  1. 发现→Abbey Road 必闪退（真机堆栈 `IllegalArgumentException: Padding must be non-negative`）；
+  2. 发现/音乐库来回切没有列表入场，设置页和音乐库内部 Tab 有（不统一）；
+  3. 音乐库→艺术家→The Beatles 等页面退出仍然缩小淡出；需审计其他页面同类老动画。
+- **根因**：
+  1. v0.8.3 为迷你条底部 offset 加了 `animateDpAsState` + 有回弹 spring，过渡中 padding 可能为负，
+     而 Compose 的非负 padding 断言直接崩溃；进入非一级页面正好触发该 offset 变化；
+  2. `Modifier.entrance` 在 `play=false` 时把动画初始进度设为 1，之后 `play=true` 时动画从 1→1，
+     所以用 `rememberPageEntrancePlay()` 的发现/音乐库没有入场；设置页用默认 `play=true` 所以正常；
+  3. navigation-compose 2.10.2 的默认 **predictivePopExitTransition = scaleOut(0.7f)**（Android 实际实现），
+     系统返回手势/返回键触发该默认预测动画，表现为页面原地缩小淡出；我们只覆盖了普通 pop 转场。
+- **决策**：
+  - 迷你条 offset 改无回弹 spring（dampingRatio=1）并 `coerceAtLeast(0.dp)` 兜底；
+  - `entrance` 初始进度固定 0，`play` 从 false→true 时仍能完整播放；
+  - NavHost 全局覆盖 `predictivePopEnterTransition`/`predictivePopExitTransition` 为整页滑动，
+    与普通 pop 一致；这样所有页面（艺术家/专辑/导入/设置子页等）都不再走系统默认的 scaleOut 老动画。
+- **影响**：修复闪退；一级 Tab 入场统一；所有页面返回不再缩小淡出。仅视频播放控件的局部 fade 保留（内容层，不是页面转场）。
+
