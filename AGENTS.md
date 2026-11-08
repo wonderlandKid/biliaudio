@@ -78,7 +78,8 @@ scripts/screenshot.sh home 8
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v2 格式规范（当前 implements：identity/kind/cover/空语义）** |
-| [docs/ARCHIVE_SCHEMA_V2.md](docs/ARCHIVE_SCHEMA_V2.md) | 归档 v2 设计与兼容策略（已实施） |
+| [docs/ARCHIVE_SCHEMA_V2.md](docs/ARCHIVE_SCHEMA_V2.md) | 归档 v2 设计与兼容策略（已实施，v3 布局方案见下一行） |
+| [docs/ARCHIVE_LAYOUT_V3.md](docs/ARCHIVE_LAYOUT_V3.md) | **归档/配置布局 v3 提案（library/playlists/settings/covers 分域 + manifest bundle）** |
 | [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md) | 批量导入与分割点文本格式（三种粘贴格式） |
 | [docs/samples/](docs/samples/) | 归档示例、分割点文本真实样例 |
 | [docs/screenshots/](docs/screenshots/) | 模拟器/真机走查截图 |
