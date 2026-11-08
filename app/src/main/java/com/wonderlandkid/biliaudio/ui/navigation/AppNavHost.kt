@@ -10,17 +10,24 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,20 +56,22 @@ import com.wonderlandkid.biliaudio.ui.rememberAppContainer
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 /**
- * 应用导航壳（v0.6.2 动效重写，依据 Material Design 3 官方 motion 规范）。
+ * 应用导航壳（v0.7.0）。
  *
- * 转场系统（见 docs 与 ui/theme/Motion.kt）：
- * - **顶级 Tab**（发现/音乐库/设置）→ Material **Fade through**：旧页 100ms 淡出，新页延后 100ms
- *   以 200ms 淡入并从 92% 放大到 100%，共 300ms（无重叠、不出现两页同时清晰叠影）；
- * - **层级页面**（专辑/分曲/艺术家/导入/登录/设置子页等）→ Material **Shared axis X**：
- *   旧页 100ms 淡出并左移 30dp，新页延后 100ms 以 200ms 淡入并从右侧 30dp 回位，共 300ms；
- * - **播放页**（迷你条向上展开）→ **Shared axis Y**（垂直 30dp + 相同 100/200ms 淡入淡出）；
- * - **歌词页**（沉浸式覆盖）→ **Fade**（200/100ms）；
- * - 页面内容不再叠加自定义淡入，避免双重动画与「先透明后闪白」；Tab 不透明叠影问题由此消除。
+ * 布局：
+ * - 底部导航仍由 Scaffold bottomBar 承载（内容区域在其上方）；
+ * - **迷你播放条改为悬浮内容层**（Scaffold 内容区底部对齐），因此可以盖在列表之上，
+ *   并使用 Haze backdrop blur 做“毛玻璃”质感（HazeState 由 NavHost 的 hazeSource 提供背景采样）；
+ * - 播放页/歌词页沉浸式，无底部 chrome。
  *
- * @see BiliMotion 动效 token（M3 Emphasized 曲线 + duration token）
+ * 动效（Material Design 3 Motion，见 ui/theme/Motion.kt）：
+ * - Tab：Fade through（400ms：旧页 200ms 淡出、新页延迟 100ms 以 300ms 淡入并 94%→100%）；
+ * - 层级页面：Shared axis X（400ms、屏幕 24% 横向位移 + 淡入淡出，进入/返回严格对称）；
+ * - 播放页：Shared axis Y（垂直 14% 屏高）；歌词页：Fade。
  */
 @Composable
 fun AppNavHost() {
@@ -77,9 +86,17 @@ fun AppNavHost() {
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
     val isImmersive = currentRoute in immersiveRoutes
+    val showMiniPlayer = (showChrome || showMiniPlayerOnly) && !isImmersive
 
     // 迷你播放条收起状态：下滑收起、上滑/点击展开；打开播放页时恢复展开
     var miniPlayerCollapsed by rememberSaveable { mutableStateOf(false) }
+
+    // Haze 背景采样：NavHost 作为 source，悬浮迷你条作为 effect
+    val hazeState = rememberHazeState()
+
+    // Scaffold 内容层可能延伸到屏幕底部（bottomBar 只是 overlay），悬浮迷你条需要自己避开底部导航
+    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -100,197 +117,217 @@ fun AppNavHost() {
         }
     }
 
-    // Shared axis 平移量：Material 规范 30dp（按当前 density 换算 px）
-    val axisOffsetPx = with(LocalDensity.current) { BiliMotion.AxisTranslationDp.dp.roundToPx() }
+    val configuration = LocalConfiguration.current
+    // Shared axis X 位移：屏幕宽度的 24%（进入/返回对称）；播放页 Y 轴：屏高 14%
+    val axisOffsetPx = with(density) {
+        (configuration.screenWidthDp * BiliMotion.AxisTranslationFraction).dp.roundToPx()
+    }
+    val verticalOffsetPx = with(density) {
+        (configuration.screenHeightDp * BiliMotion.AxisVerticalFraction).dp.roundToPx()
+    }
 
     Scaffold(
         bottomBar = {
-            if (showChrome || showMiniPlayerOnly) {
-                Column {
-                    // 播放状态在 MiniPlayerHost 内部订阅：避免播放进度 tick 触发整个导航壳重组
-                    MiniPlayerHost(
-                        playbackController = container.playbackController,
-                        collapsed = miniPlayerCollapsed,
-                        onCollapsedChange = { miniPlayerCollapsed = it },
-                        onOpenPlayer = {
-                            miniPlayerCollapsed = false
-                            navController.navigate(Routes.PLAYER)
-                        },
+            if (showChrome) {
+                Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
+                    BiliBottomBar(
+                        current = currentTab,
+                        onSelect = { switchTab(it) },
                     )
-                    if (showChrome) {
-                        BiliBottomBar(
-                            current = currentTab,
-                            onSelect = { switchTab(it) },
-                        )
-                    }
                 }
             }
         },
     ) { innerPadding ->
-        val contentPadding =
-            if (isImmersive) PaddingValues(0.dp) else innerPadding
-
-        NavHost(
-            navController = navController,
-            startDestination = Routes.HOME,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding),
-            // 层级页面：Material Shared axis X（退出淡出 100ms / 进入淡入 200ms 延迟 100ms + 30dp 平移）
-            enterTransition = { sharedAxisXEnter(axisOffsetPx) },
-            exitTransition = { sharedAxisXExit(axisOffsetPx) },
-            popEnterTransition = { sharedAxisXPopEnter(axisOffsetPx) },
-            popExitTransition = { sharedAxisXPopExit(axisOffsetPx) },
-        ) {
-            // ---------------- Tabs（Fade through） ----------------
-            composable(
-                Routes.HOME,
-                enterTransition = { fadeThroughEnter() },
-                exitTransition = { fadeThroughExit() },
-                popEnterTransition = { fadeThroughEnter() },
-                popExitTransition = { fadeThroughExit() },
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.HOME,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(hazeState)
+                    .padding(innerPadding),
+                // 层级页面：Material Shared axis X（进入/返回对称的横向位移 + 分段淡入淡出）
+                enterTransition = { sharedAxisXEnter(axisOffsetPx) },
+                exitTransition = { sharedAxisXExit(axisOffsetPx) },
+                popEnterTransition = { sharedAxisXPopEnter(axisOffsetPx) },
+                popExitTransition = { sharedAxisXPopExit(axisOffsetPx) },
             ) {
-                HomeScreen(
-                    onOpenSearch = { switchTab(MainTab.LIBRARY) },
-                    onOpenAlbum = { albumId ->
-                        navController.navigate(Routes.album(albumId))
-                    },
-                    onOpenLogin = { navController.navigate(Routes.LOGIN) },
-                    onOpenImport = { navController.navigate(Routes.IMPORT) },
-                    onOpenLibrary = { switchTab(MainTab.LIBRARY) },
-                )
-            }
-            composable(
-                Routes.LIBRARY,
-                enterTransition = { fadeThroughEnter() },
-                exitTransition = { fadeThroughExit() },
-                popEnterTransition = { fadeThroughEnter() },
-                popExitTransition = { fadeThroughExit() },
-            ) {
-                LibraryScreen(
-                    onOpenAlbum = { albumId ->
-                        navController.navigate(Routes.album(albumId))
-                    },
-                    onOpenArtist = { artistName ->
-                        navController.navigate(Routes.artist(artistName))
-                    },
-                )
-            }
-            composable(
-                Routes.SETTINGS,
-                enterTransition = { fadeThroughEnter() },
-                exitTransition = { fadeThroughExit() },
-                popEnterTransition = { fadeThroughEnter() },
-                popExitTransition = { fadeThroughExit() },
-            ) {
-                SettingsScreen(
-                    onOpenLogin = { navController.navigate(Routes.LOGIN) },
-                    onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
-                    onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
-                )
+                // ---------------- Tabs（Fade through） ----------------
+                composable(
+                    Routes.HOME,
+                    enterTransition = { fadeThroughEnter() },
+                    exitTransition = { fadeThroughExit() },
+                    popEnterTransition = { fadeThroughEnter() },
+                    popExitTransition = { fadeThroughExit() },
+                ) {
+                    HomeScreen(
+                        onOpenSearch = { switchTab(MainTab.LIBRARY) },
+                        onOpenAlbum = { albumId ->
+                            navController.navigate(Routes.album(albumId))
+                        },
+                        onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                        onOpenImport = { navController.navigate(Routes.IMPORT) },
+                        onOpenLibrary = { switchTab(MainTab.LIBRARY) },
+                    )
+                }
+                composable(
+                    Routes.LIBRARY,
+                    enterTransition = { fadeThroughEnter() },
+                    exitTransition = { fadeThroughExit() },
+                    popEnterTransition = { fadeThroughEnter() },
+                    popExitTransition = { fadeThroughExit() },
+                ) {
+                    LibraryScreen(
+                        onOpenAlbum = { albumId ->
+                            navController.navigate(Routes.album(albumId))
+                        },
+                        onOpenArtist = { artistName ->
+                            navController.navigate(Routes.artist(artistName))
+                        },
+                    )
+                }
+                composable(
+                    Routes.SETTINGS,
+                    enterTransition = { fadeThroughEnter() },
+                    exitTransition = { fadeThroughExit() },
+                    popEnterTransition = { fadeThroughEnter() },
+                    popExitTransition = { fadeThroughExit() },
+                ) {
+                    SettingsScreen(
+                        onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                        onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
+                        onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                    )
+                }
+
+                // ---------------- 艺术家（Shared axis X） ----------------
+                composable(
+                    route = Routes.ARTIST,
+                    arguments = listOf(navArgument(Routes.ARG_ARTIST_NAME) { type = NavType.StringType }),
+                ) { entry ->
+                    val artistName = entry.arguments?.getString(Routes.ARG_ARTIST_NAME).orEmpty()
+                    ArtistDetailScreen(
+                        artistName = android.net.Uri.decode(artistName),
+                        onBack = { navController.popBackStack() },
+                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                    )
+                }
+
+                // ---------------- 专辑（Shared axis X） ----------------
+                composable(
+                    route = Routes.ALBUM,
+                    arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
+                ) { entry ->
+                    val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
+                    AlbumDetailScreen(
+                        albumId = albumId,
+                        onBack = { navController.popBackStack() },
+                        onOpenSplitEditor = { id -> navController.navigate(Routes.splitEditor(id)) },
+                    )
+                }
+                composable(
+                    route = Routes.SPLIT_EDITOR,
+                    arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
+                ) { entry ->
+                    val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
+                    SplitEditorScreen(
+                        albumId = albumId,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+
+                // ---------------- 导入 / 登录 / 诊断（Shared axis X） ----------------
+                composable(Routes.IMPORT) {
+                    ImportScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { albumId ->
+                            navController.popBackStack()
+                            navController.navigate(Routes.album(albumId))
+                        },
+                    )
+                }
+                composable(Routes.SEARCH) {
+                    ImportScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { albumId ->
+                            navController.popBackStack()
+                            navController.navigate(Routes.album(albumId))
+                        },
+                        initialTab = ImportTab.SEARCH,
+                    )
+                }
+                composable(Routes.IMPORT_ARCHIVE) {
+                    ImportScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { albumId ->
+                            navController.popBackStack()
+                            navController.navigate(Routes.album(albumId))
+                        },
+                        initialTab = ImportTab.BATCH,
+                    )
+                }
+                composable(Routes.DIAGNOSTICS) {
+                    DiagnosticsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.LOGIN) {
+                    LoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onLoggedIn = { navController.popBackStack() },
+                    )
+                }
+
+                // ---------------- 播放 / 歌词页（沉浸式，页面自行处理 insets） ----------------
+                composable(
+                    Routes.PLAYER,
+                    // 从迷你条向上展开：Shared axis Y
+                    enterTransition = { sharedAxisYEnter(verticalOffsetPx) },
+                    exitTransition = { fadeThroughExit() },
+                    popEnterTransition = { fadeEnter() },
+                    popExitTransition = { sharedAxisYPopExit(verticalOffsetPx) },
+                ) {
+                    NowPlayingScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenVideo = { navController.navigate(Routes.VIDEO) },
+                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                    )
+                }
+                composable(
+                    Routes.VIDEO,
+                    enterTransition = { fadeEnter() },
+                    exitTransition = { fadeExit() },
+                    popEnterTransition = { fadeEnter() },
+                    popExitTransition = { fadeExit() },
+                ) {
+                    VideoScreen(
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
 
-            // ---------------- 艺术家（Shared axis X） ----------------
-            composable(
-                route = Routes.ARTIST,
-                arguments = listOf(navArgument(Routes.ARG_ARTIST_NAME) { type = NavType.StringType }),
-            ) { entry ->
-                val artistName = entry.arguments?.getString(Routes.ARG_ARTIST_NAME).orEmpty()
-                ArtistDetailScreen(
-                    artistName = android.net.Uri.decode(artistName),
-                    onBack = { navController.popBackStack() },
-                    onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                )
-            }
-
-            // ---------------- 专辑（Shared axis X） ----------------
-            composable(
-                route = Routes.ALBUM,
-                arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
-            ) { entry ->
-                val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
-                AlbumDetailScreen(
-                    albumId = albumId,
-                    onBack = { navController.popBackStack() },
-                    onOpenSplitEditor = { id -> navController.navigate(Routes.splitEditor(id)) },
-                )
-            }
-            composable(
-                route = Routes.SPLIT_EDITOR,
-                arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
-            ) { entry ->
-                val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
-                SplitEditorScreen(
-                    albumId = albumId,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            // ---------------- 导入 / 登录 / 诊断（Shared axis X） ----------------
-            composable(Routes.IMPORT) {
-                ImportScreen(
-                    onBack = { navController.popBackStack() },
-                    onImported = { albumId ->
-                        navController.popBackStack()
-                        navController.navigate(Routes.album(albumId))
+            // 悬浮迷你播放条：盖在内容之上（Haze 背景采样 NavHost），位于底部导航之上
+            if (showMiniPlayer) {
+                MiniPlayerHost(
+                    playbackController = container.playbackController,
+                    collapsed = miniPlayerCollapsed,
+                    onCollapsedChange = { miniPlayerCollapsed = it },
+                    onOpenPlayer = {
+                        miniPlayerCollapsed = false
+                        navController.navigate(Routes.PLAYER)
                     },
-                )
-            }
-            composable(Routes.SEARCH) {
-                ImportScreen(
-                    onBack = { navController.popBackStack() },
-                    onImported = { albumId ->
-                        navController.popBackStack()
-                        navController.navigate(Routes.album(albumId))
-                    },
-                    initialTab = ImportTab.SEARCH,
-                )
-            }
-            composable(Routes.IMPORT_ARCHIVE) {
-                ImportScreen(
-                    onBack = { navController.popBackStack() },
-                    onImported = { albumId ->
-                        navController.popBackStack()
-                        navController.navigate(Routes.album(albumId))
-                    },
-                    initialTab = ImportTab.BATCH,
-                )
-            }
-            composable(Routes.DIAGNOSTICS) {
-                DiagnosticsScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Routes.LOGIN) {
-                LoginScreen(
-                    onBack = { navController.popBackStack() },
-                    onLoggedIn = { navController.popBackStack() },
-                )
-            }
-
-            // ---------------- 播放 / 歌词页（沉浸式，页面自行处理 insets） ----------------
-            composable(
-                Routes.PLAYER,
-                // 从迷你条向上展开：Shared axis Y（垂直 30dp + 100/200ms 淡入淡出）
-                enterTransition = { sharedAxisYEnter(axisOffsetPx) },
-                exitTransition = { fadeThroughExit() },
-                popEnterTransition = { fadeEnter() },
-                popExitTransition = { sharedAxisYPopExit(axisOffsetPx) },
-            ) {
-                NowPlayingScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenVideo = { navController.navigate(Routes.VIDEO) },
-                    onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                )
-            }
-            composable(
-                Routes.VIDEO,
-                // 沉浸式视频页：Material Fade
-                enterTransition = { fadeEnter() },
-                exitTransition = { fadeExit() },
-                popEnterTransition = { fadeEnter() },
-                popExitTransition = { fadeExit() },
-            ) {
-                VideoScreen(
-                    onBack = { navController.popBackStack() },
+                    hazeState = hazeState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .then(
+                            if (showChrome) {
+                                // 位于底部导航之上（bottomBar 覆盖在 Scaffold 内容层底部）
+                                Modifier.padding(
+                                    bottom = with(density) { bottomBarHeightPx.toDp() },
+                                )
+                            } else {
+                                // 迷你条专属路由（专辑详情等）没有底部导航：避开系统手势区
+                                Modifier.navigationBarsPadding()
+                            },
+                        ),
                 )
             }
         }
@@ -298,13 +335,12 @@ fun AppNavHost() {
 }
 
 // ---------------------------------------------------------------------------
-// Material motion 转场实现
+// Material motion 转场实现（时长/曲线见 ui/theme/Motion.kt）
 // ---------------------------------------------------------------------------
 
 /**
- * 顶级 Tab：Material **Fade through**。
- * 旧页 100ms 淡出 → 新页延后 100ms 以 200ms 淡入并从 92% 放大到 100%（总 300ms）。
- * 两页没有清晰的叠加期，避免不透明双页叠影；也不会出现长时间空白。
+ * 顶级 Tab：Material **Fade through**（M3 推荐节奏，400ms）：
+ * 旧页 200ms 淡出 → 新页延后 100ms 以 300ms 淡入并从 94% 放大到 100%。
  */
 private fun fadeThroughEnter(): EnterTransition =
     fadeIn(
@@ -331,12 +367,12 @@ private fun fadeThroughExit(): ExitTransition =
     )
 
 /**
- * 层级页面：Material **Shared axis X**（前进）。
- * 旧页 100ms 淡出并向左平移 30dp；新页延后 100ms 以 200ms 淡入并从右侧 30dp 回位（总 300ms）。
+ * 层级页面：Material **Shared axis X**（400ms）。
+ * 位移取屏幕 24%，进入从右滑入、返回向右滑出，严格对称（不再是“原地缩小淡出”）。
  */
 private fun sharedAxisXEnter(offsetPx: Int): EnterTransition =
     slideInHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { offsetPx } + fadeIn(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisEnterFadeMs,
@@ -347,7 +383,7 @@ private fun sharedAxisXEnter(offsetPx: Int): EnterTransition =
 
 private fun sharedAxisXExit(offsetPx: Int): ExitTransition =
     slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
     ) { -offsetPx } + fadeOut(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisExitFadeMs,
@@ -355,10 +391,9 @@ private fun sharedAxisXExit(offsetPx: Int): ExitTransition =
         ),
     )
 
-/** 返回：当前页 100ms 淡出并右移 30dp，上一页延后 100ms 左侧 30dp 回位。 */
 private fun sharedAxisXPopEnter(offsetPx: Int): EnterTransition =
     slideInHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { -offsetPx } + fadeIn(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisEnterFadeMs,
@@ -369,7 +404,7 @@ private fun sharedAxisXPopEnter(offsetPx: Int): EnterTransition =
 
 private fun sharedAxisXPopExit(offsetPx: Int): ExitTransition =
     slideOutHorizontally(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
     ) { offsetPx } + fadeOut(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisExitFadeMs,
@@ -377,10 +412,10 @@ private fun sharedAxisXPopExit(offsetPx: Int): ExitTransition =
         ),
     )
 
-/** 播放页：Material **Shared axis Y**（从底部向上）。 */
+/** 播放页：Material **Shared axis Y**（从迷你条向上）。 */
 private fun sharedAxisYEnter(offsetPx: Int): EnterTransition =
     slideInVertically(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { offsetPx } + fadeIn(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisEnterFadeMs,
@@ -391,7 +426,7 @@ private fun sharedAxisYEnter(offsetPx: Int): EnterTransition =
 
 private fun sharedAxisYPopExit(offsetPx: Int): ExitTransition =
     slideOutVertically(
-        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.Standard),
+        animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
     ) { offsetPx } + fadeOut(
         animationSpec = tween(
             durationMillis = BiliMotion.AxisExitFadeMs,
@@ -401,14 +436,10 @@ private fun sharedAxisYPopExit(offsetPx: Int): ExitTransition =
 
 /** 沉浸/覆盖层：Material **Fade**。 */
 private fun fadeEnter(): EnterTransition =
-    fadeIn(
-        animationSpec = tween(BiliMotion.FadeInMs, easing = BiliMotion.EmphasizedDecelerate),
-    )
+    fadeIn(animationSpec = tween(BiliMotion.FadeInMs, easing = BiliMotion.EmphasizedDecelerate))
 
 private fun fadeExit(): ExitTransition =
-    fadeOut(
-        animationSpec = tween(BiliMotion.FadeOutMs, easing = BiliMotion.EmphasizedAccelerate),
-    )
+    fadeOut(animationSpec = tween(BiliMotion.FadeOutMs, easing = BiliMotion.EmphasizedAccelerate))
 
 // ---------------------------------------------------------------------------
 // 迷你播放条宿主
@@ -424,6 +455,8 @@ private fun MiniPlayerHost(
     collapsed: Boolean,
     onCollapsedChange: (Boolean) -> Unit,
     onOpenPlayer: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState?,
+    modifier: Modifier = Modifier,
 ) {
     val state by playbackController.state.collectAsStateWithLifecycle()
     MiniPlayerBar(
@@ -433,5 +466,7 @@ private fun MiniPlayerHost(
         onOpenPlayer = onOpenPlayer,
         onTogglePlay = { playbackController.togglePlayPause() },
         onNext = { playbackController.next() },
+        hazeState = hazeState,
+        modifier = modifier,
     )
 }

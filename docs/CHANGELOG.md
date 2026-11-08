@@ -1,5 +1,24 @@
 # 版本记录
 
+## v0.7.0（2026-11-08 · tag `v0.7.0`）
+
+**动效节奏润色 + 迷你播放条毛玻璃/跟手拖拽**
+
+- 动效节奏按 M3 官方「Emphasized decelerate 400ms 入场 / Emphasized accelerate 200ms 退场」建议放缓：
+  - Tab Fade through 400ms（旧页 200ms 淡出 → 新页延迟 100ms 以 300ms 淡入 + 94%→100%）；
+  - 层级页面 Shared axis X 400ms，位移改为屏幕宽 24%（此前 30dp 太含蓄，返回时像“原地缩小淡出”）；
+    进入从右滑入、返回向右滑出，严格对称；
+  - 播放页 Shared axis Y 400ms（屏高 14%）；歌词页 Fade 250/150ms。
+- 迷你播放条（参考 SPICaMusic_Android 的 Haze 实现）：
+  - 新增 Haze 2.0.1 毛玻璃（`haze` + `haze-blur` + `haze-blur-material3`）：
+    backdrop blur 22dp + 半透明 surface tint + 细边框；API 31+ 生效，软件渲染/低版本用高不透明度 fallback；
+  - 去掉顶部拖拽提示条（handle）；底部进度线改为低对比度（不再一条亮线）；
+  - 上滑支持**跟手连续拖动**：整条随手指上移（最高 180dp），松手按阈值/速度决定展开播放页或弹簧回位；
+    下滑收起为细条（细条也无 handle），点击/上滑重新展开。
+- 布局：迷你播放条改为悬浮在内容层底部（盖住列表），位于底部导航之上；HazeState 由 NavHost 的 hazeSource 提供背景采样。
+- 参考项目对比补充：SPICaMusic_Android 的迷你条也使用 Haze 2.0（glass + blur material3），我们采用其中的 blur 子集，不引入其玻璃折射/高光整套。
+- 单测保持 152 全绿。
+
 ## v0.6.3（2026-11-08 · tag `v0.6.3`）
 
 **列表卡顿最终定位并修复：发布构建改用 R8 release（+ 参考项目做法对齐）**

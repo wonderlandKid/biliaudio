@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.6.3**（tag `v0.6.3`，2026-11-08；release commit 以 `git rev-parse v0.6.3` 为准）
+- **版本：v0.7.0**（tag `v0.7.0`，2026-11-08；release commit 以 `git rev-parse v0.7.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**152 个**（v0.6.3）
+- 单元测试：**152 个**（v0.7.0）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.6.3: 152 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.7.0: 152 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -48,10 +48,13 @@ scripts/screenshot.sh home 8
    再按 docs/DEBUGGING.md 的流程判断。
 5. **UI 规范**：Tab 页页头必须用 `ui/components/PageHeader.kt` 的 `BiliPageHeader`（标题位置统一）；
    搜索框统一用 `SearchField`（可编辑）/`SearchBarEntry`（入口）。
-6. **动效规范（v0.6.2 起）**：全部动效 token 在 `ui/theme/Motion.kt`（BiliMotion），页面内禁止散写时长/曲线；
-   转场按 Material Motion：顶级 Tab = Fade through、层级页面 = Shared axis X、播放页 = Shared axis Y、沉浸页 = Fade；
-   禁止再在页面内叠加自定义进入淡入（避免双重动画/闪白）。
-7. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
+6. **动效规范（v0.7.0 起）**：全部动效 token 在 `ui/theme/Motion.kt`（BiliMotion），页面内禁止散写时长/曲线；
+   按 M3 easing/duration 推荐节奏：入场 400ms（EmphasizedDecelerate）、退场 200ms（EmphasizedAccelerate）；
+   Tab = Fade through、层级页面 = Shared axis X（24% 屏宽、进出对称）、播放页 = Shared axis Y、沉浸页 = Fade；
+   禁止页面内叠加自定义进入淡入。
+7. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
+   不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）。
+8. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
    要 map 成 `(trackId,isPlaying)` 后 distinctUntilChanged；重计算（分组/排序）放数据变化阶段；
    Lazy 列表加 contentType + 稳定 key；索引栏高亮用 provider 在组件内部读取，父级不要读滚动派生状态。
 
@@ -62,7 +65,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.6.3 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.7.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | 音乐库归档 JSON 格式规范（备份/恢复/分割点文件） |

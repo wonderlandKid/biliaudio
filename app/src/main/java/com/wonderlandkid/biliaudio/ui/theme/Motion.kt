@@ -41,25 +41,28 @@ object BiliMotion {
     const val Long2 = 500
 
     // ---------------- Fade through（顶级 Tab） ----------------
-    // Material 原时序为「旧页 100ms 淡出 → 新页 200ms 淡入（延迟 100ms）」。
-    // 纯顺序执行会在两页都不可见的瞬间露出整页背景（浅色主题下如空白），
-    // 因此保留 300ms 总时长与 92%→100% 放大，仅做 50ms 交叉重叠，兼顾标准节奏与不闪白。
-    const val TopLevelExitMs = 150
-    const val TopLevelEnterDelayMs = 50
-    const val TopLevelEnterMs = 250
-    const val TopLevelTotalMs = Medium2        // 合计 300ms
-    const val TopLevelEnterScale = 0.92f       // 92% → 100%
+    // 依据 M3「Emphasized decelerate 400ms 入场 / Emphasized accelerate 200ms 退场」的推荐节奏：
+    // 旧页先淡出、新页随后以更长的 decelerate 淡入并 94%→100% 放大，总 400ms（略慢、更优雅）。
+    const val TopLevelExitMs = 200             // 旧页 200ms 淡出
+    const val TopLevelEnterDelayMs = 100       // 新页延后 100ms
+    const val TopLevelEnterMs = 300            // 新页 300ms 淡入
+    const val TopLevelTotalMs = 400            // 合计 400ms
+    const val TopLevelEnterScale = 0.94f       // 94% → 100%
 
     // ---------------- Shared axis（层级页面） ----------------
-    const val AxisExitFadeMs = Short4          // 旧页 200ms 淡出
-    const val AxisEnterDelayMs = 60            // 新页延后 60ms（与旧页淡出重叠）
-    const val AxisEnterFadeMs = 240
-    const val AxisTotalMs = Medium2            // 平移合计 300ms
-    const val AxisTranslationDp = 30           // 沿轴向平移 30dp
+    // 400ms，旧页 200ms 淡出、新页延迟 100ms 以 300ms 淡入（EmphasizedDecelerate）。
+    const val AxisExitFadeMs = 200
+    const val AxisEnterDelayMs = 100
+    const val AxisEnterFadeMs = 300
+    const val AxisTotalMs = 400
+    // 位移用屏幕百分比（Material 原 spec 为 30dp，视觉上偏“原地淡出”；
+    // 为了让进入/返回都有明确的空间方向感，这里取 24% 屏宽，进出对称）
+    const val AxisTranslationFraction = 0.24f
+    const val AxisVerticalFraction = 0.14f
 
     // ---------------- Fade（错误/覆盖层等简单显隐） ----------------
-    const val FadeInMs = Short4
-    const val FadeOutMs = Short2
+    const val FadeInMs = 250
+    const val FadeOutMs = 150
 
     // ---------------- M3 Expressive motion physics（弹簧 token） ----------------
     // 数值来自 androidx.compose.material3.tokens.StandardMotionTokens / ExpressiveMotionTokens
