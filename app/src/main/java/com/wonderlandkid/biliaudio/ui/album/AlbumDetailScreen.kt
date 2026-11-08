@@ -2,6 +2,8 @@ package com.wonderlandkid.biliaudio.ui.album
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
@@ -56,6 +59,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,6 +116,13 @@ fun AlbumDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     // 「换封面」共享组件（相册 / 网易云 / 恢复 B 站）
     var showCoverPicker by remember { mutableStateOf(false) }
+    // 封面大图欣赏
+    var showCoverViewer by remember { mutableStateOf(false) }
+    val saveCoverLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("image/jpeg"),
+    ) { uri ->
+        if (uri != null) viewModel.saveCoverTo(uri)
+    }
     // 导出专辑文件：系统文件选择器（CreateDocument，默认文件名 <专辑名>-biliaudio.json）
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json"),
@@ -147,6 +161,10 @@ fun AlbumDetailScreen(
                     menuExpanded = false
                     state.album?.let { album -> exportLauncher.launch(buildExportFileName(album.title)) }
                 },
+                onChangeCover = {
+                    menuExpanded = false
+                    showCoverPicker = true
+                },
                 onDelete = {
                     menuExpanded = false
                     showDeleteDialog = true
@@ -176,6 +194,7 @@ fun AlbumDetailScreen(
                 onPlayTrack = viewModel::playTrack,
                 onOpenSplitEditor = { onOpenSplitEditor(album.id) },
                 onChangeCover = { showCoverPicker = true },
+                onOpenCover = { showCoverViewer = true },
                 modifier = Modifier.padding(innerPadding),
             )
         }
@@ -209,6 +228,21 @@ fun AlbumDetailScreen(
                 viewModel.applyCover(pickerAlbum.id, pick)
             },
         )
+        if (showCoverViewer) {
+            CoverViewerDialog(
+                album = pickerAlbum,
+                isApplyingCover = state.isApplyingCover,
+                onDismiss = { showCoverViewer = false },
+                onChangeCover = {
+                    showCoverViewer = false
+                    showCoverPicker = true
+                },
+                onSaveCover = {
+                    showCoverViewer = false
+                    saveCoverLauncher.launch(buildCoverFileName(pickerAlbum.title))
+                },
+            )
+        }
     }
 }
 
@@ -223,6 +257,7 @@ private fun RowScope.AlbumDetailActions(
     onMenuDismiss: () -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
+    onChangeCover: () -> Unit,
     onDelete: () -> Unit,
 ) {
     if (isRefreshing || isExporting) {
@@ -248,6 +283,12 @@ private fun RowScope.AlbumDetailActions(
             leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
             enabled = menuEnabled && !isExporting,
             onClick = onExport,
+        )
+        DropdownMenuItem(
+            text = { Text("更换封面") },
+            leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
+            enabled = menuEnabled,
+            onClick = onChangeCover,
         )
         DropdownMenuItem(
             text = { Text("删除专辑", color = MaterialTheme.colorScheme.error) },
@@ -276,6 +317,7 @@ private fun AlbumDetailContent(
     onPlayTrack: (Long) -> Unit,
     onOpenSplitEditor: () -> Unit,
     onChangeCover: () -> Unit,
+    onOpenCover: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -286,8 +328,7 @@ private fun AlbumDetailContent(
             AlbumHero(
                 album = album,
                 trackCount = tracks.size,
-                isApplyingCover = isApplyingCover,
-                onChangeCover = onChangeCover,
+                onOpenCover = onOpenCover,
             )
         }
         item(key = "actions") {
@@ -337,8 +378,7 @@ private fun AlbumDetailContent(
 private fun AlbumHero(
     album: Album,
     trackCount: Int,
-    isApplyingCover: Boolean,
-    onChangeCover: () -> Unit,
+    onOpenCover: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -349,7 +389,8 @@ private fun AlbumHero(
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.72f)
-                .aspectRatio(1f),
+                .aspectRatio(1f)
+                .clickable(onClick = onOpenCover),
         ) {
             CoverImage(
                 // 支持用户自定义本地封面（album.coverModel() 优先本地 File，回退 B 站 URL）
@@ -357,41 +398,6 @@ private fun AlbumHero(
                 modifier = Modifier.fillMaxSize(),
                 cornerRadius = 28.dp,
             )
-            // 右下角「换封面」胶囊按钮（相册 / 网易云 / 恢复 B 站）
-            Surface(
-                onClick = onChangeCover,
-                enabled = !isApplyingCover,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(Spacing.sm),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shadowElevation = 2.dp,
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xxs),
-                ) {
-                    if (isApplyingCover) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.PhotoCamera,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                    Text(
-                        text = if (isApplyingCover) "更新中…" else "换封面",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
         }
         Spacer(Modifier.height(Spacing.xl))
         Text(
@@ -544,4 +550,99 @@ private fun buildExportFileName(albumTitle: String): String {
         .trim()
         .ifBlank { "album" }
     return "$sanitized-biliaudio.json"
+}
+
+/** 封面大图欣赏：大图 + 保存封面 / 换封面。 */
+@Composable
+private fun CoverViewerDialog(
+    album: Album,
+    isApplyingCover: Boolean,
+    onDismiss: () -> Unit,
+    onChangeCover: () -> Unit,
+    onSaveCover: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.94f)),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.lg),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = album.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = album.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.65f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "关闭",
+                            tint = Color.White,
+                        )
+                    }
+                }
+                CoverImage(
+                    url = album.coverModel(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(24.dp)),
+                    cornerRadius = 24.dp,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    Button(
+                        onClick = onSaveCover,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Rounded.FileDownload, contentDescription = null)
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("保存封面")
+                    }
+                    Button(
+                        onClick = onChangeCover,
+                        enabled = !isApplyingCover,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Rounded.PhotoCamera, contentDescription = null)
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text(if (isApplyingCover) "更新中…" else "换封面")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 保存封面时的文件名：去掉文件系统非法字符。 */
+private fun buildCoverFileName(title: String): String {
+    val safe = title.trim()
+        .replace(Regex("""[/\\:*?"<>|]"""), "_")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
+        .take(60)
+        .ifBlank { "cover" }
+    return "$safe-cover.jpg"
 }

@@ -62,7 +62,7 @@ object StreamSelector {
 
     /**
      * 选择视频流（歌词页）：
-     * 1. 优先最高分辨率（封顶 720P，兼顾清晰度与无损 seek 等待；1080P+ 留给后续画质设置）；
+     * 1. 优先最高分辨率（封顶 1080P；4K/HDR 暂不选，避免解码/首帧负担）；
      * 2. 同分辨率优先 AVC（兼容性最好），其次按码率从高到低；
      * 3. 若接口只返回 >720P 的流（异常/会员高画质），取其中分辨率最低的一路。
      *
@@ -82,15 +82,15 @@ object StreamSelector {
             )
         }
         if (candidates.isEmpty()) return null
-        val within720 = candidates.filter { it.height <= MAX_VIDEO_HEIGHT }
-        val best = if (within720.isNotEmpty()) {
-            within720.maxWithOrNull(
+        val withinCap = candidates.filter { it.height <= MAX_VIDEO_HEIGHT }
+        val best = if (withinCap.isNotEmpty()) {
+            withinCap.maxWithOrNull(
                 compareBy<VideoPick> { it.height }
                     .thenBy { if (it.isAvc) 1 else 0 }
                     .thenBy { it.bandwidth },
             )
         } else {
-            // 只有 >720P 的流（异常/高画质会员）：取其中分辨率最低的一路，避免解码/等待过大
+            // 只有 >1080P 的流（异常/高画质会员）：取其中分辨率最低的一路，避免解码/等待过大
             candidates.minWithOrNull(
                 compareBy<VideoPick> { it.height }
                     .thenByDescending { if (it.isAvc) 1 else 0 }
@@ -100,8 +100,8 @@ object StreamSelector {
         return best?.let { VideoChoice(url = it.url, height = it.height, qualityId = it.qualityId, bandwidth = it.bandwidth, codecs = it.codecs) }
     }
 
-    /** 歌词页视频清晰度上限（720P）。 */
-    private const val MAX_VIDEO_HEIGHT = 720
+    /** 歌词页视频清晰度上限（1080P；4K/HDR 留给后续画质设置）。 */
+    private const val MAX_VIDEO_HEIGHT = 1080
 
     private data class VideoPick(
         val url: String,

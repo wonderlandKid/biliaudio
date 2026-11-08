@@ -114,22 +114,22 @@ class StreamSelectorTest {
     }
 
     @Test
-    fun `视频优先最高分辨率且不超过 720P`() {
+    fun `视频优先最高分辨率且不超过 1080P`() {
         val videos = listOf(
             video(80, 1080, 1920, 3_000_000, url = "https://v/1080"),
             video(64, 720, 1280, 2_500_000, url = "https://v/720"),
             video(32, 480, 852, 800_000, url = "https://v/480"),
         )
-        assertEquals("https://v/720", StreamSelector.selectVideo(videos)?.url)
+        assertEquals("https://v/1080", StreamSelector.selectVideo(videos)?.url)
     }
 
     @Test
-    fun `只有高于 720P 的流时取最低分辨率兜底`() {
+    fun `只有高于 1080P 的流时取最低分辨率兜底`() {
         val videos = listOf(
             video(120, 2160, 3840, 9_000_000, url = "https://v/2160"),
-            video(80, 1080, 1920, 3_000_000, url = "https://v/1080"),
+            video(112, 1440, 2560, 5_000_000, url = "https://v/1440"),
         )
-        assertEquals("https://v/1080", StreamSelector.selectVideo(videos)?.url)
+        assertEquals("https://v/1440", StreamSelector.selectVideo(videos)?.url)
     }
 
     @Test

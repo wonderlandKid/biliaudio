@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 
 /** 专辑详情 UI 状态。 */
@@ -230,6 +231,40 @@ class AlbumDetailViewModel(
                 // 写库成功后再删旧文件，避免旧封面丢失但数据库还没恢复
                 albumCoverRepository.deleteAlbumCoverFile(oldLocalPath)
             }
+        }
+    }
+
+    /**
+     * 封面大图模式 → 保存封面到用户通过 SAF 选择的文件。
+     *
+     * 优先读用户自定义封面的本地文件；没有自定义封面时下载 B 站封面。
+     * 读文件/下载/写目标文件都在 IO 线程，结果走一次性 Snackbar。
+     */
+    fun saveCoverTo(uri: android.net.Uri) {
+        val album = _uiState.value.album ?: return
+        viewModelScope.launch {
+            val message = try {
+                withContext(Dispatchers.IO) {
+                    val bytes = album.coverLocalPath
+                        ?.let { path -> File(path).takeIf { it.isFile }?.readBytes() }
+                        ?: album.coverUrl
+                            .takeIf { it.isNotBlank() }
+                            ?.let { albumCoverRepository.fetchCoverBytes(it) }
+                        ?: throw IllegalStateException("没有可保存的封面")
+                    val output = appContext.contentResolver.openOutputStream(uri)
+                        ?: throw IllegalStateException("无法打开目标文件")
+                    output.use { stream ->
+                        stream.write(bytes)
+                        stream.flush()
+                    }
+                }
+                "封面已保存"
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                "保存封面失败：${t.message?.takeIf { it.isNotBlank() } ?: "未知错误"}"
+            }
+            _uiState.update { it.copy(message = message) }
         }
     }
 

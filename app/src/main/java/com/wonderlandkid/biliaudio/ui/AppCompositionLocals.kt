@@ -1,10 +1,14 @@
 package com.wonderlandkid.biliaudio.ui
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -45,5 +49,16 @@ fun AppTheme(content: @Composable () -> Unit) {
     val container = rememberAppContainer()
     val settings by container.settingsRepository.settings.collectAsState()
     val dark = settings.darkTheme ?: isSystemInDarkTheme()
+    val view = LocalView.current
+    // 系统栏图标明暗必须跟随 App 自己的深色设置，而不是只跟随系统深色模式：
+    // 深色主题下状态栏时钟/图标用浅色，浅色主题下用深色。
+    SideEffect {
+        (view.context as? Activity)?.window?.let { window ->
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
+    }
     com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme(darkTheme = dark, content = content)
 }

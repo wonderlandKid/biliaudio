@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -227,8 +229,8 @@ fun AppNavHost() {
                 // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
                 // 一级 Tab 自身无转场（见各 composable 的 None），所以底层不会“往右撤”或缩小。
                 enterTransition = { slideInFromRight() },
-                exitTransition = { slideOutToLeftPart() },
-                popEnterTransition = { slideInFromLeftPart() },
+                exitTransition = { slideOutToLeft() },
+                popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() },
                 // 预测式返回（预输入）只做“无变化”预览：手势滑动过程中页面不动，
                 // 真正完成返回后才走普通 pop 转场；取消手势不会看到页面已经退了一半。
@@ -238,10 +240,9 @@ fun AppNavHost() {
                 // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
                 composable(
                     Routes.HOME,
-                    // 一级 Tab 是平级页面：不做滑动/缩放（参考项目同级页面为瞬时切换）
-                    enterTransition = { EnterTransition.None },
-                    exitTransition = { ExitTransition.None },
-                    popEnterTransition = { EnterTransition.None },
+                    enterTransition = { tabEnterTransition() },
+                    exitTransition = { tabExitTransition() },
+                    popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
@@ -378,8 +379,8 @@ fun AppNavHost() {
                 composable(
                     Routes.VIDEO,
                     enterTransition = { slideInFromRight() },
-                    exitTransition = { slideOutToLeftPart() },
-                    popEnterTransition = { slideInFromLeftPart() },
+                    exitTransition = { slideOutToLeft() },
+                    popEnterTransition = { slideInFromLeft() },
                     popExitTransition = { slideOutToRight() },
                 ) {
                     Page {
@@ -501,15 +502,30 @@ private fun slideInFromRight(): EnterTransition =
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { it }
 
-private fun slideInFromLeftPart(): EnterTransition =
+private fun slideInFromLeft(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { -it / 4 }
+    ) { -it }
 
-private fun slideOutToLeftPart(): ExitTransition =
+private fun slideOutToLeft(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { -it / 4 }
+    ) { -it }
+
+// 一级 Tab 的转场只在「Tab ↔ 详情页」时生效：
+// - 从 Tab 进入详情：Tab 整页向左退出（新页从右进入）；
+// - 从详情返回 Tab：Tab 从左侧整页回位（详情向右退出）；
+// - Tab 之间切换：仍然瞬时（平级，不做方向动画）。
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabEnterTransition(): EnterTransition =
+    if (initialState.destination.route in TAB_ROUTE_SET) EnterTransition.None else slideInFromLeft()
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabExitTransition(): ExitTransition =
+    if (targetState.destination.route in TAB_ROUTE_SET) ExitTransition.None else slideOutToLeft()
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabPopEnterTransition(): EnterTransition =
+    if (initialState.destination.route in TAB_ROUTE_SET) EnterTransition.None else slideInFromLeft()
+
+private val TAB_ROUTE_SET = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
 
 private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(
