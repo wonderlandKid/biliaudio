@@ -107,6 +107,7 @@ fun AlbumDetailScreen(
             libraryArchiveRepository = container.libraryArchiveRepository,
             appContext = container.appContext,
             albumCoverRepository = container.albumCoverRepository,
+            audioCacheRepository = container.audioCacheRepository,
         )
     },
 ) {
@@ -149,6 +150,9 @@ fun AlbumDetailScreen(
             AlbumDetailActions(
                 isRefreshing = state.isRefreshing,
                 isExporting = state.isExporting,
+                isCaching = state.isCaching,
+                cached = state.cachedAudio != null,
+                cachedQuality = state.cachedAudio?.audioQualityLabel,
                 menuEnabled = state.album != null,
                 onMenuClick = { menuExpanded = true },
                 menuExpanded = menuExpanded,
@@ -160,6 +164,10 @@ fun AlbumDetailScreen(
                 onExport = {
                     menuExpanded = false
                     state.album?.let { album -> exportLauncher.launch(buildExportFileName(album.title)) }
+                },
+                onToggleCache = {
+                    menuExpanded = false
+                    viewModel.toggleAudioCache()
                 },
                 onDelete = {
                     menuExpanded = false
@@ -247,15 +255,19 @@ fun AlbumDetailScreen(
 private fun RowScope.AlbumDetailActions(
     isRefreshing: Boolean,
     isExporting: Boolean,
+    isCaching: Boolean,
+    cached: Boolean,
+    cachedQuality: String?,
     menuEnabled: Boolean,
     onMenuClick: () -> Unit,
     menuExpanded: Boolean,
     onMenuDismiss: () -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
+    onToggleCache: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    if (isRefreshing || isExporting) {
+    if (isRefreshing || isExporting || isCaching) {
         CircularProgressIndicator(
             modifier = Modifier
                 .padding(end = Spacing.sm)
@@ -272,6 +284,20 @@ private fun RowScope.AlbumDetailActions(
             leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
             enabled = menuEnabled && !isRefreshing,
             onClick = onRefresh,
+        )
+        DropdownMenuItem(
+            text = {
+                Text(
+                    when {
+                        isCaching -> "缓存中…"
+                        cached -> "删除音频缓存${cachedQuality?.let { "（$it）" }.orEmpty()}"
+                        else -> "缓存整张专辑音频"
+                    },
+                )
+            },
+            leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
+            enabled = menuEnabled && !isCaching,
+            onClick = onToggleCache,
         )
         DropdownMenuItem(
             text = { Text("导出专辑文件") },

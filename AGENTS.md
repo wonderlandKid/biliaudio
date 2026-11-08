@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.16.0**（tag `v0.16.0`，2026-11-08；release commit 以 `git rev-parse v0.16.0` 为准）
+- **版本：v0.17.0**（tag `v0.17.0`，2026-11-08；release commit 以 `git rev-parse v0.17.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.16.0）
+- 单元测试：**126 个**（v0.17.0）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.16.0: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.17.0: 126 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -45,15 +45,18 @@ scripts/screenshot.sh home 8
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/大面积毛玻璃**；
    （v0.7.0 起用户明确要求：仅迷你播放条可使用 Haze 毛玻璃，其余页面保持扁平）
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
+4. **离线缓存**：`AudioCacheRepository` 把一张专辑的整段 DASH 音频缓存到应用私有目录
+   `files/audio_cache`（分曲共享同一文件）；缓存**不进入 Room/归档/备份**。播放引擎优先读缓存，
+   下载失败/删除专辑时清理；详见 [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md)。
+5. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
-5. **UI 规范（v0.12.0 页面模板化）**：
+6. **UI 规范（v0.12.0 页面模板化）**：
    - 页面分四类：T1 一级 Tab（`BiliPageHeader`，不自己套 Scaffold）、T2 层级详情页（必须用
      `ui/template/BiliPageTemplates.kt` 的 `BiliDetailScaffold`/`BiliTopBar`）、T3 沉浸页（播放/歌词，页面自管）、
      T4 弹层/对话框；禁止再手写“Row + 返回 + 标题”式顶栏；
    - 搜索框统一用 `SearchField`（可编辑）/`SearchBarEntry`（入口）；
    - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md)（新增页面 checklist/状态约定/共享组件）。
-6. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
+7. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
    - **层级页面统一 push/pop（完整宽度）**：push = 新页从右侧整页滑入、旧页同时整页向左滑出；
@@ -70,11 +73,11 @@ scripts/screenshot.sh home 8
    - 底部导航出现/消失做高度展开/收缩 + 淡入淡出（300/250ms），Scaffold 高度和迷你条避让同步；
    - **所有自动动画必须有速度曲线**（Emphasized 或 spring），禁止 LinearEasing/匀速；时长统一用
      `BiliMotion` token，详见 [docs/MOTION.md](docs/MOTION.md)。
-7. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
+8. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
    否则会抛 `Padding must be non-negative` 闪退）。
-8. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
+9. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
    要 map 成 `(trackId,isPlaying)` 后 distinctUntilChanged；重计算（分组/排序）放数据变化阶段；
    Lazy 列表加 contentType + 稳定 key；索引栏高亮用 provider 在组件内部读取，父级不要读滚动派生状态。
 
@@ -85,7 +88,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.16.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.17.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
@@ -93,6 +96,7 @@ scripts/screenshot.sh home 8
 | [docs/ARCHIVE_LAYOUT_V3.md](docs/ARCHIVE_LAYOUT_V3.md) | 归档/配置布局 v3（已实施：library/playlists/settings/covers + manifest bundle） |
 | [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) | **页面分四类 + 模板/状态/导航/动画规范（新增页面前必读）** |
 | [docs/MOTION.md](docs/MOTION.md) | **动效时长/曲线总表、跟手例外、调参入口（新增动效前必读）** |
+| [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md) | **专辑音频离线缓存：可行性、边界、实现位置、后续规划** |
 | [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md) | 批量导入与分割点文本格式（三种粘贴格式） |
 | [docs/samples/](docs/samples/) | 归档示例、分割点文本真实样例 |
 | [docs/screenshots/](docs/screenshots/) | 模拟器/真机走查截图 |

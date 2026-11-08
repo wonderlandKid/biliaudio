@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -19,6 +20,7 @@ import com.wonderlandkid.biliaudio.data.model.ResolvedStreams
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
+import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
@@ -59,6 +61,7 @@ class PlaybackEngine private constructor(
     private val scope: CoroutineScope,
     private val albumRepository: AlbumRepository,
     private val streamResolver: MediaStreamResolver,
+    private val audioCacheRepository: AudioCacheRepository,
 ) : PlaybackController {
 
     companion object {
@@ -95,12 +98,14 @@ class PlaybackEngine private constructor(
             scope: CoroutineScope,
             albumRepository: AlbumRepository,
             streamResolver: MediaStreamResolver,
+            audioCacheRepository: AudioCacheRepository,
         ): PlaybackEngine = instance ?: synchronized(this) {
             instance ?: PlaybackEngine(
                 context = context.applicationContext,
                 scope = scope,
                 albumRepository = albumRepository,
                 streamResolver = streamResolver,
+                audioCacheRepository = audioCacheRepository,
             ).also { instance = it }
         }
 
@@ -122,8 +127,12 @@ class PlaybackEngine private constructor(
      * 之所以不直接给 Factory 设一份全局 defaultRequestProperties：
      * 跨专辑队列里不同专辑的 Cookie 可能不同，按 URL 路由最稳妥。
      */
+    private val httpDataSourceFactory = OkHttpDataSource.Factory(httpClient)
+
     private val audioDataSourceFactory: DataSource.Factory = ResolvingDataSource.Factory(
-        OkHttpDataSource.Factory(httpClient),
+        // DefaultDataSource 同时支持 http(s)（在线）和 file://（离线缓存）；
+        // 在线请求仍由 OkHttp 发，headers 由下面的 Resolver 按 URL 补。
+        DefaultDataSource.Factory(appContext, httpDataSourceFactory),
         object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                 val extraHeaders = streamHeadersByUrl[dataSpec.uri.toString()]
@@ -473,6 +482,28 @@ class PlaybackEngine private constructor(
 
     private suspend fun resolveStream(album: Album, forceRefresh: Boolean = false): ResolvedStreams {
         val startMs = System.currentTimeMillis()
+        // 有完整音频缓存时直接播放本地文件：离线可用，也不再消耗流量。
+        // 出错重试（forceRefresh）时不走缓存，避免损坏的缓存导致死循环。
+        if (!forceRefresh) {
+            audioCacheRepository.getCached(album)?.let { cached ->
+                val fileUri = android.net.Uri.fromFile(java.io.File(cached.filePath)).toString()
+                albumCache[album.id] = album
+                Diag.log(
+                    TAG,
+                    "resolve CACHE HIT album=${album.id} file=${cached.filePath} " +
+                        "quality=${cached.audioQualityLabel} bytes=${cached.bytes}",
+                )
+                return ResolvedStreams(
+                    audioUrl = fileUri,
+                    audioQualityId = cached.audioQualityId,
+                    audioQualityLabel = cached.audioQualityLabel,
+                    videoUrl = null,
+                    videoHeight = null,
+                    expiresAtEpochMs = Long.MAX_VALUE,
+                    headers = emptyMap(),
+                )
+            }
+        }
         val stream = streamResolver.resolve(album, forceRefresh)
         val costMs = System.currentTimeMillis() - startMs
         if (stream.audioUrl.isBlank()) {

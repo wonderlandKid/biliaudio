@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
+import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
+import com.wonderlandkid.biliaudio.data.repository.CachedAudio
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -40,6 +42,12 @@ data class AlbumDetailUiState(
     val isExporting: Boolean = false,
     /** 正在保存/应用新的自定义封面 */
     val isApplyingCover: Boolean = false,
+    /** 本专辑已缓存的整段音频（null = 未缓存） */
+    val cachedAudio: CachedAudio? = null,
+    /** 正在下载缓存 */
+    val isCaching: Boolean = false,
+    /** 缓存进度 0..1（总大小未知时 null） */
+    val cacheProgress: Float? = null,
     /** 删除成功后由页面收口返回上一页 */
     val deleted: Boolean = false,
     /** 一次性提示（Snackbar） */
@@ -58,6 +66,7 @@ class AlbumDetailViewModel(
     /** 应用级 Context，仅用于读写用户通过 SAF 选择的文件 */
     private val appContext: Context,
     private val albumCoverRepository: AlbumCoverRepository,
+    private val audioCacheRepository: AudioCacheRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AlbumDetailUiState())
@@ -80,11 +89,13 @@ class AlbumDetailViewModel(
                     }
                 }
                 .collect { albumWithTracks ->
+                    val cached = albumWithTracks?.album?.let(audioCacheRepository::getCached)
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
                             album = albumWithTracks?.album,
                             tracks = albumWithTracks?.tracks.orEmpty().sortedBy { track -> track.startMs },
+                            cachedAudio = cached,
                         )
                     }
                 }
@@ -113,6 +124,53 @@ class AlbumDetailViewModel(
     /** 播放专辑内某一首。 */
     fun playTrack(trackId: Long) {
         playbackController.playTrack(albumId, trackId)
+    }
+
+    /**
+     * 更多菜单 → 缓存/删除整张专辑音频。
+     *
+     * 手动触发，避免用户没决定就消耗流量；缓存的是当前音质档位的完整 DASH 音频。
+     */
+    fun toggleAudioCache() {
+        val album = _uiState.value.album ?: return
+        if (_uiState.value.isCaching) return
+        viewModelScope.launch {
+            if (_uiState.value.cachedAudio != null) {
+                audioCacheRepository.remove(album)
+                _uiState.update { it.copy(cachedAudio = null, message = "已删除音频缓存") }
+                return@launch
+            }
+            _uiState.update { it.copy(isCaching = true, cacheProgress = 0f) }
+            try {
+                val cached = audioCacheRepository.cache(album) { downloaded, total ->
+                    val progress = if (total != null && total > 0L) {
+                        downloaded.toFloat() / total.toFloat()
+                    } else {
+                        null
+                    }
+                    _uiState.update { it.copy(cacheProgress = progress) }
+                }
+                val size = android.text.format.Formatter.formatShortFileSize(appContext, cached.bytes)
+                _uiState.update {
+                    it.copy(
+                        isCaching = false,
+                        cacheProgress = null,
+                        cachedAudio = cached,
+                        message = "已缓存整张专辑音频（$size）",
+                    )
+                }
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        isCaching = false,
+                        cacheProgress = null,
+                        message = "缓存失败：${t.message ?: "未知错误"}",
+                    )
+                }
+            }
+        }
     }
 
     /** 更多菜单 → 刷新视频信息（标题/艺术家/封面/时长/分 P 信息）。 */
@@ -153,6 +211,7 @@ class AlbumDetailViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isDeleting = true) }
             try {
+                _uiState.value.album?.let { album -> audioCacheRepository.remove(album) }
                 albumRepository.deleteAlbum(albumId)
                 _uiState.update { it.copy(isDeleting = false, deleted = true) }
             } catch (throwable: Exception) {

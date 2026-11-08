@@ -3,6 +3,7 @@ package com.wonderlandkid.biliaudio.di
 import android.content.Context
 import com.wonderlandkid.biliaudio.data.db.AppDatabase
 import com.wonderlandkid.biliaudio.data.impl.AlbumCoverRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.AudioCacheRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
@@ -13,6 +14,7 @@ import com.wonderlandkid.biliaudio.data.net.BiliApi
 import com.wonderlandkid.biliaudio.data.net.CookieStore
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
+import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
@@ -57,6 +59,12 @@ class AppContainer(context: Context) {
 
     val streamResolver: MediaStreamResolver = streamResolverImpl
 
+    /** 专辑音频离线缓存（设备本地，不进入归档）。 */
+    val audioCacheRepository: AudioCacheRepository = AudioCacheRepositoryImpl(
+        context = appContext,
+        streamResolver = streamResolver,
+    )
+
     val albumRepository: AlbumRepository = AlbumRepositoryImpl(
         database = AppDatabase.getInstance(appContext),
         biliRepository = biliRepository,
@@ -91,6 +99,7 @@ class AppContainer(context: Context) {
             scope = appScope,
             albumRepository = albumRepository,
             streamResolver = streamResolver,
+            audioCacheRepository = audioCacheRepository,
         )
     }
 
