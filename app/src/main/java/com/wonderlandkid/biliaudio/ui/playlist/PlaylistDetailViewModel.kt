@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -23,9 +25,13 @@ data class PlaylistDetailExtra(
 data class PlaylistDetailUiState(
     val playlist: PlaylistWithTracks? = null,
     val allSongs: List<TrackWithAlbum> = emptyList(),
+    val currentTrackId: Long? = null,
+    val isPlaying: Boolean = false,
     val message: String? = null,
     val deleted: Boolean = false,
 )
+
+private data class PlaylistHighlight(val trackId: Long?, val isPlaying: Boolean)
 
 class PlaylistDetailViewModel(
     private val playlistId: Long,
@@ -36,14 +42,21 @@ class PlaylistDetailViewModel(
 
     private val extra = MutableStateFlow(PlaylistDetailExtra())
 
+    private val playbackHighlight = playbackController.state
+        .map { PlaylistHighlight(trackId = it.currentTrack?.id, isPlaying = it.isPlaying) }
+        .distinctUntilChanged()
+
     val uiState: StateFlow<PlaylistDetailUiState> = combine(
         playlistRepository.playlistWithTracks(playlistId),
         albumRepository.songs,
+        playbackHighlight,
         extra,
-    ) { playlist, songs, extraState ->
+    ) { playlist, songs, highlight, extraState ->
         PlaylistDetailUiState(
             playlist = playlist,
             allSongs = songs,
+            currentTrackId = highlight.trackId,
+            isPlaying = highlight.isPlaying,
             message = extraState.message,
             deleted = extraState.deleted,
         )

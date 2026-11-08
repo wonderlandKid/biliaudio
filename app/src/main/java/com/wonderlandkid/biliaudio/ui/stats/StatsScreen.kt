@@ -40,6 +40,7 @@ import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
+import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 
@@ -47,12 +48,14 @@ import com.wonderlandkid.biliaudio.util.TimeUtils
 @Composable
 fun StatsScreen(
     onBack: () -> Unit,
+    onOpenAlbum: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val viewModel: StatsViewModel = appViewModel { container ->
         StatsViewModel(
             albumRepository = container.albumRepository,
             statsRepository = container.playbackStatsRepository,
+            playbackController = container.playbackController,
         )
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -91,8 +94,13 @@ fun StatsScreen(
             }
             when {
                 state.isLoading -> LoadingBox(modifier = Modifier.fillMaxSize())
-                selectedTab == 0 -> AlbumStatsList(state.albumStats)
-                else -> TrackStatsList(state.trackStats)
+                selectedTab == 0 -> AlbumStatsList(state.albumStats, onOpenAlbum)
+                else -> TrackStatsList(
+                    stats = state.trackStats,
+                    currentTrackId = state.currentTrackId,
+                    isPlaying = state.isPlaying,
+                    onPlaySong = viewModel::playSong,
+                )
             }
         }
     }
@@ -135,7 +143,7 @@ private fun StatsSummaryCard(totalListenedMs: Long, totalPlayCount: Int) {
 }
 
 @Composable
-private fun AlbumStatsList(stats: List<AlbumListeningUi>) {
+private fun AlbumStatsList(stats: List<AlbumListeningUi>, onOpenAlbum: (Long) -> Unit) {
     if (stats.isEmpty()) {
         EmptyState(
             title = "还没有听歌数据",
@@ -147,11 +155,19 @@ private fun AlbumStatsList(stats: List<AlbumListeningUi>) {
     val maxListened = stats.maxOf { it.listenedMs }.coerceAtLeast(1L)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        contentPadding = PaddingValues(
+            start = Spacing.lg,
+            end = Spacing.lg,
+            top = Spacing.sm,
+            bottom = 96.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         itemsIndexed(stats, key = { _, item -> item.album.id }) { index, item ->
-            BiliGroup(contentPadding = PaddingValues(0.dp)) {
+            BiliGroup(
+                contentPadding = PaddingValues(0.dp),
+                onClick = { onOpenAlbum(item.album.id) },
+            ) {
                 Row(
                     modifier = Modifier.padding(Spacing.md),
                     verticalAlignment = Alignment.CenterVertically,
@@ -171,7 +187,7 @@ private fun AlbumStatsList(stats: List<AlbumListeningUi>) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = item.album.title,
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.bodyLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -202,7 +218,12 @@ private fun AlbumStatsList(stats: List<AlbumListeningUi>) {
 }
 
 @Composable
-private fun TrackStatsList(stats: List<TrackPlayUi>) {
+private fun TrackStatsList(
+    stats: List<TrackPlayUi>,
+    currentTrackId: Long?,
+    isPlaying: Boolean,
+    onPlaySong: (TrackWithAlbum) -> Unit,
+) {
     if (stats.isEmpty()) {
         EmptyState(
             title = "还没有听歌数据",
@@ -213,7 +234,12 @@ private fun TrackStatsList(stats: List<TrackPlayUi>) {
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        contentPadding = PaddingValues(
+            start = Spacing.lg,
+            end = Spacing.lg,
+            top = Spacing.sm,
+            bottom = 96.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         itemsIndexed(stats, key = { _, item -> item.song.track.uid }) { index, item ->
@@ -221,8 +247,10 @@ private fun TrackStatsList(stats: List<TrackPlayUi>) {
                 title = item.song.track.title,
                 subtitle = "${item.song.album.artist} · ${item.song.album.title}",
                 durationMs = item.song.track.durationMs,
-                onClick = {},
+                onClick = { onPlaySong(item.song) },
                 index = index,
+                isCurrent = item.song.track.id == currentTrackId,
+                isPlaying = isPlaying,
                 leading = {
                     CoverImage(
                         url = item.song.coverModel(),

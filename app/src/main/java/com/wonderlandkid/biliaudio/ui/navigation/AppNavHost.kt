@@ -120,7 +120,12 @@ fun AppNavHost() {
     val container = rememberAppContainer()
 
     val tabRoutes = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
-    val miniPlayerOnlyRoutes = setOf(Routes.ALBUM, Routes.SPLIT_EDITOR)
+    val miniPlayerOnlyRoutes = setOf(
+        Routes.ALBUM,
+        Routes.SPLIT_EDITOR,
+        Routes.PLAYLIST_DETAIL,
+        Routes.STATS,
+    )
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
     // 歌词视频是播放页上方的一层覆盖页，不是独立导航目的地：
@@ -430,7 +435,10 @@ fun AppNavHost() {
                 }
                 composable(Routes.STATS) {
                     Page {
-                        StatsScreen(onBack = { navController.popBackStack() })
+                        StatsScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                        )
                     }
                 }
                 composable(Routes.LOGIN) {

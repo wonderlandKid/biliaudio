@@ -42,11 +42,22 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
 fun BiliGroup(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+    onClick: (() -> Unit)? = null,
+    enabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(Dimens.cardCorner)
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Dimens.cardCorner),
+        modifier = modifier
+            .fillMaxWidth()
+            .let { base ->
+                if (onClick != null) {
+                    base.clip(shape).clickable(enabled = enabled, onClick = onClick)
+                } else {
+                    base
+                }
+            },
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Column(
@@ -80,7 +91,7 @@ fun BiliGroupItem(
                 base
             }
         }
-        .padding(horizontal = Spacing.xs, vertical = Spacing.sm + 2.dp)
+        .padding(horizontal = Spacing.md, vertical = Spacing.sm + 2.dp)
     Row(
         modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,

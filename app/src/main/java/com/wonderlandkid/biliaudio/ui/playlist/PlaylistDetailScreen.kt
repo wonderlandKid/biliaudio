@@ -146,7 +146,7 @@ fun PlaylistDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(bottom = Spacing.xxl),
+                contentPadding = PaddingValues(bottom = 96.dp),
             ) {
                 item(key = "header") {
                     Column(
@@ -207,8 +207,8 @@ fun PlaylistDetailScreen(
                                 if (index >= 0) viewModel.playAt(index)
                             },
                             onRemove = { viewModel.removeSong(song.track.uid) },
-                            isCurrent = false,
-                            isPlaying = false,
+                            isCurrent = song.track.id == state.currentTrackId,
+                            isPlaying = state.isPlaying,
                         )
                     }
                 }

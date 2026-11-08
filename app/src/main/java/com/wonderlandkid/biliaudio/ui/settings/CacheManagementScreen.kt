@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
+import com.wonderlandkid.biliaudio.ui.components.BiliGroupItem
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
@@ -225,31 +226,17 @@ private fun CacheAlbumCard(
     val summary = item.summary
     val context = LocalContext.current
     BiliGroup(contentPadding = PaddingValues(0.dp)) {
-        Column(modifier = Modifier.padding(Spacing.md)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
+        BiliGroupItem(
+            title = item.album?.title ?: "已删除的专辑",
+            subtitle = item.album?.artist ?: summary.bvid,
+            leading = {
                 CoverImage(
                     url = item.album?.coverModel(),
                     modifier = Modifier.size(56.dp),
                     cornerRadius = 14.dp,
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.album?.title ?: "已删除的专辑",
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = item.album?.artist ?: summary.bvid,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            },
+            trailing = {
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
@@ -257,19 +244,19 @@ private fun CacheAlbumCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            },
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = Spacing.md, end = Spacing.md, bottom = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            if (summary.hasAudio) {
+                CacheChip("音频 ${summary.audioQualityLabel.orEmpty()} · ${formatBytes(context = context, bytes = summary.audioBytes)}")
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = Spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                if (summary.hasAudio) {
-                    CacheChip("音频 ${summary.audioQualityLabel.orEmpty()} · ${formatBytes(context = context, bytes = summary.audioBytes)}")
-                }
-                if (summary.hasVideo) {
-                    CacheChip("歌词视频 ${summary.videoHeight?.let { "${it}P" } ?: ""} · ${formatBytes(context = context, bytes = summary.videoBytes)}")
-                }
+            if (summary.hasVideo) {
+                CacheChip("歌词视频 ${summary.videoHeight?.let { "${it}P" } ?: ""} · ${formatBytes(context = context, bytes = summary.videoBytes)}")
             }
             Text(
                 text = "合计 $totalText · 更新于 ${formatDate(summary.updatedAtMs)}",
@@ -279,6 +266,7 @@ private fun CacheAlbumCard(
             )
         }
     }
+
 }
 
 @Composable

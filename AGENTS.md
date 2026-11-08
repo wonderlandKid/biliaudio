@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.22.0**（tag `v0.22.0`，2026-11-08；release commit 以 `git rev-parse v0.22.0` 为准）
+- **版本：v0.22.1**（tag `v0.22.1`，2026-11-08；release commit 以 `git rev-parse v0.22.1` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**126 个**（v0.22.0）
+- 单元测试：**126 个**（v0.22.1）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.22.0: 126 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.22.1: 126 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -65,7 +65,7 @@ scripts/screenshot.sh home 8
    - 搜索框统一用 `SearchField`（可编辑）/`SearchBarEntry`（入口）；
    - **分组/条目必须用 `ui/components/BiliGroup.kt`** 的 `BiliGroup` / `BiliGroupItem` /
      `BiliGroupSectionTitle`，禁止页面内再手写大圆角 Surface 卡片；组内自定义业务内容也只能放在
-     BiliGroup 容器内；
+     BiliGroup 容器内；**音乐内容行点击必须真正播放，禁止 `onClick={}` 空实现**；同类行必须有当前播放高亮；
    - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md)（新增页面 checklist/状态约定/共享组件）。
 8. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
@@ -101,7 +101,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.22.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.22.1 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

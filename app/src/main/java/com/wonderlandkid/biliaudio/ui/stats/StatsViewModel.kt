@@ -7,9 +7,12 @@ import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
+import com.wonderlandkid.biliaudio.player.PlaybackController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 data class AlbumListeningUi(
@@ -29,19 +32,29 @@ data class StatsUiState(
     val trackStats: List<TrackPlayUi> = emptyList(),
     val totalListenedMs: Long = 0L,
     val totalPlayCount: Int = 0,
+    val currentTrackId: Long? = null,
+    val isPlaying: Boolean = false,
 )
+
+private data class Highlight(val trackId: Long?, val isPlaying: Boolean)
 
 class StatsViewModel(
     albumRepository: AlbumRepository,
     statsRepository: PlaybackStatsRepository,
+    private val playbackController: PlaybackController,
 ) : ViewModel() {
+
+    private val playbackHighlight = playbackController.state
+        .map { Highlight(trackId = it.currentTrack?.id, isPlaying = it.isPlaying) }
+        .distinctUntilChanged()
 
     val uiState: StateFlow<StatsUiState> = combine(
         albumRepository.albums,
         albumRepository.songs,
         statsRepository.observeAlbumListening(),
         statsRepository.observeTrackPlayCounts(),
-    ) { albums, songs, albumStats, trackStats ->
+        playbackHighlight,
+    ) { albums, songs, albumStats, trackStats, highlight ->
         val albumsById = albums.associateBy { it.id }
         val songsByUid = songs.associateBy { it.track.uid }
         val albumUi = albumStats.mapNotNull { stat ->
@@ -77,10 +90,22 @@ class StatsViewModel(
             trackStats = trackUi,
             totalListenedMs = albumUi.sumOf { it.listenedMs },
             totalPlayCount = trackUi.sumOf { it.playCount },
+            currentTrackId = highlight.trackId,
+            isPlaying = highlight.isPlaying,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000L),
         initialValue = StatsUiState(),
     )
+
+    /** 统计页点歌与音乐库一致：播放所属专辑，并从这首歌开始。 */
+    fun playSong(song: TrackWithAlbum) {
+        if (song.track.id > 0L) {
+            playbackController.playTrack(albumId = song.album.id, trackId = song.track.id)
+        } else {
+            // 未分割专辑的虚拟整张曲目
+            playbackController.playAlbum(song.album.id)
+        }
+    }
 }
