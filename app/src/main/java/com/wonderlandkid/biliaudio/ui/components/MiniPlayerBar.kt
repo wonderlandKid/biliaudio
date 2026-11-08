@@ -85,19 +85,20 @@ fun MiniPlayerBar(
         val onContainer = MaterialTheme.colorScheme.onSurface
         val blurStyle = remember(containerColor) {
             val glassTint = HazeColorEffect.tint(
-                color = containerColor.copy(alpha = 0.30f),
+                color = containerColor.copy(alpha = 0.22f),
                 blendMode = BlendMode.SrcOver,
             )
             val fallbackTint = HazeColorEffect.tint(
-                color = containerColor.copy(alpha = 0.80f),
+                color = containerColor.copy(alpha = 0.90f),
                 blendMode = BlendMode.SrcOver,
             )
             HazeBlurStyle {
-                blurRadius(22.dp)
-                backgroundColor(containerColor.copy(alpha = 0.28f))
+                // 更深的毛玻璃：更大的 blur radius + 更低的底色占比
+                blurRadius(36.dp)
+                backgroundColor(containerColor.copy(alpha = 0.16f))
                 colorEffects(listOf(glassTint))
                 fallbackColorEffect(fallbackTint)
-                noiseFactor(0.03f)
+                noiseFactor(0.05f)
                 alpha(1f)
             }
         }
@@ -118,7 +119,7 @@ fun MiniPlayerBar(
                 .padding(horizontal = Spacing.md, vertical = Spacing.xs)
                 .clip(shape)
                 .then(glassModifier)
-                .border(1.dp, onContainer.copy(alpha = 0.10f), shape)
+                .border(1.dp, onContainer.copy(alpha = 0.06f), shape)
                 .then(dragModifier)
                 .clickable(onClick = onClick),
             shape = shape,
@@ -176,26 +177,6 @@ fun MiniPlayerBar(
                             tint = onContainer.copy(alpha = 0.86f),
                         )
                     }
-                }
-                // 低对比度进度线
-                val progress =
-                    if (state.trackDurationMs > 0) {
-                        (state.positionMs.toFloat() / state.trackDurationMs).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .background(onContainer.copy(alpha = 0.10f)),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .height(2.dp)
-                            .background(onContainer.copy(alpha = 0.42f)),
-                    )
                 }
             }
         }

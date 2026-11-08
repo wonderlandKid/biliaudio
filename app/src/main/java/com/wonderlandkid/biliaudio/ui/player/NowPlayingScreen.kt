@@ -84,6 +84,7 @@ fun NowPlayingScreen(
     onBack: () -> Unit,
     onOpenVideo: () -> Unit,
     modifier: Modifier = Modifier,
+    dragModifier: Modifier = Modifier,
     onOpenAlbum: (Long) -> Unit = {},
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
@@ -123,12 +124,15 @@ fun NowPlayingScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                NowPlayingTopBar(
-                    onBack = onBack,
-                    canOpenAlbum = state.currentAlbumId != null,
-                    onOpenAlbum = { state.currentAlbumId?.let(onOpenAlbum) },
-                    onTogglePlaylist = { showPlaylist = true },
-                )
+                // 顶部栏整块可下拉收起播放页（内部按钮点击不受影响）
+                Box(modifier = dragModifier) {
+                    NowPlayingTopBar(
+                        onBack = onBack,
+                        canOpenAlbum = state.currentAlbumId != null,
+                        onOpenAlbum = { state.currentAlbumId?.let(onOpenAlbum) },
+                        onTogglePlaylist = { showPlaylist = true },
+                    )
+                }
                 if (state.isLoading) {
                     LinearProgressIndicator(
                         modifier = Modifier

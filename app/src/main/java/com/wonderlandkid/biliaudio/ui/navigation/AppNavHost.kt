@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -136,7 +138,12 @@ fun AppNavHost() {
         state = playerDragState,
         orientation = Orientation.Vertical,
         onDragStopped = { velocity ->
-            val open = playerProgress > 0.18f || velocity < -800f
+            // 方向 + 速度 + 进度共同决定：向下快滑关闭、向上快滑展开，否则看是否过半
+            val open = when {
+                velocity < -800f -> true
+                velocity > 800f -> false
+                else -> playerProgress > 0.5f
+            }
             animatePlayerTo(open, (-velocity / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(-6f, 6f))
         },
     )
@@ -196,7 +203,7 @@ fun AppNavHost() {
                 // 全部导航：纯左右滑动（无淡入淡出）；返回方向严格反向
                 enterTransition = { slideInFromRight() },
                 exitTransition = { slideOutToLeft() },
-                popEnterTransition = { slideInFromLeftPart() },
+                popEnterTransition = { slideInFromLeft() },
                 popExitTransition = { slideOutToRight() },
             ) {
                 // ---------------- Tabs（按 Tab 顺序左右滑动） ----------------
@@ -204,41 +211,47 @@ fun AppNavHost() {
                     Routes.HOME,
                     enterTransition = { tabEnter(Routes.HOME) },
                     exitTransition = { tabExit(Routes.HOME) },
-                    popEnterTransition = { slideInFromLeftPart() },
+                    popEnterTransition = { slideInFromLeft() },
                     popExitTransition = { slideOutToRight() },
                 ) {
-                    HomeScreen(
-                        onOpenSearch = { switchTab(MainTab.LIBRARY) },
-                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                        onOpenLogin = { navController.navigate(Routes.LOGIN) },
-                        onOpenImport = { navController.navigate(Routes.IMPORT) },
-                        onOpenLibrary = { switchTab(MainTab.LIBRARY) },
-                    )
+                    Page {
+                        HomeScreen(
+                            onOpenSearch = { switchTab(MainTab.LIBRARY) },
+                            onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                            onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                            onOpenImport = { navController.navigate(Routes.IMPORT) },
+                            onOpenLibrary = { switchTab(MainTab.LIBRARY) },
+                        )
+                    }
                 }
                 composable(
                     Routes.LIBRARY,
                     enterTransition = { tabEnter(Routes.LIBRARY) },
                     exitTransition = { tabExit(Routes.LIBRARY) },
-                    popEnterTransition = { slideInFromLeftPart() },
+                    popEnterTransition = { slideInFromLeft() },
                     popExitTransition = { slideOutToRight() },
                 ) {
-                    LibraryScreen(
-                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                        onOpenArtist = { artistName -> navController.navigate(Routes.artist(artistName)) },
-                    )
+                    Page {
+                        LibraryScreen(
+                            onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                            onOpenArtist = { artistName -> navController.navigate(Routes.artist(artistName)) },
+                        )
+                    }
                 }
                 composable(
                     Routes.SETTINGS,
                     enterTransition = { tabEnter(Routes.SETTINGS) },
                     exitTransition = { tabExit(Routes.SETTINGS) },
-                    popEnterTransition = { slideInFromLeftPart() },
+                    popEnterTransition = { slideInFromLeft() },
                     popExitTransition = { slideOutToRight() },
                 ) {
-                    SettingsScreen(
-                        onOpenLogin = { navController.navigate(Routes.LOGIN) },
-                        onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
-                        onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
-                    )
+                    Page {
+                        SettingsScreen(
+                            onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                            onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
+                            onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                        )
+                    }
                 }
 
                 // ---------------- 艺术家 / 专辑 / 分曲（右进右出） ----------------
@@ -247,72 +260,88 @@ fun AppNavHost() {
                     arguments = listOf(navArgument(Routes.ARG_ARTIST_NAME) { type = NavType.StringType }),
                 ) { entry ->
                     val artistName = entry.arguments?.getString(Routes.ARG_ARTIST_NAME).orEmpty()
-                    ArtistDetailScreen(
-                        artistName = android.net.Uri.decode(artistName),
-                        onBack = { navController.popBackStack() },
-                        onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
-                    )
+                    Page {
+                        ArtistDetailScreen(
+                            artistName = android.net.Uri.decode(artistName),
+                            onBack = { navController.popBackStack() },
+                            onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
+                        )
+                    }
                 }
                 composable(
                     route = Routes.ALBUM,
                     arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
                 ) { entry ->
                     val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
-                    AlbumDetailScreen(
-                        albumId = albumId,
-                        onBack = { navController.popBackStack() },
-                        onOpenSplitEditor = { id -> navController.navigate(Routes.splitEditor(id)) },
-                    )
+                    Page {
+                        AlbumDetailScreen(
+                            albumId = albumId,
+                            onBack = { navController.popBackStack() },
+                            onOpenSplitEditor = { id -> navController.navigate(Routes.splitEditor(id)) },
+                        )
+                    }
                 }
                 composable(
                     route = Routes.SPLIT_EDITOR,
                     arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
                 ) { entry ->
                     val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
-                    SplitEditorScreen(
-                        albumId = albumId,
-                        onBack = { navController.popBackStack() },
-                    )
+                    Page {
+                        SplitEditorScreen(
+                            albumId = albumId,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
 
                 // ---------------- 导入 / 登录 / 诊断 ----------------
                 composable(Routes.IMPORT) {
-                    ImportScreen(
-                        onBack = { navController.popBackStack() },
-                        onImported = { albumId ->
-                            navController.popBackStack()
-                            navController.navigate(Routes.album(albumId))
-                        },
-                    )
+                    Page {
+                        ImportScreen(
+                            onBack = { navController.popBackStack() },
+                            onImported = { albumId ->
+                                navController.popBackStack()
+                                navController.navigate(Routes.album(albumId))
+                            },
+                        )
+                    }
                 }
                 composable(Routes.SEARCH) {
-                    ImportScreen(
-                        onBack = { navController.popBackStack() },
-                        onImported = { albumId ->
-                            navController.popBackStack()
-                            navController.navigate(Routes.album(albumId))
-                        },
-                        initialTab = ImportTab.SEARCH,
-                    )
+                    Page {
+                        ImportScreen(
+                            onBack = { navController.popBackStack() },
+                            onImported = { albumId ->
+                                navController.popBackStack()
+                                navController.navigate(Routes.album(albumId))
+                            },
+                            initialTab = ImportTab.SEARCH,
+                        )
+                    }
                 }
                 composable(Routes.IMPORT_ARCHIVE) {
-                    ImportScreen(
-                        onBack = { navController.popBackStack() },
-                        onImported = { albumId ->
-                            navController.popBackStack()
-                            navController.navigate(Routes.album(albumId))
-                        },
-                        initialTab = ImportTab.BATCH,
-                    )
+                    Page {
+                        ImportScreen(
+                            onBack = { navController.popBackStack() },
+                            onImported = { albumId ->
+                                navController.popBackStack()
+                                navController.navigate(Routes.album(albumId))
+                            },
+                            initialTab = ImportTab.BATCH,
+                        )
+                    }
                 }
                 composable(Routes.DIAGNOSTICS) {
-                    DiagnosticsScreen(onBack = { navController.popBackStack() })
+                    Page {
+                        DiagnosticsScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(Routes.LOGIN) {
-                    LoginScreen(
-                        onBack = { navController.popBackStack() },
-                        onLoggedIn = { navController.popBackStack() },
-                    )
+                    Page {
+                        LoginScreen(
+                            onBack = { navController.popBackStack() },
+                            onLoggedIn = { navController.popBackStack() },
+                        )
+                    }
                 }
 
                 // ---------------- 歌词视频页（左右滑动进出） ----------------
@@ -320,12 +349,14 @@ fun AppNavHost() {
                     Routes.VIDEO,
                     enterTransition = { slideInFromRight() },
                     exitTransition = { slideOutToLeft() },
-                    popEnterTransition = { slideInFromLeftPart() },
+                    popEnterTransition = { slideInFromLeft() },
                     popExitTransition = { slideOutToRight() },
                 ) {
-                    VideoScreen(
-                        onBack = { navController.popBackStack() },
-                    )
+                    Page {
+                        VideoScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
             }
 
@@ -373,6 +404,7 @@ fun AppNavHost() {
                 ) {
                     NowPlayingScreen(
                         onBack = { animatePlayerTo(false) },
+                        dragModifier = playerDragModifier,
                         onOpenVideo = {
                             reopenPlayerAfterVideo = true
                             settleJob?.cancel()
@@ -384,6 +416,14 @@ fun AppNavHost() {
                             navController.navigate(Routes.album(albumId))
                         },
                     )
+                    // 播放页顶部下拉关闭区域（48dp 高、上滑展开后手指可在顶部向下拖回迷你条）
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .then(playerDragModifier),
+                    )
                 }
                 // 注册在 NavHost/播放页之后：返回键优先收起播放页卡片，而不是 pop 导航栈
                 BackHandler(enabled = playerProgress > 0.01f) {
@@ -391,6 +431,20 @@ fun AppNavHost() {
                 }
             }
         }
+    }
+}
+
+/**
+ * 每个导航目的地都包一层不透明 Surface：左右滑动转场时两个页面是「实体」，
+ * 避免透明背景导致两页内容叠加透视。
+ */
+@Composable
+private fun Page(content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        content()
     }
 }
 
@@ -410,15 +464,16 @@ private fun slideInFromRight(): EnterTransition =
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
     ) { it }
 
-private fun slideInFromLeftPart(): EnterTransition =
+/** 返回时上一页从左侧整页推回（完整宽度，与当前页同步挤压，避免两页叠加）。 */
+private fun slideInFromLeft(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedDecelerate),
-    ) { -it / 3 }
+    ) { -it }
 
 private fun slideOutToLeft(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { -it / 3 }
+    ) { -it }
 
 private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(
@@ -439,10 +494,10 @@ private fun androidx.compose.animation.AnimatedContentTransitionScope<androidx.n
     currentRoute: String,
 ): ExitTransition {
     val forward = tabIndex(targetState.destination.route) > tabIndex(currentRoute)
-    // 注意：targetState 可能是同一 Tab 内部的详情页，此时按“前进”处理
+    // 完整宽度退出：与进入页同步移动，像两张实体卡片挤压切换，不产生中间叠加
     return slideOutHorizontally(
         animationSpec = tween(BiliMotion.AxisTotalMs, easing = BiliMotion.EmphasizedAccelerate),
-    ) { if (forward) -it / 3 else it / 3 }
+    ) { if (forward) -it else it }
 }
 
 // ---------------------------------------------------------------------------
