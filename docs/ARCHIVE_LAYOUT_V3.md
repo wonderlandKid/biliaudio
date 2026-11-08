@@ -109,6 +109,17 @@
 - `cover` 在 bundle 中用 hash 引用；单 `album.json` 可额外带 `dataBase64`（二选一）。
 - 不再包含 `settings`、`playlists`、全局 `features`（features 下沉到各域）。
 
+### 3.5 Artist 的定位（重要）
+
+- **Artist 是 album 的属性，不是独立实体**：库里 `albums.artist` 是字符串（当前来自 B 站 UP 主/专辑艺术家），
+  没有 artist 表、也不存在 artist→album 的存储层级；
+- `artist -> album` 目录只出现在「人看的导出形态」里，是**展示层/生成物**，不是身份：
+  导入只认 `albumKey`，不依赖目录名；改名/换目录不影响数据；
+- 这样查询是关系型的：`WHERE artist = ?` 或对专辑列表 `groupBy artist`，几百张专辑是 O(n) 且 n 很小；
+  需要更快时加一个归一化 `artistKey` 列 + 索引即可（DB 优化，不改归档结构）；
+- 将来若要做「艺术家主页/头像/别名/多艺术家/跨专辑稳定身份」，再引入 `artists` 表 + `album_artist` 关联；
+  这是**新增表**，album 的身份 `(source,bvid,page)` 不变，归档可加可选域，不需要推翻 library。
+
 ### 3.3 playlists.json（歌单域，预留）
 
 ```json
