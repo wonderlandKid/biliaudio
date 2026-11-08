@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -15,10 +16,14 @@ import com.wonderlandkid.biliaudio.data.model.Track
 /** 专辑表：一张专辑 = 一个 B 站视频（MVP 单 P）。 */
 @Entity(
     tableName = "albums",
-    indices = [Index(value = ["bvid"], unique = true), Index(value = ["lastPlayedAt"])],
+    indices = [
+        Index(value = ["source", "bvid", "page"], unique = true),
+        Index(value = ["lastPlayedAt"]),
+    ],
 )
 data class AlbumEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    @ColumnInfo(defaultValue = "bilibili") val source: String = "bilibili",
     val bvid: String,
     /** 当前使用的分 P cid。 */
     val cid: Long,
@@ -47,10 +52,11 @@ data class AlbumEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index(value = ["albumId"])],
+    indices = [Index(value = ["albumId"]), Index(value = ["uid"], unique = true)],
 )
 data class TrackEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    @ColumnInfo(defaultValue = "") val uid: String = "",
     val albumId: Long,
     /** 在专辑内的顺序，从 0 开始。 */
     val index: Int,
@@ -61,6 +67,7 @@ data class TrackEntity(
 
 fun AlbumEntity.toModel(): Album = Album(
     id = id,
+    source = source,
     bvid = bvid,
     cid = cid,
     page = page,
@@ -78,6 +85,7 @@ fun AlbumEntity.toModel(): Album = Album(
 
 fun Album.toEntity(): AlbumEntity = AlbumEntity(
     id = id,
+    source = source,
     bvid = bvid,
     cid = cid,
     page = page,
@@ -95,6 +103,7 @@ fun Album.toEntity(): AlbumEntity = AlbumEntity(
 
 fun TrackEntity.toModel(): Track = Track(
     id = id,
+    uid = uid,
     albumId = albumId,
     index = index,
     title = title,
@@ -104,6 +113,7 @@ fun TrackEntity.toModel(): Track = Track(
 
 fun Track.toEntity(): TrackEntity = TrackEntity(
     id = id,
+    uid = uid.ifBlank { java.util.UUID.randomUUID().toString() },
     albumId = albumId,
     index = index,
     title = title,

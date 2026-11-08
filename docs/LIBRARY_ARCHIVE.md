@@ -1,293 +1,147 @@
-# 音乐库归档文件格式（v1，已实现）
+# 音乐库归档格式 v2（已实现）
 
-> **状态**：M1 + M2 已实现（v0.2.0）：数据层 `LibraryArchiveCodec` / `LibraryArchiveRepositoryImpl`，
-> UI 包含导入页「归档导入」Tab、设置页「备份与恢复」、专辑详情「导出专辑文件」；自动备份目录
-> `files/backups/`（保留最近 10 份）。M3（自动定时备份 / YAML / 模板下载）按需再排。
->
-> 目标：用一个（或若干个）文件承载「导入的专辑 + 分曲时间点」，既能当**整库备份**，
-> 也能当**单张专辑分享文件**、**评论区分割点文件**。导入导出共用同一套格式，避免维护两套。
+> 状态：**v2 已实现（v0.9.0）**。v1 不再兼容：旧归档请用旧版 App 导出为 v2，或按本文重写。
+> 设计背景与取舍见 [ARCHIVE_SCHEMA_V2.md](ARCHIVE_SCHEMA_V2.md)。
 
 ## 1. 设计原则
 
-1. **一个格式，三种用法**：整库备份 / 单专辑 / 只导入分割点，都使用同一个 JSON 结构，靠导入模式区分行为。
-2. **文件里只有"配置"，没有音频**：B 站内容不落盘、不重新分发（版权 + 体积）；播放时按 `bvid/page` 重新解析流。
-3. **机器可写 + 人可改**：时间点导出用毫秒整数（精确），导入同时接受 `"mm:ss"` 等字符串（方便手写/评论区整理）。
-4. **稳定业务键**：专辑用 `bvid + page` 作为跨设备匹配键；数据库自增 id 不写进文件。
-5. **向后兼容**：保留现有「快捷导入」格式（JSON 数组 / CSV / 文本块），统一入口自动识别。
-6. **可演进**：`format` + `version` 字段，未知高版本明确报错，低版本兼容导入。
+1. **一个格式，三种用法**：整库备份 / 单专辑 / 仅分割点，靠 `kind` 与导入模式区分。
+2. **只有配置，没有音频**：播放时按 `bvid/page` 重新解析 B 站流。
+3. **稳定身份**：`albumKey = source:bvid#page`；分曲 `id` 为跨设备 UUID，不用自增 id。
+4. **可演进**：`version` + `minReaderVersion` + `features`；旧版读到高版本直接拒绝，不部分导入。
+5. **不可信输入**：大小、bvid、URL、分曲边界、封面 hash 全部校验。
 
-## 2. 文件格式（JSON）
-
-扩展名建议：`*.biliaudio.json`；MIME：`application/json`。
-
-### 2.1 完整示例（整库备份）
+## 2. 顶层结构
 
 ```json
 {
   "format": "biliaudio-library",
-  "version": 1,
-  "exportedAt": "2026-11-07T22:30:00+08:00",
-  "app": { "name": "BiliAudio", "version": "0.1.0" },
+  "version": 2,
+  "minReaderVersion": 2,
+  "kind": "library",
+  "archiveId": "c0a8...",
+  "exportedAt": "2026-11-08T13:47:10+08:00",
+  "app": { "name": "BiliAudio", "version": "0.9.0" },
+  "features": ["stable-album-key", "stable-track-id", "cover-sha256", "explicit-end-ms"],
   "settings": {
+    "version": 1,
     "audioQuality": "AUTO",
-    "darkTheme": null
+    "darkTheme": null,
+    "diagnosticLogsEnabled": true
   },
-  "albums": [
-    {
-      "bvid": "BV1GJ411x7h7",
-      "page": 1,
-      "cid": 137649199,
-      "title": "Never Gonna Give You Up（完整专辑）",
-      "artist": "索尼音乐中国",
-      "coverUrl": "https://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg",
-      "durationMs": 213000,
-      "createdAt": 1794046700000,
-      "lastPlayedAt": 1794051200000,
-      "playCount": 12,
-      "segments": [
-        { "startMs": 0, "title": "Never Gonna Give You Up" },
-        { "startMs": 45000, "title": "Whenever You Need Somebody" },
-        { "startMs": 120000, "title": "Together Forever" }
-      ]
-    }
+  "albums": []
+}
+```
+
+- `kind`：
+  - `library`：整库（`albums` 可为空）；
+  - `album`：单专辑（恰好 1 张）；
+  - `segments`：仅分割点（恰好 1 张，可只写定位信息 + `segments`）；
+  - `index`：目录归档根索引（`albums` 必须为空；**禁止作为音乐库/专辑直接导入，尤其禁止 REPLACE**）。
+- `version`：格式主版本；当前 = 2。读取方支持版本区间，超过当前版本拒绝。
+- `minReaderVersion`：写出方要求的最低读取版本；高于当前 App 版本拒绝。
+- `features`：读取方不认识的数据特性直接拒绝（避免静默丢字段）。
+- `settings.version`：设置对象独立版本，新增设置只升这里。
+- `archiveId`：一次导出的唯一 ID（日志/未来增量同步用）。
+
+## 3. 专辑与分曲
+
+```json
+{
+  "albumKey": "bilibili:BV1GJ411x7h7#p1",
+  "source": "bilibili",
+  "bvid": "BV1GJ411x7h7",
+  "page": 1,
+  "pageCount": 13,
+  "cidHint": 137649199,
+  "title": "Abbey Road",
+  "artist": "The Beatles",
+  "durationMs": 213000,
+  "updatedAt": 1794051200000,
+  "createdAt": 1794046700000,
+  "lastPlayedAt": 1794051200000,
+  "playCount": 12,
+  "cover": {
+    "mime": "image/jpeg",
+    "sha256": "9f3c...64位小写hex",
+    "byteLength": 183421,
+    "dataBase64": "/9j/4AAQSk..."
+  },
+  "segments": [
+    { "id": "trk_9f3c...", "startMs": 0, "endMs": 45000, "title": "Come Together" },
+    { "id": "trk_1a2b...", "startMs": 45000, "endMs": 120000, "title": "Something" }
   ]
 }
 ```
 
-> 自定义封面（v0.5.0）：专辑设置了「自定义封面」时，导出会在对应 `albums[]` 里额外带
-> `"coverBase64": "<JPEG 的 base64（无换行）>"`；导入时解码并保存为本地封面文件、写入专辑
-> `coverLocalPath`。原专辑没有自定义封面（就用 B 站 `coverUrl`）时该字段不出现；
-> 单张封面原始字节超过 2 MB 时导出会省略，避免备份文件过大。
+- `albumKey` 导出时写入；导入时校验与 `source/bvid/page` 一致，重复即报错。
+- `page` 必填（≥1）；有 `pageCount` 时校验 `page ≤ pageCount`。
+- `cidHint` 仅提示，导入时重新解析流，**不信任**。
+- 封面对象：MIME 限 `image/jpeg|png|webp`；`dataBase64` 解码后原始字节 ≤2MB；
+  `byteLength` 必须一致；`sha256` 必须匹配，不匹配直接报错。
+- 分曲：
+  - `id` 可选（手写可省略，导入时生成 UUID）；存在时需全局唯一；
+  - `startMs` 必填、非负、严格递增；
+  - `endMs` 可选；若写出必须 `> startMs`、`≤ durationMs`，且不与下一首重叠；
+  - 省略 `endMs` 时按「下一首 startMs / 专辑总时长」推导。
 
-### 2.2 单张专辑文件
+### 3.1 `segments` 空值语义
 
-同一结构，`albums` 只含一项。手动编写时可省略所有可选字段：
-
-```json
-{
-  "format": "biliaudio-library",
-  "version": 1,
-  "albums": [
-    {
-      "bvid": "BV1GJ411x7h7",
-      "segments": [
-        { "start": "00:00", "name": "Never Gonna Give You Up" },
-        { "start": "00:45", "name": "Whenever You Need Somebody" }
-      ]
-    }
-  ]
-}
-```
-
-- `title/artist/coverUrl/durationMs` 省略时：专辑不存在 → 用 B 站 view 信息补全后创建；专辑已存在 → 保留原值。
-- `segments` 省略/为空 → 专辑处于「未分割」状态：播放时整段视频按一首虚拟歌曲播放，
-  之后可在分曲编辑页补分割点（不会再生成需要手动删除的占位曲）。
-
-### 2.3 只导入分割点（评论区分割点文件）
-
-同上（最小文件），配合导入模式「**仅更新分割点**」：按 `bvid+page` 匹配已有专辑，
-只替换分曲，不新建专辑、不改元数据；匹配不到则记为跳过并提示。
-
-### 2.4 字段说明
-
-| 字段 | 必填 | 说明 |
+| 写法 | 新建专辑 | 更新已有专辑 |
 | --- | --- | --- |
-| `format` | ✅ | 固定 `"biliaudio-library"` |
-| `version` | ✅ | 格式版本，当前 `1` |
-| `exportedAt` | ❌ | ISO-8601 时间，仅信息用途 |
-| `app` | ❌ | 导出方信息（name/version） |
-| `settings` | ❌ | 可选偏好（音质/深浅色）；不含登录 Cookie |
-| `albums[]` | ✅ | 专辑数组，可为空表示空库（覆盖模式会清空） |
-| `albums[].bvid` | ✅ | 支持 BV 号；也接受 `url` 字段（视频链接） |
-| `albums[].page` | ❌ | 分 P 序号，默认 1 |
-| `albums[].cid` | ❌ | 视频流 id，导入时可从 B 站重新解析，不信任文件值 |
-| `albums[].title` | 新建时❌* | 省略则用 B 站视频标题 |
-| `albums[].artist` | 新建时❌* | 省略则用 UP 主名 |
-| `albums[].coverUrl` | ❌ | 省略则用视频封面；仅接受 http/https（B 站远程封面） |
-| `albums[].coverBase64` | ❌ | 自定义封面（JPEG base64，无换行，原始字节 ≤2 MB）；导入时解码保存为本地封面，非法/空值忽略且不影响其他字段；导出时仅当专辑有自定义封面才写入 |
-| `albums[].durationMs` | 新建时❌* | 省略则用 view 接口时长 |
-| `albums[].createdAt/lastPlayedAt/playCount` | ❌ | 用户数据，恢复时尽量保留 |
-| `albums[].segments[]` | ❌ | 为空 = 未分割（整段按一首虚拟播放）；最多 500 条 |
-| `segments[].startMs` 或 `segments[].start` | ✅ | 二选一：毫秒整数，或 `ss`/`mm:ss`/`mm:ss.SSS`/`hh:mm:ss` |
-| `segments[].title` 或 `segments[].name` | ❌ | 省略自动命名「曲目 N」 |
+| 字段省略（解码为 null） | 未分割 | **保留原分曲** |
+| `"segments": null` | 未分割 | 保留原分曲 |
+| `"segments": []` | 未分割 | **清空分曲（回到未分割）** |
+| `"segments": [...]` | 使用给定分曲 | 替换分曲 |
 
-\* 标注「新建时❌」的字段：文件里没有且需要新建专辑时，会请求 B 站 view 接口补全；离线则报错而不是写入残缺数据。
-
-### 2.5 校验规则（文件不可信）
-
-- 文件大小上限 5 MB；专辑数 ≤ 2000；单专辑分曲 ≤ 500。
-- 分曲 `startMs` 严格递增且 < `durationMs`；越界/重复直接报错并指出第几项。
-- `bvid` 必须匹配 `^BV[0-9A-Za-z]{10}$`（或合法 `av`/链接经解析后符合）。
-- 标题长度 ≤ 200；URL 仅 http/https。
-- `coverBase64` 不参与必填校验：空白/非法 base64 会被忽略（该专辑仍正常导入，只是封面回退到 `coverUrl`）；
-  仅当专辑有自定义封面时才会导出，且原始图片字节 >2 MB 不写入（`MAX_INLINE_COVER_BYTES`）。
-- 导入全程在 IO 线程；批量请求 B 站时串行 + 限速（复用现有 BiliApi 节流）。
-
-## 3. 导入语义（三种模式）
-
-| 模式 | 适用场景 | 行为 |
-| --- | --- | --- |
-| **合并导入**（默认） | 整库备份恢复、日常导入 | `bvid+page` 匹配：不存在 → 新建；存在 → 更新元数据与分曲（含 `coverBase64` 自定义封面）；可选保留 `playCount/lastPlayedAt`（默认保留较大值） |
-| **仅更新分割点** | 评论区分割点文件 | 只替换已存在专辑的 `segments`，不新建、不改元数据；匹配不到 → 跳过并报告 |
-| **覆盖全库** | 迁移/回滚到备份 | 清空本地库后导入（**先自动导出当前库到私有目录作为回滚点**，UI 二次确认） |
-
-导入完成给出报告：`新建 N 张 / 更新 M 张 / 跳过 K 张 / 失败 L 张`，失败逐条给中文原因。
-
-## 4. 与现有「快捷导入」的关系
-
-统一入口自动识别：
-
-| 文件/文本内容 | 识别为 | 处理 |
-| --- | --- | --- |
-| JSON 对象且 `format == "biliaudio-library"` | 归档格式 | 走本方案 |
-| JSON 数组 | 旧批量格式 | 转成内部归档模型后走同一导入器（不新建解析分支） |
-| CSV / 文本块 | 旧批量格式 | 同上，逐行解析 |
-
-即：**旧格式不废弃，最终都归一化成 `LibraryArchive` 再执行导入**，只有一种落库路径。
-
-## 5. UI 方案
-
-### 5.1 导入页（现有「批量导入」Tab 改造）
-
-- 文件选择（SAF `OpenDocument`，支持 `json/txt/yaml` 后缀）或直接粘贴文本；
-- 解析后展示**预览卡片**：识别出的专辑数/分曲数、每张专辑是「新建/更新/跳过」；
-- 导入模式单选：合并导入（默认）/ 仅更新分割点 / 覆盖全库（红色危险项 + 二次确认）；
-- 「导出示例文件」按钮（下载模板，方便手写分割点）；
-- 结果报告列表（沿用现有成功/失败 UI）。
-
-### 5.2 设置页 → 新增「备份与恢复」
-
-- 「导出音乐库」：`CreateDocument("biliaudio-library-20261107-2230.json")`，导出全部专辑+设置；
-- 「导入/恢复」：跳转统一导入页；
-- 显示「上次备份时间」（可后续加自动备份）。
-
-### 5.3 专辑详情 → 更多菜单
-
-- 「导出专辑文件」：单专辑 JSON，方便分享给朋友/另一台设备导入。
-
-## 6. YAML 取舍
-
-**推荐：v1 只做 JSON。** 理由：
-- 项目已有 kotlinx.serialization，零新增依赖、序列化/校验可靠；
-- 程序生成 + 机器解析为主，JSON 无缩进/类型歧义；可用 `jq`、JSON Schema 校验；
-- 手写分曲时我们可以支持「宽松写法」（时间字符串、title/name 别名、可省略元数据），JSON 依然够用；
-- YAML 需要引入 kaml（额外依赖），且 YAML 1.1 的 `on/off/yes/no`、时间类型等坑容易造成解析歧义。
-
-如果确实想要 YAML：建议 M3 阶段加 **只读 YAML 导入**（kaml → 同一 `LibraryArchive` 模型），导出仍默认 JSON；
-可选的 "友好 YAML 导出" 仅当用户明确需要再做。
-
-## 7. 代码改动清单（实施时）
-
-**数据层（新增）**
-- `data/model/LibraryArchive.kt`：`@Serializable` 的 `LibraryArchive / ArchiveAlbum / ArchiveSegment / ArchiveSettings` + `ArchiveImportMode` + `ArchiveImportReport`。
-- `data/impl/LibraryArchiveCodec.kt`：解析（JSON/旧格式归一化）、校验、序列化（prettyPrint）、格式识别、版本检查。
-- `data/impl/LibraryArchiveRepository.kt`：`exportAll()` / `exportAlbum(albumId)` / `importArchive(text, mode)`；复用 `AlbumRepository` 落库，保证幂等。
-- `AlbumRepository` 接口新增（Lead 统一改契约）：`suspend fun snapshotAll(): List<AlbumWithTracks>`、`suspend fun findByBvidPage(bvid, page): Album?`、`suspend fun applySegments(albumId, segments)`。
-- `BatchImportParser`：保留，输出统一为 `LibraryArchive`。
-
-**UI**
-- `ui/imports/ImportViewModel.kt`、`ImportScreen.kt`：批量 Tab 改为归档导入（模式选择/预览/示例下载/结果报告）。
-- `ui/settings/SettingsScreen.kt` + ViewModel：备份与恢复入口（导出）。
-- `ui/album/AlbumDetailScreen.kt`：更多菜单加「导出专辑文件」。
-
-**依赖**：无新增；导出用 `ActivityResultContracts.CreateDocument`，读取已有 `OpenDocument`。
-
-**测试**
-- Codec：完整往返（导出→导入字段一致）、旧格式归一化、时间字符串/毫秒双写法、未知版本拒绝、损坏 JSON 报错。
-- 导入模式：merge（新建/更新/保留播放次数）、segments-only（跳过未匹配）、replace（清空+导入，先备份）。
-- 校验：非法 bvid、分曲越界/乱序、超大文件、封面非 http、空库导出导入。
-- 使用现有 79 个单测基础，新增约 25–35 个用例。
-
-## 8. 分阶段实施
-
-| 阶段 | 内容 | 验收 |
-| --- | --- | --- |
-| M1 | 归档模型 + Codec + 导出全库/单专辑 + 导入合并模式（含旧格式归一化） | 导出→删库→导入完整还原；单测通过 |
-| M2 | 「仅更新分割点」+「覆盖全库」（自动备份+二次确认）+ 预览报告 | 评论区分割点文件可单独套用；覆盖模式可回滚 |
-| M3（可选） | 自动备份（每次修改写 `files/backups/`，保留近 5 份）、YAML 只读导入、导出模板按钮 | 需求确认后再做 |
-
-## 9. 附录：JSON Schema（v1，摘要）
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "BiliAudio Library Archive v1",
-  "type": "object",
-  "required": ["format", "version", "albums"],
-  "properties": {
-    "format": { "const": "biliaudio-library" },
-    "version": { "const": 1 },
-    "exportedAt": { "type": "string" },
-    "app": { "type": "object", "additionalProperties": true },
-    "settings": {
-      "type": "object",
-      "properties": {
-        "audioQuality": { "enum": ["AUTO", "HIGH", "MEDIUM", "LOW"] },
-        "darkTheme": { "type": ["boolean", "null"] }
-      },
-      "additionalProperties": true
-    },
-    "albums": {
-      "type": "array",
-      "maxItems": 2000,
-      "items": {
-        "type": "object",
-        "required": ["bvid"],
-        "properties": {
-          "bvid": { "type": "string", "pattern": "^BV[0-9A-Za-z]{10}$" },
-          "url": { "type": "string" },
-          "page": { "type": "integer", "minimum": 1 },
-          "cid": { "type": "integer", "minimum": 1 },
-          "title": { "type": "string", "maxLength": 200 },
-          "artist": { "type": "string", "maxLength": 200 },
-          "coverUrl": { "type": "string", "pattern": "^https?://" },
-          "coverBase64": { "type": "string", "contentEncoding": "base64" },
-          "durationMs": { "type": "integer", "minimum": 1 },
-          "createdAt": { "type": "integer" },
-          "lastPlayedAt": { "type": "integer" },
-          "playCount": { "type": "integer", "minimum": 0 },
-          "segments": {
-            "type": "array",
-            "maxItems": 500,
-            "items": {
-              "type": "object",
-              "properties": {
-                "startMs": { "type": "integer", "minimum": 0 },
-                "start": { "type": "string" },
-                "title": { "type": "string", "maxLength": 200 },
-                "name": { "type": "string", "maxLength": 200 }
-              },
-              "oneOf": [
-                { "required": ["startMs"] },
-                { "required": ["start"] }
-              ]
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
----
-
-## 11. 目录形态归档（v0.6.0，artist/album/segments）
-
-除单文件 `.biliaudio.json` 外，支持导出/导入目录树，便于浏览与手动编辑：
+## 4. 目录形态
 
 ```
-<用户选择的顶层目录>/
-├── biliaudio-library.json          # 根索引：format/version/exportedAt/settings；albums 为空
-├── <艺术家>/
-│   └── <专辑>/
-│       ├── album.json              # 单专辑归档：元信息 + coverBase64（segments 为空）
-│       └── segments.json           # 单专辑分割点：bvid/url/page + segments
+<顶层>/
+├── biliaudio-library.json        # kind=index：设置 + 版本；albums=[]
+├── <艺术家>/<专辑>/
+│   ├── album.json                # kind=album：元信息；segments 字段省略
+│   └── segments.json             # kind=segments：定位信息 + segments（未分割 = []）
 ```
 
-- `album.json` / `segments.json` 均为合法 `biliaudio-library` JSON（可用单文件导入逻辑解析）；
-- 目录名会做安全化：去掉 `/\:*?"<>|` 与控制字符、首尾空白/点、限长 60 码点；空 → `未知艺术家` / `未命名专辑`；
-  同父目录重名（大小写不敏感）→ `名字 (2)` … `(99)` → `名字 (BV号)`；
-- 导入：按目录合并 album.json + segments.json；只有 segments 时按 bvid 匹配更新分曲；根索引 settings 按模式应用；
-  导入模式与单文件一致；**覆盖全库且目录无有效专辑时拒绝清库**（防误删）；
-- 文件内容示例与单文件一致，见上文单专辑/分割点章节。
+- 目录名只用于展示与安全化，**身份来自文件里的 albumKey/bvid/page**；
+- 导入时每个目录合并 album.json + segments.json，再做一次全局校验（重复 albumKey 会报错）；
+- 根索引只取 settings；把根索引当单文件导入会被拒绝；
+- 其它文件（README、.DS_Store 等）忽略；
+- 路径会做非法字符/控制字符/首尾点空格/长度清理；同名目录追加 ` (2)` 或 BV 号。
+
+## 5. 校验上限
+
+| 项 | 上限 |
+| --- | --- |
+| 文件大小 | 5 MB |
+| 专辑数 | 2000 |
+| 单专辑分曲 | 500 |
+| 标题/艺术家 | 200 字符 |
+| 分曲 id | 64 字符 |
+| 封面原始字节 | 2 MB |
+| 封面 MIME | jpeg/png/webp |
+
+源字段：目前只接受 `source=bilibili`；以后新增来源需提升版本或增加 feature。
+
+## 6. 导入模式
+
+| 模式 | 行为 |
+| --- | --- |
+| **合并**（默认） | 按 albumKey upsert：新建 / 更新元信息 + 分曲（null 保留、[] 清空、数组替换） |
+| **仅更新分割点** | 只更新已存在专辑的分曲；不存在跳过；不新建、不改元信息 |
+| **覆盖全库** | 先自动备份到 `files/backups/`，清空后导入；`kind=index` 或没有有效专辑时拒绝 |
+
+导入报告：新建 / 更新 / 仅分割点更新 / 跳过 / 失败（含解析错误）。
+
+## 7. 旧格式
+
+- **v1 归档不再支持**：读取时明确提示“旧版归档不再支持，请重新导出”；
+- 旧「快捷导入」文本格式（JSON 数组 / CSV / 文本块）仍然支持，会归一化成 v2 归档再走同一导入器
+  （这是输入便捷格式，不是 v1 归档兼容）。
+
+## 8. 迁移与数据库
+
+- Room DB v3：`albums` 增加 `source`，唯一索引 `(source,bvid,page)`；`tracks` 增加 `uid`（UUID）唯一索引；
+- `MIGRATION_2_3` 会保留已有专辑/分曲并回填 uid；
+- 归档里的绝对路径（`coverLocalPath`）永不写出，封面只以字节 + hash 形式保存。

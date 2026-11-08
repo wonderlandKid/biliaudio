@@ -64,7 +64,7 @@
 - 现象「换了封面没变」：先看 `Cover` 日志是否有 `update`；若专辑详情一直显示旧图，检查
   `coverLocalPath` 文件是否存在（App 更新/清数据会丢 files 目录，但归档可恢复）；
   `album.coverUrl` 仅作远程兜底，本地文件优先。
-- 归档备份封面：导出 JSON 里的 `coverBase64`（原图 ≤2MB 才写入）；导入时自动保存并更新；
+- 归档备份封面：v2 导出 JSON 的 `cover` 对象（MIME/SHA-256/原始字节 ≤2MB）；导入时校验 hash、自动保存并更新；
   非法/超限 base64 会被忽略、不影响导入（见 LIBRARY_ARCHIVE.md）。
 
 ## 3. 导入相关

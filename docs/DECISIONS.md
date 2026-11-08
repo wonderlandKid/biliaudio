@@ -441,3 +441,19 @@
     与普通 pop 一致；这样所有页面（艺术家/专辑/导入/设置子页等）都不再走系统默认的 scaleOut 老动画。
 - **影响**：修复闪退；一级 Tab 入场统一；所有页面返回不再缩小淡出。仅视频播放控件的局部 fade 保留（内容层，不是页面转场）。
 
+---
+
+## D33 归档数据层 v2 落地（v0.9.0，不兼容 v1）
+
+- **日期**：2026-11-08
+- **背景**：v1 的 `bvid+page` 只存在于文档；DB 唯一键只有 bvid，多 P/多来源无法共存；
+  目录根索引与整库备份同 schema，可能被 REPLACE 清库；空 segments 语义矛盾；缺少前向兼容门禁。
+- **决策**：
+  - DB v3：`albums.source` + 唯一键 `(source,bvid,page)`；`tracks.uid` UUID；MIGRATION_2_3 保留数据并回填；
+  - 归档只支持 v2：`kind`/`minReaderVersion`/`features`；`albumKey=source:bvid#page`；
+    分曲 `id` + `endMs`；封面 `{mime,sha256,byteLength,dataBase64}`；segments 省略/null 保留、[] 清空；
+  - 目录归档根索引 `kind=index`；单文件导入拒绝；合并后全量校验；
+  - v1 归档明确拒绝，不做读取兼容；旧“快捷导入”文本格式保留但归一化为 v2；
+  - 封面内嵌 base64 暂保留（目录/单文件一致）；manifest/zip/独立 cover 文件列为 P2，不阻塞 v2 语义。
+- **影响**：数据层身份/版本/内容模型一次到位；后续做收藏/播放历史/多 P/同步时不再反复改归档主版本。
+

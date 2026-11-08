@@ -18,7 +18,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [AlbumEntity::class, TrackEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -37,6 +37,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3：多来源/多 P 稳定键（source+bvid+page）、tracks.uid。 */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // albums: 增加 source，唯一索引从 bvid 换成 (source,bvid,page)
+                db.execSQL("ALTER TABLE albums ADD COLUMN source TEXT NOT NULL DEFAULT 'bilibili'")
+                db.execSQL("DROP INDEX IF EXISTS index_albums_bvid")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_albums_source_bvid_page " +
+                        "ON albums(source, bvid, page)",
+                )
+                // tracks: 增加 uid 并回填随机 UUID
+                db.execSQL("ALTER TABLE tracks ADD COLUMN uid TEXT NOT NULL DEFAULT ''")
+                db.execSQL("UPDATE tracks SET uid = lower(hex(randomblob(16))) WHERE uid = ''")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_tracks_uid ON tracks(uid)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -46,7 +65,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }

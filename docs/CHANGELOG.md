@@ -1,5 +1,22 @@
 # 版本记录
 
+## v0.9.0（2026-11-08 · tag `v0.9.0`）
+
+**归档数据层 v2：稳定身份 / kind / 新版本策略（不兼容 v1）**
+
+- DB v3：`albums` 增加 `source`，唯一键改为 `(source,bvid,page)`；`tracks` 增加 `uid`（UUID）唯一索引，
+  已有数据在 `MIGRATION_2_3` 中保留并回填；
+- 归档 v2（`LIBRARY_ARCHIVE_VERSION=2`）：
+  - 顶层 `kind`（library/album/segments/index）+ `minReaderVersion` + `features`，旧 v1 明确拒绝；
+  - 稳定 `albumKey=source:bvid#page`、分曲 `id`（UUID）、显式 `endMs`；
+  - `segments` 空语义：省略/null = 更新时保留；`[]` = 清空回未分割；数组 = 替换；
+  - 封面对象 `{mime,sha256,byteLength,dataBase64}`，导入校验 MIME/≤2MB/SHA-256；
+  - 新增 `pageCount/updatedAt/source/cidHint`，设置对象独立 version 并包含诊断日志开关；
+  - 目录归档根索引 `kind=index` 禁止当单文件导入；合并后做全局校验（重复 albumKey 等）；
+- 兼容性：v1 归档不再读取；旧「快捷导入」文本/CSV 仍支持并归一化成 v2；
+- 测试：归档 codec/repository 按 v2 重写（v2 往返、kind 门禁、cover hash、空语义、目录往返、REPLACE 备份等），
+  单测 126 个全绿。
+
 ## v0.8.4（2026-11-08 · tag `v0.8.4`）
 
 **修复 v0.8.3 闪退 / 列表入场不统一 / 系统返回的缩小淡出**

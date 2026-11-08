@@ -1,6 +1,6 @@
 # 归档数据格式 v2 设计与兼容策略（提案）
 
-> 状态：**已评审、待实施**（v0.8.4 数据层现状盘点）
+> 状态：**已实施（v0.9.0）**。实现见 [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)；与提案的差异见文末。
 > 目标：在继续加功能之前，把「身份 / 版本 / 可演进」定死，避免以后导入导出互相破坏。
 > 现有 v1 格式见 [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)。
 
@@ -113,7 +113,7 @@ v1 的方向是对的（只有配置没有音频、JSON 人类可读、`format+v
 }
 ```
 
-- **封面**：v2 用对象，不再用裸 `coverBase64`；读取仍兼容 v1 旧字段。
+- **封面**：v2 用对象，不再用裸 `coverBase64`；v1 不再读取（未发布版本，不做兼容）。
   建议单文件仍内嵌 base64（保持单文件可分享），目录归档改为 `cover.jpg` + `cover.sha256`，
   album.json 里写 `"coverFile": "cover.jpg"`、`"coverHash"`，避免 JSON 膨胀。
   校验：MIME 限 jpeg/png/webp；原始字节 ≤2MB；解码前限制像素尺寸（防止解压炸弹）。
@@ -193,3 +193,13 @@ v1 没有 null 语义：为了向后兼容，v1 读取时把“省略或空数�
 4. 根索引 `albums=[]` 与“空库备份”同形，UI 在 REPLACE 时至少二次确认并提示“0 张专辑会清空音乐库”。
 5. `updateExisting` 不看 page（当前 DB 限制），至少加注释/校验，避免未来误改。
 6. 封面 base64 解码前不限制像素尺寸，建议解码时用 `BitmapFactory.Options.inJustDecodeBounds` 限制（防解压炸弹）。
+
+## 9. 实际实现差异（v0.9.0）
+
+- 已实现：DB v3（source/(source,bvid,page) 唯一键/tracks.uid）、v2 schema（kind/version/minReaderVersion/features/albumKey/cover 对象/endMs）、
+  segments null/[] 语义、目录 kind 校验、全局合并校验、REPLACE 前备份、index 禁止导入；
+- 暂缓（P2）：目录 manifest/checksum、zip 打包、`cover.jpg` 独立文件（当前目录 album.json 内嵌 cover 对象，保持单文件一致）、
+  Room schema 导出到 `app/schemas/`；这些不影响 v2 数据语义，可后续加而不改主版本；
+- 封面当前仍内嵌 base64（单文件/目录一致），校验 MIME + 原始字节 ≤2MB + SHA-256；
+- 旧「快捷导入」文本格式保留，但归一化成 v2（不是 v1 归档兼容）。
+

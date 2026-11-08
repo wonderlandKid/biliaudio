@@ -721,7 +721,7 @@ private fun ArchiveImportTab(
                 item { ArchiveSubHeader("计划动作（${preview.items.size} 项）") }
                 itemsIndexed(
                     items = preview.items,
-                    key = { index, item -> "preview_${item.bvid}_${item.page}_$index" },
+                    key = { index, item -> "preview_${item.albumKey}_$index" },
                 ) { _, item ->
                     ArchivePreviewItemRow(item)
                 }
@@ -810,7 +810,7 @@ private fun ArchiveImportTab(
                 item { ArchiveSubHeader("逐条结果（${report.items.size} 项）") }
                 itemsIndexed(
                     items = report.items,
-                    key = { index, item -> "report_${item.bvid}_${item.page}_$index" },
+                    key = { index, item -> "report_${item.albumKey}_$index" },
                 ) { _, item ->
                     ArchiveItemResultRow(item)
                 }

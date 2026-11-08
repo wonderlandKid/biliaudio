@@ -9,6 +9,8 @@ import androidx.compose.runtime.Immutable
 @Immutable
 data class Album(
     val id: Long = 0L,
+    /** 来源标识（当前只有 bilibili；为后续多来源预留稳定键） */
+    val source: String = "bilibili",
     val bvid: String,
     /** 当前专辑使用的视频分 P 对应的 cid（播放/获取流需要） */
     val cid: Long,
@@ -32,6 +34,8 @@ data class Album(
 @Immutable
 data class Track(
     val id: Long = 0L,
+    /** 跨设备稳定 ID（UUID；归档/未来播放历史/收藏用，不依赖自增 id） */
+    val uid: String = "",
     val albumId: Long,
     val index: Int,
     val title: String,
@@ -129,6 +133,8 @@ data class AlbumImportRequest(
     val albumTitle: String? = null,
     val artist: String? = null,
     val mode: ImportMode = ImportMode.SINGLE_VIDEO,
+    /** 要导入的分 P 序号（从 1 开始；归档/链接指定页时使用） */
+    val page: Int = 1,
     val segments: List<SegmentSpec> = emptyList(),
 )
 

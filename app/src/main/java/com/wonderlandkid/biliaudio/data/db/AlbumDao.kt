@@ -24,8 +24,8 @@ interface AlbumDao {
     @Query("SELECT * FROM albums WHERE id = :albumId")
     suspend fun getById(albumId: Long): AlbumEntity?
 
-    @Query("SELECT * FROM albums WHERE bvid = :bvid LIMIT 1")
-    suspend fun getByBvid(bvid: String): AlbumEntity?
+    @Query("SELECT * FROM albums WHERE source = :source AND bvid = :bvid AND page = :page LIMIT 1")
+    suspend fun getBySourceKey(source: String, bvid: String, page: Int): AlbumEntity?
 
     @Query("SELECT * FROM albums ORDER BY createdAt ASC")
     suspend fun getAll(): List<AlbumEntity>

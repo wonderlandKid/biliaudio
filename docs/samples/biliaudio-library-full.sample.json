@@ -1,42 +1,37 @@
 {
   "format": "biliaudio-library",
-  "version": 1,
-  "exportedAt": "2026-11-07T22:30:00+08:00",
-  "app": { "name": "BiliAudio", "version": "0.1.0" },
+  "version": 2,
+  "minReaderVersion": 2,
+  "kind": "library",
+  "archiveId": "4f1c2b7e-8a3d-4b6e-9c21-0d7e5a9b1c33",
+  "exportedAt": "2026-11-08T13:47:10+08:00",
+  "app": { "name": "BiliAudio", "version": "0.9.0" },
+  "features": ["stable-album-key", "stable-track-id", "cover-sha256", "explicit-end-ms"],
   "settings": {
+    "version": 1,
     "audioQuality": "AUTO",
-    "darkTheme": null
+    "darkTheme": null,
+    "diagnosticLogsEnabled": true
   },
   "albums": [
     {
+      "albumKey": "bilibili:BV1GJ411x7h7#p1",
+      "source": "bilibili",
       "bvid": "BV1GJ411x7h7",
       "page": 1,
+      "pageCount": 1,
+      "cidHint": 137649199,
       "title": "Never Gonna Give You Up（完整专辑）",
       "artist": "索尼音乐中国",
-      "coverUrl": "https://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg",
       "durationMs": 213000,
+      "updatedAt": 1794051200000,
       "createdAt": 1794046700000,
       "lastPlayedAt": 1794051200000,
       "playCount": 12,
       "segments": [
-        { "startMs": 0, "title": "Never Gonna Give You Up" },
-        { "startMs": 45000, "title": "Whenever You Need Somebody" },
-        { "startMs": 120000, "title": "Together Forever" }
-      ]
-    },
-    {
-      "bvid": "BV1uv411q7Mv",
-      "page": 1,
-      "title": "周杰伦 · 叶惠美（全专）",
-      "artist": "周杰伦",
-      "coverUrl": "https://picsum.photos/seed/biliaudio1/600",
-      "durationMs": 2600000,
-      "playCount": 5,
-      "segments": [
-        { "startMs": 0, "title": "以父之名" },
-        { "startMs": 340000, "title": "懦夫" },
-        { "startMs": 560000, "title": "晴天" },
-        { "startMs": 860000, "title": "三年二班" }
+        { "id": "trk_00000000-0000-0000-0000-000000000001", "startMs": 0, "endMs": 45000, "title": "Never Gonna Give You Up" },
+        { "id": "trk_00000000-0000-0000-0000-000000000002", "startMs": 45000, "endMs": 120000, "title": "Whenever You Need Somebody" },
+        { "id": "trk_00000000-0000-0000-0000-000000000003", "startMs": 120000, "endMs": 213000, "title": "Together Forever" }
       ]
     }
   ]

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 
 /** 诊断日志域标签（data 层导入链路）。 */
 private const val TAG = "Import"
+private const val SOURCE_BILIBILI = "bilibili"
 
 /**
  * 专辑 / 曲目库：Room 持久化 + 单条/批量导入。
@@ -74,8 +75,8 @@ class AlbumRepositoryImpl(
 
     override suspend fun getAlbum(albumId: Long): Album? = albumDao.getById(albumId)?.toModel()
 
-    override suspend fun getAlbumByBvid(bvid: String): Album? =
-        albumDao.getByBvid(bvid.trim())?.toModel()
+    override suspend fun getAlbumBySourceKey(source: String, bvid: String, page: Int): Album? =
+        albumDao.getBySourceKey(source = source, bvid = bvid.trim(), page = page)?.toModel()
 
     override suspend fun getTracks(albumId: Long): List<Track> =
         trackDao.getByAlbum(albumId).map { it.toModel() }
@@ -92,11 +93,21 @@ class AlbumRepositoryImpl(
             } else {
                 albumDao.insert(entity.copy(createdAt = entity.createdAt.takeIf { it > 0L } ?: now, updatedAt = now))
             }
+            // 重写分曲时按 startMs 保留已有 uid（稳定 ID 不因重新导入/编辑而改变）
+            val oldUids = if (entity.id > 0L) {
+                trackDao.getByAlbum(albumId).associate { it.startMs to it.uid }
+            } else {
+                emptyMap()
+            }
             trackDao.deleteByAlbum(albumId)
             if (tracks.isNotEmpty()) {
                 trackDao.insertAll(
                     tracks.mapIndexed { index, track ->
-                        track.copy(albumId = albumId, index = index).toEntity().copy(id = 0L)
+                        track.copy(
+                            albumId = albumId,
+                            index = index,
+                            uid = track.uid.ifBlank { oldUids[track.startMs].orEmpty() },
+                        ).toEntity().copy(id = 0L)
                     },
                 )
             }
@@ -109,11 +120,16 @@ class AlbumRepositoryImpl(
 
     override suspend fun replaceTracks(albumId: Long, tracks: List<Track>) {
         database.withTransaction {
+            val oldUids = trackDao.getByAlbum(albumId).associate { it.startMs to it.uid }
             trackDao.deleteByAlbum(albumId)
             if (tracks.isNotEmpty()) {
                 trackDao.insertAll(
                     tracks.mapIndexed { index, track ->
-                        track.copy(albumId = albumId, index = index).toEntity().copy(id = 0L)
+                        track.copy(
+                            albumId = albumId,
+                            index = index,
+                            uid = track.uid.ifBlank { oldUids[track.startMs].orEmpty() },
+                        ).toEntity().copy(id = 0L)
                     },
                 )
             }
@@ -225,15 +241,18 @@ class AlbumRepositoryImpl(
             )
         }
 
-        val page = info.pages.firstOrNull()
-            ?: return ImportResult.Failure(input, "该视频缺少可播放的分 P 信息，可能已失效")
+        val pageNo = request.page.coerceAtLeast(1)
+        val page = info.pages.firstOrNull { it.page == pageNo }
+            ?: info.pages.firstOrNull()?.takeIf { pageNo == 1 }
+            ?: return ImportResult.Failure(input, "该视频没有第 $pageNo 个分 P，可能已失效")
         val cid = page.cid
         if (cid <= 0L) return ImportResult.Failure(input, "该视频缺少可播放的分 P 信息，可能已失效")
 
         val durationMs = info.durationMs.takeIf { it > 0L } ?: page.durationMs
         if (durationMs <= 0L) return ImportResult.Failure(input, "视频时长异常，无法导入")
 
-        val albumTitle = request.albumTitle?.trim()?.takeIf { it.isNotEmpty() } ?: info.title
+        val albumTitle = request.albumTitle?.trim()?.takeIf { it.isNotEmpty() }
+            ?: if (pageNo > 1 && page.title.isNotBlank()) "${info.title} P${pageNo}" else info.title
         val artist = request.artist?.trim()?.takeIf { it.isNotEmpty() } ?: info.ownerName
         val segmentSpecs = buildSegments(request.segments, durationMs, albumTitle)
         val tracks = segmentSpecs.mapIndexed { index, segment ->
@@ -241,13 +260,13 @@ class AlbumRepositoryImpl(
             Track(id = 0L, albumId = 0L, index = index, title = segment.title, startMs = segment.startMs, endMs = endMs)
         }
 
-        val existing = getAlbumByBvid(info.bvid)
+        val existing = getAlbumBySourceKey(SOURCE_BILIBILI, info.bvid, pageNo)
         val now = System.currentTimeMillis()
         val album = Album(
             id = existing?.id ?: 0L,
             bvid = info.bvid,
             cid = cid,
-            page = page.page.coerceAtLeast(1),
+            page = pageNo,
             pageCount = info.pages.size,
             title = albumTitle,
             artist = artist,

@@ -26,7 +26,8 @@ interface AlbumRepository {
     fun albumWithTracks(albumId: Long): Flow<AlbumWithTracks?>
 
     suspend fun getAlbum(albumId: Long): Album?
-    suspend fun getAlbumByBvid(bvid: String): Album?
+    /** 跨设备稳定键：source + bvid + page。 */
+    suspend fun getAlbumBySourceKey(source: String, bvid: String, page: Int): Album?
     suspend fun getTracks(albumId: Long): List<Track>
     suspend fun getTrack(trackId: Long): Track?
 

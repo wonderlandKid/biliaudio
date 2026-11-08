@@ -801,7 +801,7 @@ fun ArchivePreviewItemRow(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = item.title.ifBlank { item.bvid.ifBlank { "（未识别条目）" } },
+                    text = item.title.ifBlank { item.albumKey.ifBlank { "（未识别条目）" } },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -812,11 +812,7 @@ fun ArchivePreviewItemRow(
             }
             Text(
                 text = buildString {
-                    if (item.bvid.isNotBlank()) append(item.bvid)
-                    if (item.page > 1) {
-                        if (isNotEmpty()) append(" · ")
-                        append("第 ${item.page} 页")
-                    }
+                    if (item.albumKey.isNotBlank()) append(item.albumKey)
                     if (isNotEmpty()) append(" · ")
                     append("${item.segmentCount} 个分曲")
                 },
@@ -983,7 +979,7 @@ fun ArchiveItemResultRow(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = result.title.ifBlank { result.bvid },
+                    text = result.title.ifBlank { result.albumKey },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -994,13 +990,7 @@ fun ArchiveItemResultRow(
                 ) {
                     ArchiveActionBadge(result.action)
                     Text(
-                        text = buildString {
-                            if (result.bvid.isNotBlank()) append(result.bvid)
-                            if (result.page > 1) {
-                                if (isNotEmpty()) append(" · ")
-                                append("第 ${result.page} 页")
-                            }
-                        },
+                        text = result.albumKey,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
