@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -94,16 +96,29 @@ class AlbumDetailViewModel(
                     }
                 }
                 .collect { albumWithTracks ->
-                    val cachedAudio = albumWithTracks?.album?.let(audioCacheRepository::getCached)
-                    val cachedVideo = albumWithTracks?.album?.let(audioCacheRepository::getCachedVideo)
+                    val album = albumWithTracks?.album
+                    // 先展示专辑/曲目，缓存文件检查（磁盘 IO）放到 IO 线程异步补状态，
+                    // 避免刚进入详情页时在主线程做文件系统操作。
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
-                            album = albumWithTracks?.album,
+                            album = album,
                             tracks = albumWithTracks?.tracks.orEmpty().sortedBy { track -> track.startMs },
-                            cachedAudio = cachedAudio,
-                            cachedVideo = cachedVideo,
                         )
+                    }
+                    if (album != null) {
+                        val (cachedAudio, cachedVideo) = withContext(Dispatchers.IO) {
+                            audioCacheRepository.getCached(album) to
+                                audioCacheRepository.getCachedVideo(album)
+                        }
+                        _uiState.update { state ->
+                            // 专辑可能在 IO 期间被删除/切换，避免把旧缓存状态写到新专辑上
+                            if (state.album?.id == album.id) {
+                                state.copy(cachedAudio = cachedAudio, cachedVideo = cachedVideo)
+                            } else {
+                                state
+                            }
+                        }
                     }
                 }
         }
@@ -111,17 +126,33 @@ class AlbumDetailViewModel(
 
     private fun observePlayback() {
         viewModelScope.launch {
-            playbackController.state.collect { playback ->
-                _uiState.update {
-                    it.copy(
-                        currentTrackId = playback.currentTrack?.id,
+            // 只取详情页需要的三个字段并去重，避免播放进度每 250ms 触发详情页重组。
+            playbackController.state
+                .map { playback ->
+                    PlaybackHighlight(
+                        trackId = playback.currentTrack?.id,
                         isPlaying = playback.isPlaying,
                         isThisAlbumPlaying = playback.currentAlbumId == albumId && playback.isPlaying,
                     )
                 }
-            }
+                .distinctUntilChanged()
+                .collect { highlight ->
+                    _uiState.update {
+                        it.copy(
+                            currentTrackId = highlight.trackId,
+                            isPlaying = highlight.isPlaying,
+                            isThisAlbumPlaying = highlight.isThisAlbumPlaying,
+                        )
+                    }
+                }
         }
     }
+
+    private data class PlaybackHighlight(
+        val trackId: Long?,
+        val isPlaying: Boolean,
+        val isThisAlbumPlaying: Boolean,
+    )
 
     /** 播放全部（队列 = 该专辑全部分曲）。 */
     fun playAll() {

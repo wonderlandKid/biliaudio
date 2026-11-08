@@ -95,8 +95,10 @@ fun AlbumDetailScreen(
     albumId: Long,
     /** 顶部返回 */
     onBack: () -> Unit,
-    /** 编辑分割点（跳转分曲编辑页） */
+    /** 编辑分割点（单视频来源） */
     onOpenSplitEditor: (Long) -> Unit,
+    /** 编辑分 P 标题（多 P 来源） */
+    onOpenTrackNameEditor: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AlbumDetailViewModel = appViewModel { container ->
         AlbumDetailViewModel(
@@ -211,6 +213,7 @@ fun AlbumDetailScreen(
                 onPlayAll = viewModel::playAll,
                 onPlayTrack = viewModel::playTrack,
                 onOpenSplitEditor = { onOpenSplitEditor(album.id) },
+                onOpenTrackNameEditor = { onOpenTrackNameEditor(album.id) },
                 onChangeCover = { showCoverPicker = true },
                 onOpenCover = { showCoverViewer = true },
                 modifier = Modifier.padding(innerPadding),
@@ -390,6 +393,7 @@ private fun AlbumDetailContent(
     onPlayAll: () -> Unit,
     onPlayTrack: (Long) -> Unit,
     onOpenSplitEditor: () -> Unit,
+    onOpenTrackNameEditor: () -> Unit,
     onChangeCover: () -> Unit,
     onOpenCover: () -> Unit,
     modifier: Modifier = Modifier,
@@ -409,9 +413,10 @@ private fun AlbumDetailContent(
         item(key = "actions") {
             AlbumActionRow(
                 isThisAlbumPlaying = isThisAlbumPlaying,
-                canEditSplit = !isMultiPage,
+                isMultiPage = isMultiPage,
                 onPlayAll = onPlayAll,
                 onOpenSplitEditor = onOpenSplitEditor,
+                onOpenTrackNameEditor = onOpenTrackNameEditor,
             )
         }
         item(key = "tracksHeader") {
@@ -537,9 +542,10 @@ private fun MetadataChip(text: String) {
 @Composable
 private fun AlbumActionRow(
     isThisAlbumPlaying: Boolean,
-    canEditSplit: Boolean,
+    isMultiPage: Boolean,
     onPlayAll: () -> Unit,
     onOpenSplitEditor: () -> Unit,
+    onOpenTrackNameEditor: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -561,9 +567,8 @@ private fun AlbumActionRow(
             Spacer(Modifier.width(Spacing.xs))
             Text(if (isThisAlbumPlaying) "重新播放" else "播放全部")
         }
-        if (canEditSplit) {
         OutlinedButton(
-            onClick = onOpenSplitEditor,
+            onClick = if (isMultiPage) onOpenTrackNameEditor else onOpenSplitEditor,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(percent = 50),
             contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
@@ -574,8 +579,7 @@ private fun AlbumActionRow(
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(Spacing.xs))
-            Text("编辑分割点")
-        }
+            Text(if (isMultiPage) "编辑分 P 标题" else "编辑分割点")
         }
     }
 }

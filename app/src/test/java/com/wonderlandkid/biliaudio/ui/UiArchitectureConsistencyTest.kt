@@ -43,6 +43,7 @@ class UiArchitectureConsistencyTest {
         val detailPages = listOf(
             "album/AlbumDetailScreen.kt",
             "album/SplitEditorScreen.kt",
+            "album/MultiPageTrackEditorScreen.kt",
             "library/ArtistDetailScreen.kt",
             "imports/ImportScreen.kt",
             "login/LoginScreen.kt",

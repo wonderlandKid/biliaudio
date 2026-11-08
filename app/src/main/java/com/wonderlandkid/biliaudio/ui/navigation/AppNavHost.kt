@@ -75,6 +75,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.ui.album.AlbumDetailScreen
+import com.wonderlandkid.biliaudio.ui.album.MultiPageTrackEditorScreen
 import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
 import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
@@ -95,7 +96,10 @@ import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.stats.StatsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
+import com.wonderlandkid.biliaudio.ui.LocalMiniPlayerSnackbarInset
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
+import com.wonderlandkid.biliaudio.ui.theme.Dimens
+import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
@@ -215,6 +219,15 @@ fun AppNavHost() {
         }
     }
 
+    /** 导入成功后直接进入专辑详情：用一次 navigate + popUpTo 收掉导入页，避免先 pop 再 push 的双转场。 */
+    fun openImportedAlbum(albumId: Long) {
+        val fromRoute = navController.currentDestination?.route ?: Routes.HOME
+        navController.navigate(Routes.album(albumId)) {
+            popUpTo(fromRoute) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
     Scaffold(
         bottomBar = {
             // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
@@ -255,6 +268,13 @@ fun AppNavHost() {
             }
         },
     ) { innerPadding ->
+        // 页面内 Snackbar 的底部安全区：迷你条可见时抬到毛玻璃上方。
+        val snackbarBottomInset = if (showMiniPlayer && playerProgress < 0.16f) {
+            miniBottomPadding + Dimens.miniPlayerHeight + Spacing.sm
+        } else {
+            0.dp
+        }
+        CompositionLocalProvider(LocalMiniPlayerSnackbarInset provides snackbarBottomInset) {
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
@@ -351,6 +371,9 @@ fun AppNavHost() {
                             albumId = albumId,
                             onBack = { navController.popBackStack() },
                             onOpenSplitEditor = { id -> navController.navigate(Routes.splitEditor(id)) },
+                            onOpenTrackNameEditor = { id ->
+                                navController.navigate(Routes.multiPageTrackEditor(id))
+                            },
                         )
                     }
                 }
@@ -366,16 +389,25 @@ fun AppNavHost() {
                         )
                     }
                 }
+                composable(
+                    route = Routes.MULTI_PAGE_TRACK_EDITOR,
+                    arguments = listOf(navArgument(Routes.ARG_ALBUM_ID) { type = NavType.LongType }),
+                ) { entry ->
+                    val albumId = entry.arguments?.getLong(Routes.ARG_ALBUM_ID) ?: 0L
+                    Page {
+                        MultiPageTrackEditorScreen(
+                            albumId = albumId,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
 
                 // ---------------- 导入 / 登录 / 诊断 ----------------
                 composable(Routes.IMPORT) {
                     Page {
                         ImportScreen(
                             onBack = { navController.popBackStack() },
-                            onImported = { albumId ->
-                                navController.popBackStack()
-                                navController.navigate(Routes.album(albumId))
-                            },
+                            onImported = { albumId -> openImportedAlbum(albumId) },
                         )
                     }
                 }
@@ -383,10 +415,7 @@ fun AppNavHost() {
                     Page {
                         ImportScreen(
                             onBack = { navController.popBackStack() },
-                            onImported = { albumId ->
-                                navController.popBackStack()
-                                navController.navigate(Routes.album(albumId))
-                            },
+                            onImported = { albumId -> openImportedAlbum(albumId) },
                             initialTab = ImportTab.SEARCH,
                         )
                     }
@@ -570,6 +599,7 @@ fun AppNavHost() {
                     Toast.makeText(context, "再返回一次退出应用", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
         }
     }
 }

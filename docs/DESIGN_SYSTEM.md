@@ -20,7 +20,7 @@
 | 发现 | T1 | 底部 Tab | `BiliPageHeader` + `BiliSection` ×4 |
 | 音乐库 | T1 | 底部 Tab | `BiliPageHeader` + `SearchField` + `PrimaryTabRow` |
 | 设置 | T1 | 底部 Tab | `BiliPageHeader` + `BiliGroup` 卡片 |
-| 专辑详情 / 分曲编辑 / 艺术家 / 导入 / 登录 / 诊断 / 缓存管理 | T2 | 各自上游 | `BiliDetailScaffold` |
+| 专辑详情 / 分曲编辑 / 分 P 曲名编辑 / 艺术家 / 导入 / 登录 / 诊断 / 缓存管理 | T2 | 各自上游 | `BiliDetailScaffold` |
 | 我的歌单 / 歌单详情 / 听歌统计 / 最近播放 | T2 | 发现页四个区块 | `BiliDetailScaffold` |
 | 正在播放 | T3 | 迷你条上滑 | 自管 |
 | 歌词视频 | T3 | 播放页内 | 自管（覆盖在播放页上方） |

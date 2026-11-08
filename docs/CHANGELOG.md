@@ -1,5 +1,19 @@
 # 版本记录
 
+## v0.26.0（2026-11-08 · tag `v0.26.0`）
+
+**导入→专辑卡顿修复 + Snackbar 避让迷你条 + 多 P 曲名编辑**
+
+- 导入成功「查看专辑」从 `popBackStack() + navigate()` 改为单次 `navigate + popUpTo`，避免一次点击触发两次导航转场；
+- 专辑详情缓存文件检查从主线程移到 `Dispatchers.IO`，先显示专辑内容再异步补缓存状态；
+- 专辑详情播放状态按 `(trackId,isPlaying,isThisAlbumPlaying)` map + `distinctUntilChanged`，避免播放进度触发整页重组；
+- 页面内 `SnackbarHost` 增加迷你播放条底部避让（`LocalMiniPlayerSnackbarInset`），不再被 Haze 迷你条遮住而发黑；
+- 多 P 专辑新增「编辑分 P 标题」T2 页面：
+  - 逐 P 编辑曲目名，留空回退 P 序号；
+  - 只替换标题，保留 `sourceCid/sourcePage` 和时间轴；
+  - 保存后返回专辑详情，与单视频「编辑分割点」按钮对应；
+- UI 架构守卫补充新编辑页；单测 132 全绿。
+
 ## v0.25.0（2026-11-08 · tag `v0.25.0`）
 
 **多 P（分 P）BV 专辑导入 + 无缝播放**
