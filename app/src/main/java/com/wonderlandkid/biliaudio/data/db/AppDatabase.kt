@@ -17,8 +17,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 装配：`AppDatabase.getInstance(context)`。
  */
 @Database(
-    entities = [AlbumEntity::class, TrackEntity::class],
-    version = 3,
+    entities = [
+        AlbumEntity::class,
+        TrackEntity::class,
+        PlaylistEntity::class,
+        PlaylistEntryEntity::class,
+        TrackStatsEntity::class,
+    ],
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +32,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun albumDao(): AlbumDao
 
     abstract fun trackDao(): TrackDao
+
+    abstract fun playlistDao(): PlaylistDao
+
+    abstract fun trackStatsDao(): TrackStatsDao
 
     companion object {
         private const val DB_NAME = "biliaudio.db"
@@ -56,6 +66,49 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4：用户歌单 + 听歌统计。 */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS playlists (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "createdAt INTEGER NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS playlist_entries (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "playlistId INTEGER NOT NULL, " +
+                        "trackUid TEXT NOT NULL, " +
+                        "albumId INTEGER NOT NULL, " +
+                        "position INTEGER NOT NULL, " +
+                        "FOREIGN KEY(playlistId) REFERENCES playlists(id) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                        "FOREIGN KEY(albumId) REFERENCES albums(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_playlist_entries_playlistId_trackUid " +
+                        "ON playlist_entries(playlistId, trackUid)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_entries_albumId " +
+                        "ON playlist_entries(albumId)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS track_stats (" +
+                        "trackUid TEXT NOT NULL PRIMARY KEY, " +
+                        "albumId INTEGER NOT NULL, " +
+                        "playCount INTEGER NOT NULL, " +
+                        "listenedMs INTEGER NOT NULL, " +
+                        "lastPlayedAt INTEGER, " +
+                        "FOREIGN KEY(albumId) REFERENCES albums(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_track_stats_albumId ON track_stats(albumId)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -65,7 +118,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

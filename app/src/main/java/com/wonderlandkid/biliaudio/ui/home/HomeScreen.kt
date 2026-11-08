@@ -20,6 +20,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -33,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.data.model.Album
@@ -72,11 +75,16 @@ fun HomeScreen(
     onOpenImport: () -> Unit,
     /** 点击「最近播放 · 查看全部」（跳转音乐库 Tab） */
     onOpenLibrary: () -> Unit = {},
+    /** 点击「我的歌单」 */
+    onOpenPlaylists: () -> Unit = {},
+    /** 点击「听歌统计」 */
+    onOpenStats: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = appViewModel { container ->
         HomeViewModel(
             albumRepository = container.albumRepository,
             authRepository = container.authRepository,
+            playlistRepository = container.playlistRepository,
             playbackController = container.playbackController,
         )
     },
@@ -89,6 +97,8 @@ fun HomeScreen(
         onOpenLogin = onOpenLogin,
         onOpenImport = onOpenImport,
         onOpenLibrary = onOpenLibrary,
+        onOpenPlaylists = onOpenPlaylists,
+        onOpenStats = onOpenStats,
         onPlayRecentAlbum = viewModel::playRecentAlbum,
         modifier = modifier,
     )
@@ -102,6 +112,8 @@ private fun HomeContent(
     onOpenLogin: () -> Unit,
     onOpenImport: () -> Unit,
     onOpenLibrary: () -> Unit,
+    onOpenPlaylists: () -> Unit,
+    onOpenStats: () -> Unit,
     onPlayRecentAlbum: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,6 +130,15 @@ private fun HomeContent(
         }
         if (!state.isLoggedIn) {
             item(key = "loginBanner") { LoginBanner(onOpenLogin = onOpenLogin) }
+        }
+        item(key = "hub") {
+            Box(modifier = Modifier.entrance(order = 0)) {
+                HomeHubRow(
+                    playlistCount = state.playlistCount,
+                    onOpenPlaylists = onOpenPlaylists,
+                    onOpenStats = onOpenStats,
+                )
+            }
         }
         when {
             state.isLoading -> item(key = "loading") {
@@ -176,6 +197,82 @@ private fun HomeContent(
         }
         // 列表底部留白，避免最后一行贴着迷你播放条
         item(key = "bottomSpace") { ListBottomSpacer(extra = 32) }
+    }
+}
+
+/** 发现页的音乐入口：我的歌单 / 听歌统计。 */
+@Composable
+private fun HomeHubRow(
+    playlistCount: Int,
+    onOpenPlaylists: () -> Unit,
+    onOpenStats: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        HomeHubCard(
+            title = "我的歌单",
+            subtitle = if (playlistCount > 0) "$playlistCount 个歌单" else "新建自己的播放列表",
+            icon = Icons.Rounded.QueueMusic,
+            onClick = onOpenPlaylists,
+            modifier = Modifier.weight(1f),
+        )
+        HomeHubCard(
+            title = "听歌统计",
+            subtitle = "专辑时长 · 歌曲次数",
+            icon = Icons.Rounded.BarChart,
+            onClick = onOpenStats,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun HomeHubCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier
+                        .padding(Spacing.sm)
+                        .size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

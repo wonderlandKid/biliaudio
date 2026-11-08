@@ -89,7 +89,10 @@ import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.player.VideoScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
 import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
+import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
+import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
+import com.wonderlandkid.biliaudio.ui.stats.StatsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
@@ -279,6 +282,8 @@ fun AppNavHost() {
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
                             onOpenImport = { navController.navigate(Routes.IMPORT) },
                             onOpenLibrary = { switchTab(MainTab.LIBRARY) },
+                            onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
+                            onOpenStats = { navController.navigate(Routes.STATS) },
                         )
                     }
                 }
@@ -397,6 +402,35 @@ fun AppNavHost() {
                 composable(Routes.CACHE_MANAGEMENT) {
                     Page {
                         CacheManagementScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(Routes.PLAYLISTS) {
+                    Page {
+                        PlaylistsScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenPlaylist = { playlistId ->
+                                navController.navigate(Routes.playlist(playlistId))
+                            },
+                        )
+                    }
+                }
+                composable(
+                    route = Routes.PLAYLIST_DETAIL,
+                    arguments = listOf(
+                        navArgument(Routes.ARG_PLAYLIST_ID) { type = NavType.LongType },
+                    ),
+                ) { entry ->
+                    val playlistId = entry.arguments?.getLong(Routes.ARG_PLAYLIST_ID) ?: 0L
+                    Page {
+                        PlaylistDetailScreen(
+                            playlistId = playlistId,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
+                composable(Routes.STATS) {
+                    Page {
+                        StatsScreen(onBack = { navController.popBackStack() })
                     }
                 }
                 composable(Routes.LOGIN) {

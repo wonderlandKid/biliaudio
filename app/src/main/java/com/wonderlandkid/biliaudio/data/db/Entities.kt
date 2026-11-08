@@ -120,3 +120,88 @@ fun Track.toEntity(): TrackEntity = TrackEntity(
     startMs = startMs,
     endMs = endMs,
 )
+
+// ---------------------------------------------------------------------------
+// v4：用户歌单 + 听歌统计
+// ---------------------------------------------------------------------------
+
+/** 用户歌单。 */
+@Entity(tableName = "playlists")
+data class PlaylistEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val name: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+)
+
+/**
+ * 歌单条目：用 [trackUid]（跨重导入稳定）而不是自增 trackId 引用歌曲，
+ * 这样重新编辑分曲/重导入后歌单不会全部失效。
+ */
+@Entity(
+    tableName = "playlist_entries",
+    foreignKeys = [
+        ForeignKey(
+            entity = PlaylistEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["playlistId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = AlbumEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["playlistId", "trackUid"], unique = true),
+        Index(value = ["albumId"]),
+    ],
+)
+data class PlaylistEntryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val playlistId: Long,
+    val trackUid: String,
+    val albumId: Long,
+    val position: Int,
+)
+
+/** 专辑时长统计的聚合投影。 */
+data class AlbumListeningRow(
+    val albumId: Long,
+    val listenedMs: Long,
+)
+
+/** 歌单列表投影（含曲目数）。 */
+data class PlaylistSummaryRow(
+    val id: Long,
+    val name: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val trackCount: Int,
+)
+
+/**
+ * 歌曲统计：按 trackUid 持久化，避免 tracks 重写时统计丢失。
+ * albumId 外键级联：专辑删除时统计一起删除。
+ */
+@Entity(
+    tableName = "track_stats",
+    foreignKeys = [
+        ForeignKey(
+            entity = AlbumEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["albumId"])],
+)
+data class TrackStatsEntity(
+    @PrimaryKey val trackUid: String,
+    val albumId: Long,
+    val playCount: Int,
+    val listenedMs: Long,
+    val lastPlayedAt: Long?,
+)

@@ -10,6 +10,12 @@ object Routes {
     const val LOGIN = "login"
     const val DIAGNOSTICS = "diagnostics"
     const val CACHE_MANAGEMENT = "cache_management"
+    const val PLAYLISTS = "playlists"
+    const val STATS = "stats"
+
+    const val PLAYLIST_DETAIL = "playlist/{playlistId}"
+    const val ARG_PLAYLIST_ID = "playlistId"
+    fun playlist(playlistId: Long) = "playlist/$playlistId"
 
     /** 艺术家详情：artistName 由 [artist] 生成（URL 编码）。 */
     const val ARTIST = "artist/{artistName}"

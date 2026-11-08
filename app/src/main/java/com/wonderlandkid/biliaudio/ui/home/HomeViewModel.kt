@@ -8,6 +8,7 @@ import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
+import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,8 @@ data class HomeUiState(
     val recentAlbums: List<Album> = emptyList(),
     /** 我的专辑（两列网格） */
     val albums: List<Album> = emptyList(),
+    /** 用户自建歌单数量（发现页入口用） */
+    val playlistCount: Int = 0,
     val isLoggedIn: Boolean = false,
     val errorMessage: String? = null,
 ) {
@@ -47,6 +50,7 @@ data class HomeUiState(
 class HomeViewModel(
     albumRepository: AlbumRepository,
     authRepository: AuthRepository,
+    playlistRepository: PlaylistRepository,
     private val playbackController: PlaybackController,
 ) : ViewModel() {
 
@@ -65,13 +69,15 @@ class HomeViewModel(
             albumRepository.albums,
             countsFlow,
             authRepository.authState,
-        ) { recentAlbums, albums, counts, authState ->
+            playlistRepository.playlists,
+        ) { recentAlbums, albums, counts, authState, playlists ->
             HomeUiState(
                 isLoading = false,
                 songCount = counts.songCount,
                 albumCount = counts.albumCount,
                 recentAlbums = recentAlbums.take(MAX_RECENT_ALBUMS),
                 albums = albums.sortedByDescending { album -> album.createdAt },
+                playlistCount = playlists.size,
                 isLoggedIn = authState is AuthState.LoggedIn,
             )
         }

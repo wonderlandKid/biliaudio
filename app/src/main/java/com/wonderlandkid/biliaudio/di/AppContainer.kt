@@ -8,6 +8,8 @@ import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.PlaylistRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.PlaybackStatsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.net.BiliApi
@@ -18,6 +20,8 @@ import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
+import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
+import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
 import com.wonderlandkid.biliaudio.player.AlbumVideoController
@@ -70,6 +74,17 @@ class AppContainer(context: Context) {
         biliRepository = biliRepository,
     )
 
+    /** 用户自建歌单。 */
+    val playlistRepository: PlaylistRepository = PlaylistRepositoryImpl(
+        database = AppDatabase.getInstance(appContext),
+        albumRepository = albumRepository,
+    )
+
+    /** 听歌统计（播放次数/收听时长）。 */
+    val playbackStatsRepository: PlaybackStatsRepository = PlaybackStatsRepositoryImpl(
+        database = AppDatabase.getInstance(appContext),
+    )
+
     /** 在线封面搜索（网易云）+ 自定义封面文件存取。 */
     val albumCoverRepository: AlbumCoverRepository = AlbumCoverRepositoryImpl(appContext)
 
@@ -100,6 +115,7 @@ class AppContainer(context: Context) {
             albumRepository = albumRepository,
             streamResolver = streamResolver,
             audioCacheRepository = audioCacheRepository,
+            statsRepository = playbackStatsRepository,
         )
     }
 

@@ -190,3 +190,35 @@ data class CoverCandidate(
 ) {
     val displaySubtitle: String get() = if (artist.isBlank()) title else "$artist · $title"
 }
+
+/** 用户自建歌单（歌曲通过稳定 trackUid 关联）。 */
+@Immutable
+data class Playlist(
+    val id: Long = 0L,
+    val name: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
+    val trackCount: Int = 0,
+)
+
+@Immutable
+data class PlaylistWithTracks(
+    val playlist: Playlist,
+    val tracks: List<TrackWithAlbum>,
+)
+
+/** 听歌统计：专辑维度累计收听时长。 */
+@Immutable
+data class AlbumListeningStat(
+    val albumId: Long,
+    val listenedMs: Long,
+)
+
+/** 听歌统计：单曲播放次数/累计时长。 */
+@Immutable
+data class TrackPlayStat(
+    val trackUid: String,
+    val albumId: Long,
+    val playCount: Int,
+    val listenedMs: Long,
+)

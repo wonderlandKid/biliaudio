@@ -1,6 +1,7 @@
 package com.wonderlandkid.biliaudio.player
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -22,6 +23,7 @@ import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
+import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +64,7 @@ class PlaybackEngine private constructor(
     private val albumRepository: AlbumRepository,
     private val streamResolver: MediaStreamResolver,
     private val audioCacheRepository: AudioCacheRepository,
+    private val statsRepository: PlaybackStatsRepository,
 ) : PlaybackController {
 
     companion object {
@@ -72,6 +75,9 @@ class PlaybackEngine private constructor(
 
         /** 进度刷新间隔。 */
         private const val PROGRESS_TICK_MS = 250L
+
+        /** 收听时长先内存累计，每累计约 5 秒落库一次，避免每 250ms 写 DB。 */
+        private const val STATS_FLUSH_MS = 5_000L
 
         /** 封面字节上限（超过则丢弃，避免把超大图塞进通知）。 */
         private const val MAX_ARTWORK_BYTES = 512 * 1024
@@ -99,6 +105,7 @@ class PlaybackEngine private constructor(
             albumRepository: AlbumRepository,
             streamResolver: MediaStreamResolver,
             audioCacheRepository: AudioCacheRepository,
+            statsRepository: PlaybackStatsRepository,
         ): PlaybackEngine = instance ?: synchronized(this) {
             instance ?: PlaybackEngine(
                 context = context.applicationContext,
@@ -106,6 +113,7 @@ class PlaybackEngine private constructor(
                 albumRepository = albumRepository,
                 streamResolver = streamResolver,
                 audioCacheRepository = audioCacheRepository,
+                statsRepository = statsRepository,
             ).also { instance = it }
         }
 
@@ -190,6 +198,12 @@ class PlaybackEngine private constructor(
     /** 最近一次记录“播放中”的曲目，避免同一首歌重复累加播放次数。 */
     private var lastRecordedTrackId: Long? = null
 
+    // ---- 收听时长统计（内存累计，定期落库） ----
+    private var statsTrackUid: String? = null
+    private var statsAlbumId: Long? = null
+    private var statsPendingMs = 0L
+    private var statsLastTickMs = 0L
+
     // ---- 诊断计时（Diag tag = "Play"，避免噪音：每首歌切换最多 2~3 行） ----
 
     /** 当前曲目开始时间（切歌时重置）。 */
@@ -236,6 +250,7 @@ class PlaybackEngine private constructor(
     /** 未分割专辑的虚拟整张曲目（不写库，只在播放队列中使用）。 */
     private fun wholeAlbumTrack(album: Album): Track = Track(
         id = -album.id,
+        uid = "album:${album.id}",
         albumId = album.id,
         index = 0,
         title = album.title,
@@ -576,6 +591,11 @@ class PlaybackEngine private constructor(
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         val safePosition = startPositionMs.coerceAtLeast(0L)
 
+        flushListeningStats()
+        statsTrackUid = null
+        statsAlbumId = null
+        statsPendingMs = 0L
+        statsLastTickMs = 0L
         queueEntries = entries
         retriedForCurrentItem = false
         lastRecordedTrackId = null
@@ -615,9 +635,47 @@ class PlaybackEngine private constructor(
         progressJob?.cancel()
         progressJob = scope.launch {
             while (isActive) {
-                if (player.isPlaying) publishProgress()
+                if (player.isPlaying) {
+                    publishProgress()
+                    accumulateListeningStats()
+                } else {
+                    flushListeningStats()
+                    statsLastTickMs = 0L
+                }
                 delay(PROGRESS_TICK_MS)
             }
+        }
+    }
+
+    /** 按真实经过时间累计当前曲目收听时长；每 5 秒落库一次。 */
+    private fun accumulateListeningStats() {
+        val entry = queueEntries.getOrNull(player.currentMediaItemIndex) ?: return
+        val uid = statsUidOf(entry)
+        val now = SystemClock.elapsedRealtime()
+        val last = statsLastTickMs
+        if (statsTrackUid != uid || statsAlbumId != entry.albumId) {
+            flushListeningStats()
+            statsTrackUid = uid
+            statsAlbumId = entry.albumId
+            statsPendingMs = 0L
+        }
+        statsLastTickMs = now
+        if (last <= 0L) return
+        val delta = (now - last).coerceIn(0L, PROGRESS_TICK_MS * 4)
+        statsPendingMs += delta
+        if (statsPendingMs >= STATS_FLUSH_MS) flushListeningStats()
+    }
+
+    /** 把内存里累计的收听时长异步落库；清空 pending。 */
+    private fun flushListeningStats() {
+        val uid = statsTrackUid ?: return
+        val albumId = statsAlbumId ?: return
+        val delta = statsPendingMs
+        statsPendingMs = 0L
+        if (delta <= 0L) return
+        scope.launch {
+            runCatching { statsRepository.addListeningTime(albumId, uid, delta) }
+                .onFailure { Log.w(TAG, "写入收听时长失败", it) }
         }
     }
 
@@ -656,11 +714,18 @@ class PlaybackEngine private constructor(
     private fun recordPlayed(entry: QueueEntry?) {
         if (entry == null || entry.track.id == lastRecordedTrackId) return
         lastRecordedTrackId = entry.track.id
+        val trackUid = statsUidOf(entry)
         scope.launch {
-            runCatching { albumRepository.markPlayed(entry.albumId, entry.track.id) }
-                .onFailure { Log.w(TAG, "记录最近播放失败", it) }
+            runCatching {
+                albumRepository.markPlayed(entry.albumId, entry.track.id)
+                statsRepository.recordTrackStarted(entry.albumId, trackUid)
+            }.onFailure { Log.w(TAG, "记录播放统计失败", it) }
         }
     }
+
+    /** 统计用的稳定 uid：未分割专辑的虚拟曲目用 album:<id>。 */
+    private fun statsUidOf(entry: QueueEntry): String =
+        entry.track.uid.ifBlank { "album:${entry.albumId}" }
 
     private fun ensureServiceStarted() {
         if (!serviceStartLogged) {
@@ -771,6 +836,10 @@ class PlaybackEngine private constructor(
     private inner class PlayerEvents : Player.Listener {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            flushListeningStats()
+            statsTrackUid = null
+            statsAlbumId = null
+            statsLastTickMs = 0L
             retriedForCurrentItem = false
             itemStartedAtMs = System.currentTimeMillis()
             itemReadyLogged = false
@@ -792,7 +861,14 @@ class PlaybackEngine private constructor(
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _state.update { it.copy(isPlaying = isPlaying) }
-            if (isPlaying) ensureServiceStarted() else publishProgress()
+            if (isPlaying) {
+                ensureServiceStarted()
+                statsLastTickMs = 0L
+            } else {
+                flushListeningStats()
+                statsLastTickMs = 0L
+                publishProgress()
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
