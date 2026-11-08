@@ -149,9 +149,7 @@ fun SettingsScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .entrance(order = 0),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 // 与发现/音乐库一致：页头由 BiliPageHeader 自带水平 Spacing.lg
                 top = Spacing.md,
@@ -825,7 +823,9 @@ private fun SettingsPadded(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.lg),
+            .padding(horizontal = Spacing.lg)
+            // 页头 BiliPageHeader 不经过这里，保持静态；只有列表/卡片内容入场
+            .entrance(order = 0),
     ) {
         content()
     }

@@ -15,7 +15,8 @@
 规则：
 
 - **T1 不再自己套 Scaffold**（底部导航/inset 由 `AppNavHost` 的 Scaffold 统一处理）；
-  内容用 `BiliPageHeader` + 业务列表，内容入场统一 `Modifier.entrance`；
+  内容用 `BiliPageHeader` + 业务列表；**固定页头/搜索/登录卡等静态元素不做入场**，
+  只有列表/内容区用 `Modifier.entrance`（发现逐项、设置逐卡、音乐库内容区）；
 - **T2 一律用 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`）。禁止在页面里手写一行
   `Row { IconButton(back); Text(title) }` 的顶栏；
 - **T3 不使用 T1/T2 模板**：全屏、insets、关闭手势都由页面自己管；
@@ -95,7 +96,7 @@ fun BiliDetailScaffold(
 ## 6. 新增页面 checklist
 
 1. **先定类型**：T1 / T2 / T3 / T4，并在路由处选对应转场；
-2. **T2 用 `BiliDetailScaffold`**（T1 用 `BiliPageHeader`）；
+2. **T2 用 `BiliDetailScaffold`**（T1 用 `BiliPageHeader`；T1 页头静态、列表内容入场）；
 3. ViewModel 定义 `@Immutable` UiState，Screen 只收集 + 转发事件；
 4. loading/error/empty 复用公共组件；一次性提示走 Snackbar + consume；
 5. 列表加稳定 key + contentType；重计算放数据层/ViewModel；

@@ -1,6 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -108,9 +109,7 @@ private fun HomeContent(
     val albumRows = remember(state.albums) { state.albums.chunked(2) }
 
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .entrance(order = 0),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
@@ -137,32 +136,40 @@ private fun HomeContent(
                 // 无最近播放数据时整块不显示
                 if (state.recentAlbums.isNotEmpty()) {
                     item(key = "recent") {
-                        RecentPlayedCard(
-                            albums = state.recentAlbums,
-                            onOpenAlbum = onOpenAlbum,
-                            onPlayAlbum = onPlayRecentAlbum,
-                            onOpenLibrary = onOpenLibrary,
-                        )
+                        Box(modifier = Modifier.entrance(order = 0)) {
+                            RecentPlayedCard(
+                                albums = state.recentAlbums,
+                                onOpenAlbum = onOpenAlbum,
+                                onPlayAlbum = onPlayRecentAlbum,
+                                onOpenLibrary = onOpenLibrary,
+                            )
+                        }
                     }
                 }
                 item(key = "myAlbumsHeader") {
-                    MyAlbumsHeader(albumCount = state.albumCount, onOpenImport = onOpenImport)
+                    Box(modifier = Modifier.entrance(order = 1)) {
+                        MyAlbumsHeader(albumCount = state.albumCount, onOpenImport = onOpenImport)
+                    }
                 }
                 if (albumRows.isEmpty()) {
                     item(key = "empty") {
-                        EmptyState(
-                            title = "还没有专辑",
-                            description = "导入一张 B 站专辑，就能按歌曲播放整段音频",
-                            actionLabel = "导入专辑",
-                            onAction = onOpenImport,
-                        )
+                        Box(modifier = Modifier.entrance(order = 1)) {
+                            EmptyState(
+                                title = "还没有专辑",
+                                description = "导入一张 B 站专辑，就能按歌曲播放整段音频",
+                                actionLabel = "导入专辑",
+                                onAction = onOpenImport,
+                            )
+                        }
                     }
                 } else {
                     itemsIndexed(
                         items = albumRows,
                         key = { index, row -> "albumRow_${row.firstOrNull()?.id ?: index}" },
-                    ) { _, row ->
-                        AlbumGridRow(albums = row, onOpenAlbum = onOpenAlbum)
+                    ) { index, row ->
+                        Box(modifier = Modifier.entrance(order = (index + 2).coerceAtMost(8))) {
+                            AlbumGridRow(albums = row, onOpenAlbum = onOpenAlbum)
+                        }
                     }
                 }
             }
