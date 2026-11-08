@@ -60,6 +60,8 @@ data class VideoImportState(
     val albumTitle: String = "",
     /** 可编辑的艺术家，解析成功后默认填 UP 主 */
     val artist: String = "",
+    /** 导入方式：整段单视频 / 多 P（每个 P 一首） */
+    val importMode: ImportMode = ImportMode.SINGLE_VIDEO,
     val parseError: String? = null,
     val isImporting: Boolean = false,
     val importError: String? = null,
@@ -89,7 +91,9 @@ data class VideoImportState(
 
     /** 文本非空但没识别出分割点时的错误提示（此时禁止导入） */
     val splitError: String?
-        get() = if (splitText.isNotBlank() && splitSegments.isEmpty()) {
+        get() = if (importMode == ImportMode.MULTI_PAGE) {
+            null
+        } else if (splitText.isNotBlank() && splitSegments.isEmpty()) {
             "未识别到有效时间点：请检查分曲文本格式（如「00:42 歌名」/「歌名00:42」/「1.歌名00:42」），" +
                 "或清空后以未分割专辑导入"
         } else {
@@ -99,6 +103,10 @@ data class VideoImportState(
     val canImport: Boolean
         get() = info != null && !isParsing && !isImporting &&
             importedAlbumId == null && splitError == null
+
+    /** 多 P 自动分曲模式：每个分 P 自动成为一首，分曲文本不参与。 */
+    val isMultiPageMode: Boolean
+        get() = importMode == ImportMode.MULTI_PAGE && (info?.pages?.size ?: 0) > 1
 }
 
 /**
@@ -216,6 +224,11 @@ class ImportViewModel(
         _uiState.update { it.copy(bv = it.bv.copy(artist = text)) }
     }
 
+    /** 切换整段/多 P 导入方式。 */
+    fun updateBvImportMode(mode: ImportMode) {
+        _uiState.update { it.copy(bv = it.bv.copy(importMode = mode)) }
+    }
+
     /** 更新 BV 预览里的分曲文本，并实时解析成分割点。 */
     fun updateBvSplitText(text: String) {
         _uiState.update { it.copy(bv = it.bv.withSplitText(text)) }
@@ -254,6 +267,11 @@ class ImportViewModel(
                             info = info,
                             albumTitle = info.title,
                             artist = info.ownerName,
+                            importMode = if (info.pages.size > 1) {
+                                ImportMode.MULTI_PAGE
+                            } else {
+                                ImportMode.SINGLE_VIDEO
+                            },
                         ),
                     )
                 }
@@ -289,9 +307,13 @@ class ImportViewModel(
                             bvidOrUrl = info.bvid,
                             albumTitle = state.albumTitle.trim().ifBlank { null },
                             artist = state.artist.trim().ifBlank { null },
-                            mode = ImportMode.SINGLE_VIDEO,
-                            // 空文本 → 空列表：数据层生成 0 首未分割专辑（整张按一首播放）
-                            segments = state.splitSegments,
+                            mode = state.importMode,
+                            // 多 P 模式不使用分曲文本；单视频模式空文本 → 未分割专辑
+                            segments = if (state.importMode == ImportMode.MULTI_PAGE) {
+                                emptyList()
+                            } else {
+                                state.splitSegments
+                            },
                         ),
                     )
                 }
@@ -562,6 +584,11 @@ class ImportViewModel(
                         info = info,
                         albumTitle = info.title,
                         artist = info.ownerName,
+                        importMode = if (info.pages.size > 1) {
+                            ImportMode.MULTI_PAGE
+                        } else {
+                            ImportMode.SINGLE_VIDEO
+                        },
                     )
                 }
             } catch (ce: CancellationException) {
@@ -587,6 +614,11 @@ class ImportViewModel(
                         info = info,
                         albumTitle = info.title,
                         artist = info.ownerName,
+                        importMode = if (info.pages.size > 1) {
+                            ImportMode.MULTI_PAGE
+                        } else {
+                            ImportMode.SINGLE_VIDEO
+                        },
                     )
                 }
             } catch (ce: CancellationException) {
@@ -603,6 +635,10 @@ class ImportViewModel(
 
     fun updateSearchPreviewArtist(text: String) {
         updateSearchPreview { it.copy(artist = text) }
+    }
+
+    fun updateSearchPreviewImportMode(mode: ImportMode) {
+        updateSearchPreview { it.copy(importMode = mode) }
     }
 
     /** 更新搜索预览里的分曲文本，并实时解析成分割点。 */
@@ -635,9 +671,13 @@ class ImportViewModel(
                             bvidOrUrl = info.bvid,
                             albumTitle = state.albumTitle.trim().ifBlank { null },
                             artist = state.artist.trim().ifBlank { null },
-                            mode = ImportMode.SINGLE_VIDEO,
-                            // 空文本 → 空列表：数据层生成 0 首未分割专辑（整张按一首播放）
-                            segments = state.splitSegments,
+                            mode = state.importMode,
+                            // 多 P 模式不使用分曲文本；单视频模式空文本 → 未分割专辑
+                            segments = if (state.importMode == ImportMode.MULTI_PAGE) {
+                                emptyList()
+                            } else {
+                                state.splitSegments
+                            },
                         ),
                     )
                 }

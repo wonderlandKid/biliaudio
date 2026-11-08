@@ -10,6 +10,7 @@ import com.wonderlandkid.biliaudio.data.model.AlbumImportRequest
 import com.wonderlandkid.biliaudio.data.model.AlbumWithTracks
 import com.wonderlandkid.biliaudio.data.model.BatchImportReport
 import com.wonderlandkid.biliaudio.data.model.BiliApiException
+import com.wonderlandkid.biliaudio.data.model.BiliVideoInfo
 import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.data.model.ImportResult
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
@@ -37,8 +38,8 @@ private const val SOURCE_BILIBILI = "bilibili"
  * 导入行为（与 docs/IMPORT_FORMATS.md 一致）：
  * - 同一 bvid 已存在时**覆盖更新**：保留原 id / createdAt / lastPlayedAt / playCount，替换元信息与分曲；
  * - 单条失败不影响其他条目（批量导入逐条收集 [ImportResult]）；
- * - 多 P 视频自动分 P 暂不支持（契约 `Track` 无 cid 字段，MVP 仅支持单 P，按 DESIGN.md 约定，
- *   用户可用单视频模式导入后手动分曲）。
+ * - 多 P 视频支持 [ImportMode.MULTI_PAGE]：每个分 P 自动成为一首曲目；曲目记录 sourceCid/page，
+ *   播放层按曲目解析分 P 音频流，实现无需手动切歌的无缝队列。
  */
 class AlbumRepositoryImpl(
     private val database: AppDatabase,
@@ -235,10 +236,7 @@ class AlbumRepositoryImpl(
         }
 
         if (request.mode == ImportMode.MULTI_PAGE && info.pages.size > 1) {
-            return ImportResult.Failure(
-                input,
-                "多 P 视频暂不支持自动分 P 导入（当前版本请按单视频导入后手动分曲）",
-            )
+            return importMultiPage(request = request, info = info, importStartMs = importStartMs)
         }
 
         val pageNo = request.page.coerceAtLeast(1)
@@ -283,6 +281,80 @@ class AlbumRepositoryImpl(
                 TAG,
                 "import DONE input=$input bvid=${info.bvid} albums id=$albumId " +
                     "tracks=${tracks.size} durationMs=$durationMs in ${System.currentTimeMillis() - importStartMs}ms",
+            )
+            ImportResult.Success(albumId = albumId, albumTitle = albumTitle, trackCount = tracks.size)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ImportResult.Failure(input, "保存专辑失败：${e.message ?: "数据库错误"}")
+        }
+    }
+
+    /**
+     * 多 P 视频导入：每个分 P 一首曲目。
+     *
+     * 曲目的 startMs/endMs 是整张专辑的累计时间轴（进度条/歌词用）；
+     * sourceCid/sourcePage/sourceOffsetMs 记录实际音频来源，播放层按曲目解析各自的分 P 流。
+     * 所有分 P 的音频 URL 会在开始播放前一次性解析并全部入 ExoPlayer 队列，实现自动无缝切歌。
+     */
+    private suspend fun importMultiPage(
+        request: AlbumImportRequest,
+        info: BiliVideoInfo,
+        importStartMs: Long,
+    ): ImportResult {
+        val input = request.bvidOrUrl.trim()
+        val pages = info.pages
+            .sortedBy { it.page }
+            .filter { it.cid > 0L && it.durationMs > 0L }
+        if (pages.isEmpty()) {
+            return ImportResult.Failure(input, "该视频没有可用的分 P 音频，无法导入")
+        }
+        val albumTitle = request.albumTitle?.trim()?.takeIf { it.isNotEmpty() } ?: info.title
+        val artist = request.artist?.trim()?.takeIf { it.isNotEmpty() } ?: info.ownerName
+        val totalDurationMs = pages.sumOf { it.durationMs }
+
+        var cursorMs = 0L
+        val tracks = pages.mapIndexed { index, page ->
+            val startMs = cursorMs
+            val endMs = startMs + page.durationMs
+            cursorMs = endMs
+            Track(
+                id = 0L,
+                albumId = 0L,
+                index = index,
+                title = page.title.trim().ifBlank { "P${page.page}" },
+                startMs = startMs,
+                endMs = endMs,
+                sourceCid = page.cid,
+                sourcePage = page.page,
+                sourceOffsetMs = 0L,
+            )
+        }
+        val firstPage = pages.first()
+        val existing = getAlbumBySourceKey(SOURCE_BILIBILI, info.bvid, 1)
+        val now = System.currentTimeMillis()
+        val album = Album(
+            id = existing?.id ?: 0L,
+            bvid = info.bvid,
+            // 多 P 专辑以第一 P 作为专辑封面/视频入口，实际播放按曲目 cid 解析
+            cid = firstPage.cid,
+            page = 1,
+            pageCount = pages.size,
+            title = albumTitle,
+            artist = artist,
+            coverUrl = info.coverUrl,
+            durationMs = totalDurationMs,
+            createdAt = existing?.createdAt ?: now,
+            updatedAt = now,
+            lastPlayedAt = existing?.lastPlayedAt,
+            playCount = existing?.playCount ?: 0,
+        )
+        return try {
+            val albumId = saveAlbumWithTracks(album, tracks)
+            Diag.log(
+                TAG,
+                "import MULTI_PAGE DONE input=$input bvid=${info.bvid} albums id=$albumId " +
+                    "pages=${pages.size} durationMs=$totalDurationMs in ${System.currentTimeMillis() - importStartMs}ms",
             )
             ImportResult.Success(albumId = albumId, albumTitle = albumTitle, trackCount = tracks.size)
         } catch (e: CancellationException) {

@@ -41,8 +41,26 @@ data class Track(
     val title: String,
     val startMs: Long,
     val endMs: Long,
+    /**
+     * 曲目音频所在的分 P cid；0 = 沿用专辑 cid（旧数据/单视频分曲）。
+     * 多 P 专辑每首曲目都有独立 cid，播放时需要单独解析音频流。
+     */
+    val sourceCid: Long = 0L,
+    /** 曲目所在分 P 序号（1-based）；0 = 沿用专辑 page。 */
+    val sourcePage: Int = 0,
+    /**
+     * 曲目在源音频流内的起点；null = 沿用 [startMs]（旧数据/单视频分曲）。
+     * 多 P 曲目的 startMs 是专辑时间轴累计值，播放时必须从该 P 的 0ms 开始。
+     */
+    val sourceOffsetMs: Long? = null,
 ) {
     val durationMs: Long get() = (endMs - startMs).coerceAtLeast(0L)
+
+    /** 是否为多 P 来源曲目（有独立 cid）。 */
+    val hasOwnSource: Boolean get() = sourceCid > 0L
+
+    /** 播放时在源流中的起始毫秒。 */
+    val playbackStartMs: Long get() = sourceOffsetMs ?: startMs
 }
 
 @Immutable

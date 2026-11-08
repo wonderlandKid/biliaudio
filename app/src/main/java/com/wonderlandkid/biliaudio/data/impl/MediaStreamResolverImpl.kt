@@ -32,7 +32,8 @@ class MediaStreamResolverImpl(
         val cid: Long,
     )
 
-    private val cache = ConcurrentHashMap<Long, CacheEntry>()
+    // 多 P 专辑同一 albumId 下每首曲目有不同 cid，缓存键必须带 cid。
+    private val cache = ConcurrentHashMap<Pair<Long, Long>, CacheEntry>()
 
     @Volatile
     private var lastCookieSnapshot: String = biliApi.cookieSnapshot()
@@ -40,8 +41,8 @@ class MediaStreamResolverImpl(
     override suspend fun resolve(album: Album, forceRefresh: Boolean): ResolvedStreams {
         dropCacheIfSessionChanged()
         if (!forceRefresh && album.id > 0L) {
-            val cached = cache[album.id]
-            if (cached != null && cached.cid == album.cid && isFresh(cached)) {
+            val cached = cache[album.id to album.cid]
+            if (cached != null && isFresh(cached)) {
                 Diag.log(TAG, "resolve cache HIT album=${album.id} bvid=${album.bvid} cid=${album.cid}")
                 return cached.streams
             }
@@ -68,7 +69,7 @@ class MediaStreamResolverImpl(
             headers = biliApi.mediaHeaders(),
         )
         if (album.id > 0L) {
-            cache[album.id] = CacheEntry(streams = streams, fetchedAtMs = now, cid = album.cid)
+            cache[album.id to album.cid] = CacheEntry(streams = streams, fetchedAtMs = now, cid = album.cid)
         }
         Diag.log(
             TAG,
@@ -81,7 +82,7 @@ class MediaStreamResolverImpl(
     }
 
     override fun invalidate(albumId: Long) {
-        cache.remove(albumId)
+        cache.keys.removeIf { it.first == albumId }
         Diag.log(TAG, "resolve invalidate album=$albumId")
     }
 

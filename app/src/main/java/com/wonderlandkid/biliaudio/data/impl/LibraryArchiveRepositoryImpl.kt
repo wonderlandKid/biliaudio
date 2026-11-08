@@ -436,6 +436,9 @@ class LibraryArchiveRepositoryImpl(
                 title = segment.title ?: "曲目 ${index + 1}",
                 startMs = segment.startMs,
                 endMs = endMs,
+                sourceCid = segment.sourceCid ?: 0L,
+                sourcePage = segment.sourcePage ?: 0,
+                sourceOffsetMs = segment.sourceOffsetMs,
             )
         }
         albumRepository.replaceTracks(album.id, tracks)

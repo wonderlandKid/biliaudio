@@ -164,3 +164,17 @@
 
 - v1/v2 的单文件整库归档不再支持（未发布版本，不做兼容）；
 - 旧「快捷导入」文本/CSV 仍支持，会归一化成 v3 library 后走导入器。
+
+
+## 多 P 分 P 字段（v0.25.0）
+
+`archive.segments[]` 新增可选字段：
+
+```json
+{"startMs": 0, "endMs": 344000, "title": "P1", "sourceCid": 275493414, "sourcePage": 1, "sourceOffsetMs": 0}
+```
+
+- `sourceCid/sourcePage`：曲目实际所在分 P；
+- `startMs/endMs`：专辑累计时间轴（进度条/歌词）；
+- `sourceOffsetMs`：该曲目在分 P 流内的起点（多 P 通常为 0）；
+- 旧归档字段缺失时按单流专辑恢复，不影响兼容性。

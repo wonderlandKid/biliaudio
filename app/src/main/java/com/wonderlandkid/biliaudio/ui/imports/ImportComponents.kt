@@ -30,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,7 @@ import com.wonderlandkid.biliaudio.data.model.ArchiveParseError
 import com.wonderlandkid.biliaudio.data.model.ArchivePreview
 import com.wonderlandkid.biliaudio.data.model.ArchivePreviewItem
 import com.wonderlandkid.biliaudio.data.model.BiliVideoSearchItem
+import com.wonderlandkid.biliaudio.data.model.ImportMode
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -223,6 +225,7 @@ fun VideoPreviewCard(
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onSplitTextChange: (String) -> Unit,
+    onImportModeChange: (ImportMode) -> Unit,
     onChangeCover: () -> Unit,
     onImport: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
@@ -350,24 +353,39 @@ fun VideoPreviewCard(
                 ),
             )
 
-            // ---- 多 P 视频说明（当前版本仅支持整段导入） ----
+            // ---- 多 P 导入方式 ----
             if (info.pages.size > 1) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-                ) {
-                    Text(
-                        text = "该视频包含 ${info.pages.size} 个分 P，当前版本按整段视频导入为一张专辑；" +
-                            "导入后可在专辑详情里手动添加分割点分曲。",
-                        modifier = Modifier.padding(Spacing.md),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                Text(
+                    text = "该视频包含 ${info.pages.size} 个分 P，选择导入方式：",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    FilterChip(
+                        selected = state.importMode == ImportMode.SINGLE_VIDEO,
+                        onClick = { onImportModeChange(ImportMode.SINGLE_VIDEO) },
+                        label = { Text("整段视频") },
+                    )
+                    FilterChip(
+                        selected = state.importMode == ImportMode.MULTI_PAGE,
+                        onClick = { onImportModeChange(ImportMode.MULTI_PAGE) },
+                        label = { Text("按分 P 自动分曲") },
                     )
                 }
+                Text(
+                    text = if (state.importMode == ImportMode.MULTI_PAGE) {
+                        "每个分 P 自动成为一首曲目；播放时所有分 P 预解析入队，自动无缝衔接。"
+                    } else {
+                        "整段视频作为一张专辑导入，可配合下方分曲文本手动分曲。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
+            if (!state.isMultiPageMode) {
             // ---- 可选：分曲文本（评论区「歌名 + 时间点」） ----
             Text(
                 text = "分曲文本（可选）",
@@ -468,6 +486,7 @@ fun VideoPreviewCard(
                     }
                 }
             }
+            }
 
             // ---- 导入按钮 / 成功卡片 ----
             if (state.importedAlbumId != null) {
@@ -497,10 +516,10 @@ fun VideoPreviewCard(
                     } else {
                         // 未填分曲文本时明确提示会导入为未分割专辑
                         Text(
-                            text = if (state.splitText.isBlank()) {
-                                "导入为未分割专辑"
-                            } else {
-                                "导入到音乐库"
+                            text = when {
+                                state.isMultiPageMode -> "导入 ${info.pages.size} 个分 P 为曲目"
+                                state.splitText.isBlank() -> "导入为未分割专辑"
+                                else -> "导入到音乐库"
                             },
                         )
                     }

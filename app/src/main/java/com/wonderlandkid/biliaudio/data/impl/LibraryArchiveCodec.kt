@@ -221,9 +221,23 @@ class LibraryArchiveCodec(
                     if (!ids.add(it)) throw ArchiveFormatException("第 $position 张专辑存在重复的分曲 id：$it")
                 }
                 val segTitle = segment.title.cleanText(MAX_TITLE_LENGTH, "第 $position 张专辑第 ${segIndex + 1} 个分曲名")
+                val sourceCid = segment.sourceCid?.takeIf { it > 0 }
+                val sourcePage = segment.sourcePage?.takeIf { it > 0 }
+                val sourceOffset = segment.sourceOffsetMs?.takeIf { it >= 0 }
+                if (sourceCid != null && sourcePage == null) {
+                    throw ArchiveFormatException("第 $position 张专辑第 ${segIndex + 1} 个分曲缺少分 P 序号")
+                }
                 previousEnd = endMs
                 lastStart = startMs
-                ArchiveSegment(id = id, startMs = startMs, endMs = endMs, title = segTitle)
+                ArchiveSegment(
+                    id = id,
+                    startMs = startMs,
+                    endMs = endMs,
+                    title = segTitle,
+                    sourceCid = sourceCid,
+                    sourcePage = sourcePage,
+                    sourceOffsetMs = sourceOffset,
+                )
             }
         }
 

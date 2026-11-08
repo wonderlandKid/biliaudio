@@ -147,6 +147,32 @@ class PlaybackMappingTest {
         }
     }
 
+
+    @Test
+    fun buildPlaySpecs_multiPageUsesPerTrackSourceAndNoClipping() {
+        val album = album(durationMs = 250_000L).copy(pageCount = 2)
+        val page1 = track(id = 1L, index = 0, startMs = 0L, endMs = 100_000L)
+            .copy(uid = "p1", sourceCid = 111L, sourcePage = 1, sourceOffsetMs = 0L)
+        val page2 = track(id = 2L, index = 1, startMs = 100_000L, endMs = 250_000L)
+            .copy(uid = "p2", sourceCid = 222L, sourcePage = 2, sourceOffsetMs = 0L)
+        val entries = PlaybackMapping.buildQueueEntries(album, listOf(page1, page2))
+
+        val specs = PlaybackMapping.buildPlaySpecsForTracks(
+            entries,
+            mapOf("p1" to "https://cdn.example/p1.m4s", "p2" to "https://cdn.example/p2.m4s"),
+        )
+
+        assertEquals("https://cdn.example/p1.m4s", specs[0].audioUrl)
+        assertEquals("https://cdn.example/p2.m4s", specs[1].audioUrl)
+        // 多 P 曲目是完整分 P 流：播放起点从 0 开始，且不做 Clipping（避免切歌缝隙）
+        assertEquals(0L, specs[1].clipStartMs)
+        assertEquals(150_000L, specs[1].clipEndMs)
+        assertFalse(specs[0].clipEnabled)
+        assertFalse(specs[1].clipEnabled)
+        // 专辑时间轴仍然是累计的，进度条/歌词页可正常换算
+        assertEquals(100_000L, specs[1].clipStartMs + page2.startMs)
+    }
+
     @Test
     fun buildPlaySpecs_keepsSameSizeAsQueue() {
         val album = album()

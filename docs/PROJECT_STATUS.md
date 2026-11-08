@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.24.0）
+# 项目现状与交接（v0.25.0）
 
-> 最后更新：2026-11-08 · 版本 v0.24.0 · tag `v0.24.0`（release commit 以 `git rev-parse v0.24.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-08 · 版本 v0.25.0 · tag `v0.25.0`（release commit 以 `git rev-parse v0.25.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -77,6 +77,7 @@
 - **v0.8.2** 参考 SPICaMusic_Android 统一导航：一级 Tab 瞬时切换（无滑动），层级页面统一 push/pop（右进右出、旧页 1/4 视差、无淡入/缩放）
 - **v0.8.3** 一级 Tab 内容入场动画（Entrance.kt）、迷你条底部 spring 过渡；确认分割时间支持 01:22:23（新增单测）
 - **v0.8.4** 修复 v0.8.3 闪退（负 padding）、入场动画初始进度 bug、predictive back 默认缩小淡出（全局覆盖返回转场）
+- **v0.25.0** 多 P BV 导入 + Room v5 分 P 来源 + 播放前预解析队列无缝切歌
 - **v0.24.0** 设计系统目录 + BiliSection/GroupHeader/AlbumRow + BiliLayout token + 5 个源码级 UI 守卫测试
 - **v0.23.1** 发现页区块边距/顺序修正；统计预览支持专辑时长/歌曲次数切换并持久化
 - **v0.23.0** 发现页四区块化（无搜索栏/随机专辑/最近播放详情 10 张）+ 设置卡片首行统一

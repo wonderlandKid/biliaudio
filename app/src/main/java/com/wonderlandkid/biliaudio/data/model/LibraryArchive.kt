@@ -110,6 +110,10 @@ data class ArchiveSegment(
     val startMs: Long,
     val endMs: Long? = null,
     val title: String? = null,
+    /** 多 P 专辑：曲目所属分 P cid / 序号 / 源内起点；旧归档为 null。 */
+    val sourceCid: Long? = null,
+    val sourcePage: Int? = null,
+    val sourceOffsetMs: Long? = null,
 )
 
 // ---------------------------------------------------------------------------

@@ -172,6 +172,8 @@ class PlaybackEngine private constructor(
         .setWakeMode(C.WAKE_MODE_NETWORK)
         .setSeekBackIncrementMs(5_000L)
         .setSeekForwardIncrementMs(5_000L)
+        // 多 P 队列：不暂停在单个 MediaItem 末尾，由 ExoPlayer 直接预加载下一分 P
+        .setPauseAtEndOfMediaItems(false)
         .build()
 
     /** 供 [PlaybackService] 构建 MediaSession 使用（同一个 ExoPlayer 实例）。 */
@@ -232,15 +234,12 @@ class PlaybackEngine private constructor(
             // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
             val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
-            val albumData = loadAlbumPlaybackData(album)
-            val specs = PlaybackMapping.buildPlaySpecs(
-                entries = entries,
-                audioUrlByAlbumId = mapOf(albumId to albumData.stream.audioUrl),
-            )
+            val audioUrls = resolveAudioUrls(entries = entries, forceRefresh = false)
+            val specs = PlaybackMapping.buildPlaySpecsForTracks(entries, audioUrls)
             startQueue(
                 entries = entries,
                 specs = specs,
-                artworkByAlbumId = mapOf(albumId to albumData.artwork),
+                artworkByAlbumId = mapOf(albumId to loadArtwork(album)),
                 startIndex = startTrackIndex.coerceIn(0, entries.lastIndex),
                 startPositionMs = 0L,
             )
@@ -269,15 +268,12 @@ class PlaybackEngine private constructor(
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
             val targetIndex = entries.indexOfFirst { it.track.id == trackId }
             require(targetIndex >= 0) { "歌曲不存在或已被删除" }
-            val albumData = loadAlbumPlaybackData(album)
-            val specs = PlaybackMapping.buildPlaySpecs(
-                entries = entries,
-                audioUrlByAlbumId = mapOf(albumId to albumData.stream.audioUrl),
-            )
+            val audioUrls = resolveAudioUrls(entries = entries, forceRefresh = false)
+            val specs = PlaybackMapping.buildPlaySpecsForTracks(entries, audioUrls)
             startQueue(
                 entries = entries,
                 specs = specs,
-                artworkByAlbumId = mapOf(albumId to albumData.artwork),
+                artworkByAlbumId = mapOf(albumId to loadArtwork(album)),
                 startIndex = targetIndex,
                 startPositionMs = 0L,
             )
@@ -296,16 +292,12 @@ class PlaybackEngine private constructor(
             val entries = PlaybackMapping.buildQueueEntries(songs)
             // 搜索结果自带专辑信息，先放进缓存，重试时不必回查数据库
             songs.forEach { albumCache[it.album.id] = it.album }
-            val albumIds = entries.map { it.albumId }.distinct()
-            val albumDataById = loadAlbumPlaybackData(albumIds)
-            val specs = PlaybackMapping.buildPlaySpecs(
-                entries = entries,
-                audioUrlByAlbumId = albumDataById.mapValues { (_, data) -> data.stream.audioUrl },
-            )
+            val audioUrls = resolveAudioUrls(entries = entries, forceRefresh = false)
+            val specs = PlaybackMapping.buildPlaySpecsForTracks(entries, audioUrls)
             startQueue(
                 entries = entries,
                 specs = specs,
-                artworkByAlbumId = albumDataById.mapValues { (_, data) -> data.artwork },
+                artworkByAlbumId = loadArtworkByAlbum(entries),
                 startIndex = safeStartIndex,
                 startPositionMs = 0L,
             )
@@ -468,41 +460,102 @@ class PlaybackEngine private constructor(
         return album
     }
 
-    /** 解析专辑音频流并预取封面（并行，封面失败不影响播放）。 */
-    private suspend fun loadAlbumPlaybackData(album: Album): AlbumPlaybackData = coroutineScope {
-        val streamDeferred = async { resolveStream(album) }
-        val artworkDeferred = async { loadArtwork(album) }
-        AlbumPlaybackData(
-            album = album,
-            stream = streamDeferred.await(),
-            artwork = artworkDeferred.await(),
-        )
-    }
-
-    /** 批量解析（跨专辑队列；限制并发度，避免 B 站风控）。 */
-    private suspend fun loadAlbumPlaybackData(albumIds: List<Long>): Map<Long, AlbumPlaybackData> =
-        coroutineScope {
-            val result = mutableMapOf<Long, AlbumPlaybackData>()
-            albumIds.chunked(MAX_CONCURRENT_RESOLVES).forEach { chunk ->
-                val loaded = chunk.map { albumId ->
-                    async {
-                        val album = requireAlbum(albumId)
-                        albumId to loadAlbumPlaybackData(album)
-                    }
-                }.awaitAll()
-                loaded.forEach { (albumId, data) -> result[albumId] = data }
-            }
-            result
+    /**
+     * 解析本次队列每一首曲目的音频地址。
+     *
+     * - 普通曲目：共用所属专辑的音频流；
+     * - 多 P 曲目：按 sourceCid 解析各自分 P 的音频流；
+     * - 所有地址在 [startQueue] 前全部解析完成，随后一次性交给 ExoPlayer，
+     *   这样切歌不需要在播放中等待网络解析，才能做到自动无缝衔接。
+     */
+    private suspend fun resolveAudioUrls(
+        entries: List<QueueEntry>,
+        forceRefresh: Boolean,
+    ): Map<String, String> = coroutineScope {
+        val albumsById = mutableMapOf<Long, Album>()
+        entries.forEach { entry ->
+            albumCache[entry.albumId]?.let { albumsById[entry.albumId] = it }
+        }
+        for (entry in entries) {
+            if (albumsById.containsKey(entry.albumId)) continue
+            albumsById[entry.albumId] = requireAlbum(entry.albumId)
         }
 
-    private suspend fun resolveStream(album: Album, forceRefresh: Boolean = false): ResolvedStreams {
+        data class Request(val album: Album, val cid: Long, val page: Int, val cacheAlbum: Boolean)
+
+        val requests = mutableMapOf<Pair<Long, Long>, Request>()
+        for (entry in entries) {
+            val album = albumsById.getValue(entry.albumId)
+            val track = entry.track
+            if (track.hasOwnSource) {
+                val key = album.id to track.sourceCid
+                requests.putIfAbsent(
+                    key,
+                    Request(
+                        album = album.copy(cid = track.sourceCid, page = track.sourcePage),
+                        cid = track.sourceCid,
+                        page = track.sourcePage,
+                        cacheAlbum = false,
+                    ),
+                )
+            } else {
+                val key = album.id to album.cid
+                requests.putIfAbsent(
+                    key,
+                    Request(album = album, cid = album.cid, page = album.page, cacheAlbum = true),
+                )
+            }
+        }
+
+        val urlBySource = mutableMapOf<Pair<Long, Long>, String>()
+        requests.entries.chunked(MAX_CONCURRENT_RESOLVES).forEach { chunk ->
+            val resolved = chunk.map { (key, request) ->
+                async {
+                    val stream = resolveStream(request.album, forceRefresh, request.cacheAlbum)
+                    key to stream.audioUrl
+                }
+            }.awaitAll()
+            resolved.forEach { (key, url) -> urlBySource[key] = url }
+        }
+
+        val urls = entries.associate { entry ->
+            val track = entry.track
+            val key = entry.albumId to if (track.hasOwnSource) track.sourceCid else albumsById.getValue(entry.albumId).cid
+            entry.track.uid to (urlBySource[key] ?: throw IllegalStateException("音频流获取失败，请重试"))
+        }
+        Diag.log(
+            TAG,
+            "resolveAudioUrls tracks=${entries.size} sources=${urlBySource.size} " +
+                "multiPageTracks=${entries.count { it.track.hasOwnSource }} force=$forceRefresh",
+        )
+        urls
+    }
+
+    private suspend fun loadArtworkByAlbum(entries: List<QueueEntry>): Map<Long, ByteArray?> =
+        coroutineScope {
+            val albums = mutableMapOf<Long, Album>()
+            entries.forEach { entry -> albumCache[entry.albumId]?.let { albums[entry.albumId] = it } }
+            for (entry in entries) {
+                if (albums.containsKey(entry.albumId)) continue
+                albums[entry.albumId] = requireAlbum(entry.albumId)
+            }
+            albums.map { (albumId, album) ->
+                async { albumId to loadArtwork(album) }
+            }.awaitAll().toMap()
+        }
+
+    private suspend fun resolveStream(
+        album: Album,
+        forceRefresh: Boolean = false,
+        cacheAlbum: Boolean = true,
+    ): ResolvedStreams {
         val startMs = System.currentTimeMillis()
         // 有完整音频缓存时直接播放本地文件：离线可用，也不再消耗流量。
         // 出错重试（forceRefresh）时不走缓存，避免损坏的缓存导致死循环。
         if (!forceRefresh) {
             audioCacheRepository.getCached(album)?.let { cached ->
                 val fileUri = android.net.Uri.fromFile(java.io.File(cached.filePath)).toString()
-                albumCache[album.id] = album
+                if (cacheAlbum) albumCache[album.id] = album
                 Diag.log(
                     TAG,
                     "resolve CACHE HIT album=${album.id} file=${cached.filePath} " +
@@ -524,7 +577,7 @@ class PlaybackEngine private constructor(
         if (stream.audioUrl.isBlank()) {
             throw IllegalStateException(PlayerErrorMessages.AUDIO_STREAM_UNAVAILABLE)
         }
-        albumCache[album.id] = album
+        if (cacheAlbum) albumCache[album.id] = album
         // 记录该流需要的请求头（音频；视频地址留给歌词页自己的播放器使用）
         streamHeadersByUrl[stream.audioUrl] = MediaHttp.mergeHeaders(stream.headers)
         Diag.log(
@@ -782,15 +835,13 @@ class PlaybackEngine private constructor(
                 val album = albumCache[albumId]
                     ?: albumRepository.getAlbum(albumId)
                     ?: throw IllegalStateException("专辑不存在或已被删除")
-                val stream = resolveStream(album, forceRefresh = true)
                 val artwork = loadArtwork(album)
                 // 只替换当前专辑的媒体项，其它专辑的队列保持不变
                 val indices = queueEntries.indices.filter { queueEntries[it].albumId == albumId }
                 if (indices.isNotEmpty()) {
-                    val specs = PlaybackMapping.buildPlaySpecs(
-                        entries = indices.map { queueEntries[it] },
-                        audioUrlByAlbumId = mapOf(albumId to stream.audioUrl),
-                    )
+                    val retryEntries = indices.map { queueEntries[it] }
+                    val audioUrls = resolveAudioUrls(entries = retryEntries, forceRefresh = true)
+                    val specs = PlaybackMapping.buildPlaySpecsForTracks(retryEntries, audioUrls)
                     indices.forEachIndexed { specIndex, queueIndex ->
                         player.replaceMediaItem(
                             queueIndex,

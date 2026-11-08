@@ -203,6 +203,7 @@ fun AlbumDetailScreen(
             else -> AlbumDetailContent(
                 album = album,
                 tracks = state.tracks,
+                isMultiPage = state.tracks.any { it.hasOwnSource },
                 currentTrackId = state.currentTrackId,
                 isPlaying = state.isPlaying,
                 isThisAlbumPlaying = state.isThisAlbumPlaying,
@@ -381,6 +382,7 @@ private fun RowScope.AlbumDetailActions(
 private fun AlbumDetailContent(
     album: Album,
     tracks: List<Track>,
+    isMultiPage: Boolean,
     currentTrackId: Long?,
     isPlaying: Boolean,
     isThisAlbumPlaying: Boolean,
@@ -400,12 +402,14 @@ private fun AlbumDetailContent(
             AlbumHero(
                 album = album,
                 trackCount = tracks.size,
+                isMultiPage = isMultiPage,
                 onOpenCover = onOpenCover,
             )
         }
         item(key = "actions") {
             AlbumActionRow(
                 isThisAlbumPlaying = isThisAlbumPlaying,
+                canEditSplit = !isMultiPage,
                 onPlayAll = onPlayAll,
                 onOpenSplitEditor = onOpenSplitEditor,
             )
@@ -450,6 +454,7 @@ private fun AlbumDetailContent(
 private fun AlbumHero(
     album: Album,
     trackCount: Int,
+    isMultiPage: Boolean,
     onOpenCover: () -> Unit,
 ) {
     Column(
@@ -495,7 +500,9 @@ private fun AlbumHero(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MetadataChip(text = album.bvid)
-            if (album.pageCount > 1) {
+            if (isMultiPage) {
+                MetadataChip(text = "${album.pageCount} 个分 P")
+            } else if (album.pageCount > 1) {
                 MetadataChip(text = "P${album.page}/${album.pageCount}")
             }
             MetadataChip(
@@ -530,6 +537,7 @@ private fun MetadataChip(text: String) {
 @Composable
 private fun AlbumActionRow(
     isThisAlbumPlaying: Boolean,
+    canEditSplit: Boolean,
     onPlayAll: () -> Unit,
     onOpenSplitEditor: () -> Unit,
 ) {
@@ -553,6 +561,7 @@ private fun AlbumActionRow(
             Spacer(Modifier.width(Spacing.xs))
             Text(if (isThisAlbumPlaying) "重新播放" else "播放全部")
         }
+        if (canEditSplit) {
         OutlinedButton(
             onClick = onOpenSplitEditor,
             modifier = Modifier.weight(1f),
@@ -566,6 +575,7 @@ private fun AlbumActionRow(
             )
             Spacer(Modifier.width(Spacing.xs))
             Text("编辑分割点")
+        }
         }
     }
 }

@@ -26,6 +26,8 @@ internal data class TrackPlaySpec(
     val clipStartMs: Long,
     /** 在专辑音频流中的裁剪终点（毫秒，开区间） */
     val clipEndMs: Long,
+    /** 是否真的需要 ClippingMediaSource；多 P 的整段分 P 不裁剪，避免额外源造成切歌缝隙。 */
+    val clipEnabled: Boolean = true,
 ) {
     /** 当前曲目时长 = 裁剪区间长度。 */
     val clipDurationMs: Long get() = clipEndMs - clipStartMs
@@ -53,14 +55,30 @@ internal object PlaybackMapping {
         songs.map { song -> entryOf(song.album, song.track) }
 
     /** 队列 + 专辑音频流地址 → MediaItem 规格列表（顺序、数量与队列严格一致）。 */
+    fun buildPlaySpecsForTracks(
+        entries: List<QueueEntry>,
+        audioUrlByTrackUid: Map<String, String>,
+    ): List<TrackPlaySpec> = entries.map { entry ->
+        val audioUrl = audioUrlByTrackUid[entry.track.uid]?.takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException("音频流获取失败，请重试")
+        buildSpec(entry, audioUrl)
+    }
+
+    /** 单流专辑兼容入口：同一张专辑的所有曲目共用专辑音频流。 */
     fun buildPlaySpecs(
         entries: List<QueueEntry>,
         audioUrlByAlbumId: Map<Long, String>,
     ): List<TrackPlaySpec> = entries.map { entry ->
         val audioUrl = audioUrlByAlbumId[entry.albumId]?.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("音频流获取失败，请重试")
-        val (clipStart, clipEnd) = sanitizeClipRange(entry.track.startMs, entry.track.endMs)
-        TrackPlaySpec(
+        buildSpec(entry, audioUrl)
+    }
+
+    private fun buildSpec(entry: QueueEntry, audioUrl: String): TrackPlaySpec {
+        val startMs = entry.track.playbackStartMs
+        val endMs = startMs + entry.track.durationMs.coerceAtLeast(1L)
+        val (clipStart, clipEnd) = sanitizeClipRange(startMs, endMs)
+        return TrackPlaySpec(
             albumId = entry.albumId,
             trackId = entry.track.id,
             mediaId = MEDIA_ID_PREFIX + entry.track.id,
@@ -71,6 +89,8 @@ internal object PlaybackMapping {
             coverUrl = entry.coverUrl,
             clipStartMs = clipStart,
             clipEndMs = clipEnd,
+            // 多 P：每个曲目是完整分 P 流，不裁剪 → ExoPlayer 可直接无缝过渡
+            clipEnabled = !entry.track.hasOwnSource,
         )
     }
 
@@ -92,14 +112,18 @@ internal object PlaybackMapping {
             .setMediaId(spec.mediaId)
             .setUri(spec.audioUrl)
             .setMediaMetadata(metadataBuilder.build())
-            .setClippingConfiguration(
-                MediaItem.ClippingConfiguration.Builder()
-                    .setStartPositionMs(spec.clipStartMs)
-                    .setEndPositionMs(spec.clipEndMs)
-                    // B 站 fMP4 实测可 seek；这里仍允许不可 seek 的流裁剪到非 0 起点，避免直接创建失败
-                    .setAllowUnseekableMedia(true)
-                    .build(),
-            )
+            .apply {
+                if (spec.clipEnabled) {
+                    setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder()
+                            .setStartPositionMs(spec.clipStartMs)
+                            .setEndPositionMs(spec.clipEndMs)
+                            // B 站 fMP4 实测可 seek；这里仍允许不可 seek 的流裁剪到非 0 起点，避免直接创建失败
+                            .setAllowUnseekableMedia(true)
+                            .build(),
+                    )
+                }
+            }
             .build()
     }
 

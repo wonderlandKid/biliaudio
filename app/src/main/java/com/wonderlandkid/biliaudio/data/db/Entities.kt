@@ -63,6 +63,10 @@ data class TrackEntity(
     val title: String,
     val startMs: Long,
     val endMs: Long,
+    /** 分 P 播放源；0/null 表示沿用专辑单流（旧数据） */
+    @ColumnInfo(defaultValue = "0") val sourceCid: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val sourcePage: Int = 0,
+    val sourceOffsetMs: Long? = null,
 )
 
 fun AlbumEntity.toModel(): Album = Album(
@@ -109,6 +113,9 @@ fun TrackEntity.toModel(): Track = Track(
     title = title,
     startMs = startMs,
     endMs = endMs,
+    sourceCid = sourceCid,
+    sourcePage = sourcePage,
+    sourceOffsetMs = sourceOffsetMs,
 )
 
 fun Track.toEntity(): TrackEntity = TrackEntity(
@@ -119,6 +126,9 @@ fun Track.toEntity(): TrackEntity = TrackEntity(
     title = title,
     startMs = startMs,
     endMs = endMs,
+    sourceCid = sourceCid,
+    sourcePage = sourcePage,
+    sourceOffsetMs = sourceOffsetMs,
 )
 
 // ---------------------------------------------------------------------------
