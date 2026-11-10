@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -70,22 +70,22 @@ import com.wonderlandkid.biliaudio.util.TimeUtils
 /**
  * 正在播放页（全屏路由）。
  *
- * 结构：主题色渐变背景 + 大封面 + 标题/艺术家/专辑 + 分曲进度条 + 播放控制 + 播放列表面板 +
- * “看歌词视频”入口。点顶部/列表可以打开播放列表面板（ModalBottomSheet）。
+ * 结构：主题色渐变背景 + 大封面 + 标题/艺术家/专辑 + 分曲进度条 + 播放控制 + 播放列表面板。
+ * 点顶部按钮可以打开播放列表面板（ModalBottomSheet）。
  *
  * 注意：
  * - 本页是导航层之外的全屏路由，由页面内的 Scaffold 自行处理系统栏 insets；
  * - 通知权限（POST_NOTIFICATIONS）由 MainActivity 统一申请，这里不处理。
  *
  * @param onBack 返回上一页
- * @param onOpenVideo 打开歌词（原视频）页
+ * @param onOpenLyrics 打开全屏歌词页（覆盖在本页上方，播放页保持展开）
  * @param onOpenAlbum 打开当前专辑详情（可选，不传则顶部不显示入口）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
     onBack: () -> Unit,
-    onOpenVideo: () -> Unit,
+    onOpenLyrics: () -> Unit,
     modifier: Modifier = Modifier,
     dragModifier: Modifier = Modifier,
     onOpenAlbum: (Long) -> Unit = {},
@@ -175,7 +175,7 @@ fun NowPlayingScreen(
                         onPrevious = viewModel::previous,
                         onCycleRepeat = viewModel::cycleRepeatMode,
                         onToggleShuffle = viewModel::toggleShuffle,
-                        onOpenVideo = onOpenVideo,
+                        onOpenLyrics = onOpenLyrics,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -242,7 +242,7 @@ private fun NowPlayingBody(
     onPrevious: () -> Unit,
     onCycleRepeat: () -> Unit,
     onToggleShuffle: () -> Unit,
-    onOpenVideo: () -> Unit,
+    onOpenLyrics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
@@ -311,16 +311,16 @@ private fun NowPlayingBody(
         )
         Spacer(Modifier.height(Spacing.md))
         FilledTonalButton(
-            onClick = onOpenVideo,
+            onClick = onOpenLyrics,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(
-                imageVector = Icons.Rounded.Movie,
+                imageVector = Icons.Rounded.Lyrics,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(Spacing.sm))
-            Text(text = "看歌词视频")
+            Text(text = "看歌词")
         }
         Spacer(Modifier.height(Spacing.md))
     }

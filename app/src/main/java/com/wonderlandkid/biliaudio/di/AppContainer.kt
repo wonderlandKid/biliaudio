@@ -8,6 +8,7 @@ import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.LyricsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.PlaylistRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.UserDataBackupRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.PlaybackStatsRepositoryImpl
@@ -15,19 +16,19 @@ import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.net.BiliApi
 import com.wonderlandkid.biliaudio.data.net.CookieStore
+import com.wonderlandkid.biliaudio.data.net.LyricsApiClient
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
+import com.wonderlandkid.biliaudio.data.repository.LyricsRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
 import com.wonderlandkid.biliaudio.data.repository.UserDataBackupRepository
 import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
-import com.wonderlandkid.biliaudio.player.AlbumVideoController
-import com.wonderlandkid.biliaudio.player.AlbumVideoPlayer
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.player.PlaybackEngine
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +88,12 @@ class AppContainer(context: Context) {
         database = AppDatabase.getInstance(appContext),
     )
 
+    /** 歌词（在线搜索 + 本机 Room 缓存），解析见 data/lyrics/LyricsParser。 */
+    val lyricsRepository: LyricsRepository = LyricsRepositoryImpl(
+        database = AppDatabase.getInstance(appContext),
+        api = LyricsApiClient(),
+    )
+
     /** 歌单 + 听歌统计的独立用户数据备份（与音乐库归档分离）。 */
     val userDataBackupRepository: UserDataBackupRepository = UserDataBackupRepositoryImpl(
         database = AppDatabase.getInstance(appContext),
@@ -129,15 +136,6 @@ class AppContainer(context: Context) {
 
     val playbackController: PlaybackController
         get() = playbackEngine
-
-    /** 歌词页视频播放器（每页一个实例，页面销毁时 release）。 */
-    fun createVideoController(context: Context): AlbumVideoController =
-        AlbumVideoPlayer(
-            context = context,
-            streamResolver = streamResolver,
-            audioCacheRepository = audioCacheRepository,
-            scope = appScope,
-        )
 
     /** 应用启动时触发一次登录态校验（不阻塞启动）。 */
     fun warmUp() {

@@ -7,11 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.repository.AlbumCoverRepository
-import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
-import com.wonderlandkid.biliaudio.data.repository.CachedAudio
-import com.wonderlandkid.biliaudio.data.repository.CachedVideo
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
+import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
+import com.wonderlandkid.biliaudio.data.repository.CachedAlbumAudio
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.ui.components.CoverPick
@@ -45,16 +44,14 @@ data class AlbumDetailUiState(
     val isExporting: Boolean = false,
     /** 正在保存/应用新的自定义封面 */
     val isApplyingCover: Boolean = false,
-    /** 本专辑已缓存的整段音频（null = 未缓存） */
-    val cachedAudio: CachedAudio? = null,
+    /** 本专辑已缓存的音频分 P 汇总（cids 为空 = 未缓存） */
+    val cachedAudio: CachedAlbumAudio = CachedAlbumAudio(albumId = 0L, bvid = ""),
+    /** 本专辑音频共需要缓存多少个分 P（多 P = 分 P 数；单视频 = 1） */
+    val cacheTotalPages: Int = 0,
     /** 正在下载缓存 */
     val isCaching: Boolean = false,
-    /** 缓存进度 0..1（总大小未知时 null） */
+    /** 缓存进度 0..1（当前分 P 总大小未知时 null） */
     val cacheProgress: Float? = null,
-    /** 本专辑已缓存的歌词视频（null = 未缓存） */
-    val cachedVideo: CachedVideo? = null,
-    val isCachingVideo: Boolean = false,
-    val videoCacheProgress: Float? = null,
     /** 删除成功后由页面收口返回上一页 */
     val deleted: Boolean = false,
     /** 一次性提示（Snackbar） */
@@ -97,24 +94,25 @@ class AlbumDetailViewModel(
                 }
                 .collect { albumWithTracks ->
                     val album = albumWithTracks?.album
+                    val tracks = albumWithTracks?.tracks.orEmpty().sortedBy { track -> track.startMs }
                     // 先展示专辑/曲目，缓存文件检查（磁盘 IO）放到 IO 线程异步补状态，
                     // 避免刚进入详情页时在主线程做文件系统操作。
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
                             album = album,
-                            tracks = albumWithTracks?.tracks.orEmpty().sortedBy { track -> track.startMs },
+                            tracks = tracks,
+                            cacheTotalPages = album?.let { totalCachePages(it, tracks) } ?: 0,
                         )
                     }
                     if (album != null) {
-                        val (cachedAudio, cachedVideo) = withContext(Dispatchers.IO) {
-                            audioCacheRepository.getCached(album) to
-                                audioCacheRepository.getCachedVideo(album)
+                        val cachedAudio = withContext(Dispatchers.IO) {
+                            audioCacheRepository.getCachedSummary(album, tracks)
                         }
                         _uiState.update { state ->
                             // 专辑可能在 IO 期间被删除/切换，避免把旧缓存状态写到新专辑上
                             if (state.album?.id == album.id) {
-                                state.copy(cachedAudio = cachedAudio, cachedVideo = cachedVideo)
+                                state.copy(cachedAudio = cachedAudio)
                             } else {
                                 state
                             }
@@ -167,20 +165,35 @@ class AlbumDetailViewModel(
     /**
      * 更多菜单 → 缓存/删除整张专辑音频。
      *
-     * 手动触发，避免用户没决定就消耗流量；缓存的是当前音质档位的完整 DASH 音频。
+     * 手动触发，避免用户没决定就消耗流量；按分 P 缓存/补齐，已缓存的分 P 自动跳过。
+     * 已缓存全部分 P 时为「删除缓存」语义。
      */
     fun toggleAudioCache() {
-        val album = _uiState.value.album ?: return
-        if (_uiState.value.isCaching) return
+        val state = _uiState.value
+        val album = state.album ?: return
+        if (state.isCaching) return
+        val tracks = state.tracks
         viewModelScope.launch {
-            if (_uiState.value.cachedAudio != null) {
-                audioCacheRepository.remove(album)
-                _uiState.update { it.copy(cachedAudio = null, message = "已删除音频缓存") }
+            // 全部分 P 已缓存 → 删除该专辑全部音频缓存
+            if (state.cacheTotalPages > 0 && state.cachedAudio.cachedPageCount >= state.cacheTotalPages) {
+                try {
+                    audioCacheRepository.remove(album)
+                    _uiState.update {
+                        it.copy(
+                            cachedAudio = CachedAlbumAudio(albumId = album.id, bvid = album.bvid),
+                            message = "已删除专辑音频缓存",
+                        )
+                    }
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    _uiState.update { it.copy(message = "删除缓存失败：${t.message ?: "未知错误"}") }
+                }
                 return@launch
             }
             _uiState.update { it.copy(isCaching = true, cacheProgress = 0f) }
             try {
-                val cached = audioCacheRepository.cache(album) { downloaded, total ->
+                audioCacheRepository.cache(album, tracks) { downloaded, total ->
                     val progress = if (total != null && total > 0L) {
                         downloaded.toFloat() / total.toFloat()
                     } else {
@@ -188,70 +201,36 @@ class AlbumDetailViewModel(
                     }
                     _uiState.update { it.copy(cacheProgress = progress) }
                 }
-                val size = android.text.format.Formatter.formatShortFileSize(appContext, cached.bytes)
+                val summary = withContext(Dispatchers.IO) {
+                    audioCacheRepository.getCachedSummary(album, tracks)
+                }
+                val size = android.text.format.Formatter.formatShortFileSize(appContext, summary.bytes)
+                val message = if (summary.cachedPageCount >= state.cacheTotalPages) {
+                    "已缓存整张专辑音频（$size）"
+                } else {
+                    "已缓存 ${summary.cachedPageCount}/${state.cacheTotalPages} 个分P（$size）"
+                }
                 _uiState.update {
                     it.copy(
                         isCaching = false,
                         cacheProgress = null,
-                        cachedAudio = cached,
-                        message = "已缓存整张专辑音频（$size）",
+                        cachedAudio = summary,
+                        message = message,
                     )
                 }
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                // 失败时刷新已成功落盘的分 P，避免详情页状态滞后于磁盘
+                val summary = runCatching {
+                    withContext(Dispatchers.IO) { audioCacheRepository.getCachedSummary(album, tracks) }
+                }.getOrNull()
                 _uiState.update {
                     it.copy(
                         isCaching = false,
                         cacheProgress = null,
+                        cachedAudio = summary ?: it.cachedAudio,
                         message = "缓存失败：${t.message ?: "未知错误"}",
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * 更多菜单 → 缓存/删除歌词视频。
-     *
-     * 视频缓存的是整段原始视频（不是按曲目切段），文件可能很大；UI 层负责先弹确认。
-     */
-    fun toggleVideoCache() {
-        val album = _uiState.value.album ?: return
-        if (_uiState.value.isCachingVideo) return
-        viewModelScope.launch {
-            if (_uiState.value.cachedVideo != null) {
-                audioCacheRepository.removeVideo(album)
-                _uiState.update { it.copy(cachedVideo = null, message = "已删除歌词视频缓存") }
-                return@launch
-            }
-            _uiState.update { it.copy(isCachingVideo = true, videoCacheProgress = 0f) }
-            try {
-                val cached = audioCacheRepository.cacheVideo(album) { downloaded, total ->
-                    val progress = if (total != null && total > 0L) {
-                        downloaded.toFloat() / total.toFloat()
-                    } else {
-                        null
-                    }
-                    _uiState.update { it.copy(videoCacheProgress = progress) }
-                }
-                val size = android.text.format.Formatter.formatShortFileSize(appContext, cached.bytes)
-                _uiState.update {
-                    it.copy(
-                        isCachingVideo = false,
-                        videoCacheProgress = null,
-                        cachedVideo = cached,
-                        message = "已缓存歌词视频（${cached.videoHeight?.let { "${it}P" } ?: "视频"} · $size）",
-                    )
-                }
-            } catch (ce: CancellationException) {
-                throw ce
-            } catch (t: Throwable) {
-                _uiState.update {
-                    it.copy(
-                        isCachingVideo = false,
-                        videoCacheProgress = null,
-                        message = "视频缓存失败：${t.message ?: "未知错误"}",
                     )
                 }
             }
@@ -297,8 +276,8 @@ class AlbumDetailViewModel(
             _uiState.update { it.copy(isDeleting = true) }
             try {
                 _uiState.value.album?.let { album ->
+                    // remove(album) 会按元数据 albumId 删掉该专辑所有分 P 的缓存
                     audioCacheRepository.remove(album)
-                    audioCacheRepository.removeVideo(album)
                 }
                 albumRepository.deleteAlbum(albumId)
                 _uiState.update { it.copy(isDeleting = false, deleted = true) }
@@ -449,6 +428,15 @@ class AlbumDetailViewModel(
             }
             _uiState.update { it.copy(isExporting = false, message = resultMessage) }
         }
+    }
+
+    /** 该专辑需要缓存的分 P 数：曲目有独立 sourceCid 时按 cid 去重，否则为专辑本身 1 个分 P。 */
+    private fun totalCachePages(album: Album, tracks: List<Track>): Int {
+        val distinctCids = tracks
+            .map { track -> if (track.sourceCid > 0L) track.sourceCid else album.cid }
+            .filter { cid -> cid > 0L }
+            .distinct()
+        return distinctCids.size.coerceAtLeast(1)
     }
 
     /** Snackbar 展示过后清空一次性提示。 */

@@ -10,9 +10,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * 应用数据库（单例）。
  *
- * 两张表：
+ * 表：
  * - `albums`：专辑元信息 + 最近播放/播放次数；
- * - `tracks`：专辑切分出来的曲目（startMs/endMs），外键级联删除。
+ * - `tracks`：专辑切分出来的曲目（startMs/endMs），外键级联删除；
+ * - `playlists` / `playlist_entries` / `track_stats`：歌单与听歌统计（v4）；
+ * - `lyrics`：歌词本机缓存（v6，按曲目稳定 uid 存原始文本，无外键，不进归档/备份）。
  *
  * 装配：`AppDatabase.getInstance(context)`。
  */
@@ -23,8 +25,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlaylistEntity::class,
         PlaylistEntryEntity::class,
         TrackStatsEntity::class,
+        LyricEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +39,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
 
     abstract fun trackStatsDao(): TrackStatsDao
+
+    /** 歌词本机缓存（v6 新增，歌词不进归档/备份）。 */
+    abstract fun lyricsDao(): LyricsDao
 
     companion object {
         private const val DB_NAME = "biliaudio.db"
@@ -118,6 +124,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 → v6：歌词本机缓存（按曲目 uid 存原文 + 来源 + 偏移 + 手动/关闭标记，无外键）。 */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS lyrics (" +
+                        "trackUid TEXT NOT NULL PRIMARY KEY, " +
+                        "rawLyrics TEXT NOT NULL, " +
+                        "sourceType TEXT NOT NULL, " +
+                        "sourceName TEXT NOT NULL, " +
+                        "delayMs INTEGER NOT NULL DEFAULT 0, " +
+                        "isManual INTEGER NOT NULL DEFAULT 0, " +
+                        "suppressed INTEGER NOT NULL DEFAULT 0, " +
+                        "updatedAtMs INTEGER NOT NULL)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -127,7 +150,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }

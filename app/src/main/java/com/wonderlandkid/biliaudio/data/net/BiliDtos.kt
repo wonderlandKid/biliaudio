@@ -101,11 +101,10 @@ data class PlayUrlData(
 data class Dash(
     val duration: Long = 0L,
     val audio: List<DashMedia> = emptyList(),
-    val video: List<DashMedia> = emptyList(),
 )
 
 /**
- * DASH 音/视频流条目。
+ * DASH 音频流条目。
  *
  * 注意 B 站同时返回驼峰和蛇形两套字段（baseUrl / base_url、backupUrl / backup_url），
  * 这里都接收，取用第一个非空的。
@@ -121,8 +120,6 @@ data class DashMedia(
     val codecs: String = "",
     @SerialName("mimeType") val mimeTypeCamel: String? = null,
     @SerialName("mime_type") val mimeTypeSnake: String? = null,
-    val width: Int = 0,
-    val height: Int = 0,
 ) {
     /** 主播放地址。 */
     val url: String?

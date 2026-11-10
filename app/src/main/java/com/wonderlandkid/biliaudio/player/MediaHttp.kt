@@ -5,7 +5,7 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /**
- * 播放层（音频 / 视频 / 封面）共用的 OkHttp 客户端与请求头工具。
+ * 播放层（音频 / 封面）共用的 OkHttp 客户端与请求头工具。
  *
  * B 站媒体 CDN 对请求头校验严格：**缺少 Referer / UA 会 403**（见 docs/API_NOTES.md）。
  * 这里统一注入兜底的 UA + Referer；[com.wonderlandkid.biliaudio.data.model.ResolvedStreams.headers]

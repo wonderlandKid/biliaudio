@@ -15,43 +15,33 @@
 | --- | --- |
 | `App` | 启动、设备/版本信息、旧数据清理 |
 | `Api` | B 站接口请求（path、HTTP、耗时、重试/风控） |
-| `Resolver` | 播放流解析：缓存命中、音频/视频清晰度/码率、CDN host、耗时 |
+| `Resolver` | 播放流解析：缓存命中、音频清晰度/码率、CDN host、耗时 |
 | `Play` | 音频播放引擎：playAlbum/Track/Songs、队列与裁剪映射、READY、错误重试、前台服务 |
-| `Video` | 歌词页视频：resolve、prepare、BUFFERING/READY、首帧、解码器（硬/软）、分片加载、错误、封面占位/覆盖层显隐、漂移校正 seek |
+| `Lyrics` | 歌词：自动匹配（`auto matched`）、在线搜索失败、解析失败、手动选源/本地导入、关闭/恢复 |
+| `LyricsApi` | 在线歌词接口请求（HTTP 失败/解析异常，失败静默返回空列表） |
 | `Cover` | 自定义封面：网易云搜索、图片下载/保存、DB 更新（albumId/path） |
 | `Import` | 专辑导入（BV/批量/文本）输入、条目数、耗时、失败原因；分割点文本解析统计 |
 | `Archive` | 归档导入/导出（模式、条目统计、自动备份路径） |
 
-## 2. 歌词页「转圈很久」
+## 2. 歌词相关（v0.27.0，SPICaMusic 方案）
 
-按 `BiliDiag` 里 `[Video]` 时间线判读：
+按 `BiliDiag` 里 `[Lyrics]` / `[LyricsApi]` 日志判读：
 
-1. `prepare START` → `resolve DONE in Xms`：**X 大** → 数据层 playurl/网络问题；
-   先看同时段 `[Resolver]`/`[Api]`（是否 412/风控、是否缓存未命中）。
-2. `resolve DONE` 后 → `player prepare ISSUED`：应 <10ms；大则主线程卡顿。
-3. `prepare ISSUED` → `BUFFERING`/`READY`/`first frame RENDERED`：**这段大** → 源站/CDN 拉流慢。
-   看日志里的 `host=`（CDN 节点）与 `load#N media=...B in ...ms`；可点 UI 的「重试」
-   （会 `streamResolver.invalidate` 后重新解析，可能换到别的 CDN 节点）。
-4. `READY` 早但 `first frame RENDERED` 晚 → 解码慢；看 `video DECODER=...（硬件/软件解码）`：
-   若是软件解码（c2.android.*）或老设备，考虑换更低分辨率/AVC 流。
-5. `player ERROR`：日志含 exoplayer 错误码与 host，可重试；持续失败检查 Referer/UA/Cookie 是否带全
-   （引擎有默认头，登录态变化会自动清流缓存）。
+1. **自动匹配不到歌词**：看 `[Lyrics] auto matched uid=... source=...` 是否出现；
+   - 没有 `auto matched` → 看 `[LyricsApi] 搜索失败/异常`（接口不可达/超时）或候选为空（曲名清洗后搜不到）；
+   - 有候选但 `没有匹配到合适的歌词` → 标题/时长相似度低于阈值（宁缺毋滥），
+     在歌词页右上角「歌词来源」面板手动选择，或导入本地歌词；
+   - 曲名清洗规则见 `data/lyrics/LyricsText.cleanTitle`（去「01、」等分曲序号，保护「7 Years」类真实歌名）。
+2. **歌词解析失败/空白**：`LyricsParser.detectFormat` 识别 LRC/YRC/AMLL-TTML/纯文本；
+   解析不出行时 `[Lyrics] stored lyrics parse empty ... will search online`；本地导入会校验扩展名+内容。
+3. **歌词错位**：歌词页右上角偏移面板 ±0.1s/±0.5s 调整（正数=歌词提前），会持久化到 Room `lyrics.delayMs`。
+4. **关闭歌词后想恢复**：来源面板 →「恢复自动匹配」（清快照后重新在线匹配）；
+   快照仍在 Room `lyrics` 表（按 trackUid），不需要重装。
+5. **在线接口是 HTTP 第三方服务**：App 仅通过 `res/xml/network_security_config.xml` 放行该域名，
+   若日志/Logcat 出现 `CLEARTEXT communication ... not permitted` 说明域名配置失效（服务换 IP 需同步改配置）。
+   接口失败不影响播放与本地导入。
 
-**已做的优化**（v0.4.0 → v0.5.0）：
-- 视频分辨率封顶 720P、同分辨率优先 AVC；`setMediaItem(item, startPosition)` 省 prepare 后 seek；
-- 未出首帧用**专辑封面占位**（不再黑屏），加载提示延迟 500ms 且只显示一次；<500ms 快速加载无任何提示；
-- 禁用 PlayerView 自带 spinner；
-- 音画漂移阈值 800ms / 最小校正间隔 3s / READY 后 1.2s 宽限；READY 后中途 re-buffer 不再弹加载提示；
-- 慢加载 >8s 提示可重试（重试会作废旧流地址重新解析，可能换 CDN 节点）。
-
-**v0.5.0 真机基线**（Xiaomi / 硬件解码 / 720P）：`prepare START` → `resolve DONE in 0~2ms` →
-`first frame RENDERED after 289~341ms` → `READY` → `coverPlaceholder HIDE`；快速加载**无 overlay SHOW**。
-若日志出现 `overlay SHOW ... elapsed=504ms` 说明确实超过 500ms，再按上面 1-5 排查。
-若出现 `BUFFERING again after READY (re-buffer)` 且用户觉得顿一下，可调大 `READY_DRIFT_GRACE_MS`
-（VideoScreenViewModel，当前 1.2s）。
-
-> 参考数据（模拟器、未登录 480P）：resolve 缓存命中 1ms、首帧 3.4s（模拟器软解）。
-> 真机若仍慢，把「诊断日志 → 复制全部」发给开发者，按上面 1-5 定位。
+> 逐字 KaraOK（YRC/TTML）在真机尚未用逐字源验证；在线源目前是 LRC（行级时间轴），逐行高亮正常。
 
 ## 2.1 自定义封面相关
 

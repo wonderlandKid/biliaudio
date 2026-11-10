@@ -56,7 +56,8 @@ import java.util.Locale
 /**
  * 缓存管理页（设置 → 存储）。
  *
- * 展示设备上已缓存的专辑音频/歌词视频、占用空间，并支持逐条删除或清空全部。
+ * 展示设备上已缓存的专辑音频（多 P 专辑按专辑聚合：分 P 数 / 总大小 / 档位 / 更新时间），
+ * 并支持逐条删除或清空全部。
  */
 @Composable
 fun CacheManagementScreen(
@@ -96,7 +97,7 @@ fun CacheManagementScreen(
 
             state.items.isEmpty() -> EmptyState(
                 title = "还没有缓存",
-                description = "在专辑详情 → 更多菜单里缓存音频或歌词视频，离线也能听。",
+                description = "在专辑详情 → 更多菜单里缓存整张专辑音频，离线也能听。",
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -129,7 +130,6 @@ fun CacheManagementScreen(
                 ) { item ->
                     CacheAlbumCard(
                         item = item,
-                        totalText = formatBytes(context, item.summary.totalBytes),
                         onDelete = { pendingDelete = item },
                     )
                 }
@@ -146,9 +146,8 @@ fun CacheManagementScreen(
                     buildString {
                         append(item.album?.title ?: item.summary.bvid)
                         append("\n")
-                        if (item.summary.hasAudio) append("音频 · ")
-                        if (item.summary.hasVideo) append("歌词视频")
-                        append(" 将一起删除。")
+                        append("已缓存 ${item.summary.cachedPageCount} 个分P 音频（${formatBytes(context, item.summary.bytes)}）")
+                        append(" 将一起删除，无法恢复。")
                     },
                 )
             },
@@ -170,7 +169,7 @@ fun CacheManagementScreen(
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
             title = { Text("清空全部缓存？") },
-            text = { Text("会删除所有已缓存的专辑音频和歌词视频，无法恢复。") },
+            text = { Text("会删除所有已缓存的专辑音频（含多 P 全部分 P），无法恢复。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -221,7 +220,6 @@ private fun CacheSummaryCard(
 @Composable
 private fun CacheAlbumCard(
     item: CachedItemUi,
-    totalText: String,
     onDelete: () -> Unit,
 ) {
     val summary = item.summary
@@ -253,14 +251,16 @@ private fun CacheAlbumCard(
                 .padding(start = Spacing.md, end = Spacing.md, bottom = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            if (summary.hasAudio) {
-                CacheChip("音频 ${summary.audioQualityLabel.orEmpty()} · ${formatBytes(context = context, bytes = summary.audioBytes)}")
-            }
-            if (summary.hasVideo) {
-                CacheChip("歌词视频 ${summary.videoHeight?.let { "${it}P" } ?: ""} · ${formatBytes(context = context, bytes = summary.videoBytes)}")
-            }
+            CacheChip(
+                buildString {
+                    append("音频")
+                    summary.audioQualityLabel?.takeIf { it.isNotBlank() }?.let { append(" $it") }
+                    append(" · ${formatBytes(context = context, bytes = summary.bytes)}")
+                },
+            )
+            CacheChip("${summary.cachedPageCount} 个分P")
             Text(
-                text = "合计 $totalText · 更新于 ${formatDate(summary.updatedAtMs)}",
+                text = "更新于 ${formatDate(summary.updatedAtMs)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = Spacing.sm),

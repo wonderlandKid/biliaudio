@@ -117,7 +117,6 @@ fun AlbumDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showVideoCacheConfirm by remember { mutableStateOf(false) }
     // 「换封面」共享组件（相册 / 网易云 / 恢复 B 站）
     var showCoverPicker by remember { mutableStateOf(false) }
     // 封面大图欣赏
@@ -154,11 +153,10 @@ fun AlbumDetailScreen(
                 isRefreshing = state.isRefreshing,
                 isExporting = state.isExporting,
                 isCaching = state.isCaching,
-                cached = state.cachedAudio != null,
-                cachedQuality = state.cachedAudio?.audioQualityLabel,
-                isCachingVideo = state.isCachingVideo,
-                cachedVideo = state.cachedVideo != null,
-                cachedVideoHeight = state.cachedVideo?.videoHeight,
+                cacheProgress = state.cacheProgress,
+                cachedPages = state.cachedAudio.cachedPageCount,
+                totalPages = state.cacheTotalPages,
+                cachedQuality = state.cachedAudio.audioQualityLabel,
                 menuEnabled = state.album != null,
                 onMenuClick = { menuExpanded = true },
                 menuExpanded = menuExpanded,
@@ -174,15 +172,6 @@ fun AlbumDetailScreen(
                 onToggleCache = {
                     menuExpanded = false
                     viewModel.toggleAudioCache()
-                },
-                onToggleVideoCache = {
-                    menuExpanded = false
-                    when {
-                        // v0.18 之前可能只缓存了视频（DASH 视频轨不含音频）：给一个补音频入口。
-                        state.cachedVideo != null && state.cachedAudio == null -> viewModel.toggleAudioCache()
-                        state.cachedVideo != null -> viewModel.toggleVideoCache()
-                        else -> showVideoCacheConfirm = true
-                    }
                 },
                 onDelete = {
                     menuExpanded = false
@@ -219,31 +208,6 @@ fun AlbumDetailScreen(
                 modifier = Modifier.padding(innerPadding),
             )
         }
-    }
-
-    if (showVideoCacheConfirm && state.album != null) {
-        AlertDialog(
-            onDismissRequest = { showVideoCacheConfirm = false },
-            title = { Text("缓存歌词视频（含音频）？") },
-            text = {
-                Text(
-                    "B 站视频轨不含音频，视频缓存不会自动让音频可离线。这里会同时缓存歌词视频和整段音频，" +
-                        "确保断网时听歌和看歌词视频都可用。视频文件可能较大（数百 MB 至 1 GB+），" +
-                        "建议在 Wi-Fi 下下载；下载期间请保持页面打开。",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showVideoCacheConfirm = false
-                        viewModel.toggleVideoCache()
-                    },
-                ) { Text("开始缓存") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showVideoCacheConfirm = false }) { Text("取消") }
-            },
-        )
     }
 
     val albumForDialog = state.album
@@ -298,11 +262,10 @@ private fun RowScope.AlbumDetailActions(
     isRefreshing: Boolean,
     isExporting: Boolean,
     isCaching: Boolean,
-    cached: Boolean,
+    cacheProgress: Float?,
+    cachedPages: Int,
+    totalPages: Int,
     cachedQuality: String?,
-    isCachingVideo: Boolean,
-    cachedVideo: Boolean,
-    cachedVideoHeight: Int?,
     menuEnabled: Boolean,
     onMenuClick: () -> Unit,
     menuExpanded: Boolean,
@@ -310,10 +273,9 @@ private fun RowScope.AlbumDetailActions(
     onRefresh: () -> Unit,
     onExport: () -> Unit,
     onToggleCache: () -> Unit,
-    onToggleVideoCache: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    if (isRefreshing || isExporting || isCaching || isCachingVideo) {
+    if (isRefreshing || isExporting || isCaching) {
         CircularProgressIndicator(
             modifier = Modifier
                 .padding(end = Spacing.sm)
@@ -334,31 +296,18 @@ private fun RowScope.AlbumDetailActions(
         DropdownMenuItem(
             text = {
                 Text(
-                    when {
-                        isCaching -> "缓存中…"
-                        cached -> "删除音频缓存${cachedQuality?.let { "（$it）" }.orEmpty()}"
-                        else -> "缓存整张专辑音频"
-                    },
+                    cacheActionLabel(
+                        isCaching = isCaching,
+                        cacheProgress = cacheProgress,
+                        cachedPages = cachedPages,
+                        totalPages = totalPages,
+                        cachedQuality = cachedQuality,
+                    ),
                 )
             },
             leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
             enabled = menuEnabled && !isCaching,
             onClick = onToggleCache,
-        )
-        DropdownMenuItem(
-            text = {
-                Text(
-                    when {
-                        isCachingVideo -> "视频缓存中…"
-                        cachedVideo && !cached -> "补缓存音频（视频已缓存）"
-                        cachedVideo -> "删除歌词视频缓存${cachedVideoHeight?.let { "（${it}P）" }.orEmpty()}"
-                        else -> "缓存歌词视频（含音频）"
-                    },
-                )
-            },
-            leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null) },
-            enabled = menuEnabled && !isCachingVideo,
-            onClick = onToggleVideoCache,
         )
         DropdownMenuItem(
             text = { Text("导出专辑文件") },
@@ -379,6 +328,35 @@ private fun RowScope.AlbumDetailActions(
             onClick = onDelete,
         )
     }
+}
+
+/**
+ * 缓存菜单文案：
+ * - 未缓存：「缓存整张专辑音频（N 个分P）」
+ * - 部分缓存：「补缓存音频（已缓存 x/y 分P）」
+ * - 全部缓存：「删除专辑音频缓存（192K · x 个分P）」
+ * - 下载中：「缓存中 42%…」（总量未知时只显示「缓存中…」）
+ */
+private fun cacheActionLabel(
+    isCaching: Boolean,
+    cacheProgress: Float?,
+    cachedPages: Int,
+    totalPages: Int,
+    cachedQuality: String?,
+): String = when {
+    isCaching -> cacheProgress
+        ?.let { progress -> "缓存中 ${(progress * 100).toInt()}%…" }
+        ?: "缓存中…"
+    totalPages > 0 && cachedPages >= totalPages -> {
+        val detail = listOfNotNull(
+            cachedQuality?.takeIf { it.isNotBlank() },
+            "${cachedPages} 个分P",
+        ).joinToString(" · ")
+        "删除专辑音频缓存（$detail）"
+    }
+    cachedPages > 0 -> "补缓存音频（已缓存 $cachedPages/$totalPages 分P）"
+    totalPages > 0 -> "缓存整张专辑音频（$totalPages 个分P）"
+    else -> "缓存整张专辑音频"
 }
 
 @Composable

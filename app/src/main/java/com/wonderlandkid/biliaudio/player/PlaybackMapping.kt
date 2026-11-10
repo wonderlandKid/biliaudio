@@ -150,7 +150,7 @@ internal object PlaybackMapping {
     /**
      * 在同专辑队列中查找包含 [albumPositionMs] 的曲目下标；找不到返回 -1。
      *
-     * 用于歌词页 / 视频页按“专辑绝对进度”定位：目标可能落在别的曲目上。
+     * 用于歌词页按“专辑绝对进度”定位：目标可能落在别的曲目上。
      */
     fun findQueueIndexAtAlbumPosition(
         entries: List<QueueEntry>,

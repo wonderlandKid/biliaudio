@@ -67,7 +67,7 @@ interface PlaybackController {
     /** 跳转到当前歌曲内的进度。 */
     fun seekToTrackPosition(positionMs: Long)
 
-    /** 跳转到当前专辑流的绝对进度（歌词/视频页同步用）。 */
+    /** 跳转到当前专辑流的绝对进度（歌词定位同步用）。 */
     fun seekToAlbumPosition(albumPositionMs: Long)
 
     /** 跳转到队列第 [index] 首（播放列表面板点选用）。 */

@@ -63,15 +63,9 @@ object BiliMotion {
     /** 迷你播放条显示/隐藏。 */
     const val MiniPlayerEnterMs = 280
     const val MiniPlayerExitMs = 220
-    /** 歌词视频控制层显隐。 */
-    const val VideoControlsEnterMs = 260
-    const val VideoControlsExitMs = 200
     /** 底部导航出现/消失。 */
     const val BottomBarEnterMs = 300
     const val BottomBarExitMs = 250
-    /** 歌词视频封面占位淡出。 */
-    const val VideoCoverEnterMs = 300
-    const val VideoCoverExitMs = 250
     /** Tab 列表入场：基础 320ms + 每项 50ms（封顶 650ms），交错 45ms。 */
     const val EntranceBaseMs = 320
     const val EntranceStepMs = 50

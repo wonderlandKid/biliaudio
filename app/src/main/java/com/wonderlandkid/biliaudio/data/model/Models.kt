@@ -122,13 +122,11 @@ enum class AudioQualityPreference(val label: String) {
     LOW("64K"),
 }
 
-/** 已解析出的可播放流地址。 */
+/** 已解析出的可播放音频流地址。 */
 data class ResolvedStreams(
     val audioUrl: String,
     val audioQualityId: Int,
     val audioQualityLabel: String,
-    val videoUrl: String?,
-    val videoHeight: Int?,
     val expiresAtEpochMs: Long,
     /** 拉流必须的请求头（User-Agent / Referer / Cookie 等）。 */
     val headers: Map<String, String> = emptyMap(),

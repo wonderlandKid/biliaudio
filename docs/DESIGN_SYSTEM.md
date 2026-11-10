@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | **T1 一级 Tab** | 无自己的 Scaffold；有底部导航；有 `BiliPageHeader`；内容按区块/列表组织 | 发现 / 音乐库 / 设置 | `BiliPageHeader` + `BiliSection` / 业务列表 |
 | **T2 层级详情页** | 有返回、无底部导航；统一 push/pop；页面内系统 inset 由外层管 | 专辑详情、分曲编辑、艺术家、导入、搜索、归档导入、登录、诊断、缓存管理、我的歌单、歌单详情、听歌统计、最近播放 | `BiliDetailScaffold` |
-| **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片、歌词视频覆盖层 | `NowPlayingScreen` / `VideoScreen` |
+| **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片、歌词页覆盖层 | `NowPlayingScreen` / `LyricsScreen` |
 | **T4 弹层/对话框** | 盖在当前页上，不参与导航转场 | 播放列表、封面选择、封面大图、确认框、新建/重命名歌单 | `ModalBottomSheet` / `AlertDialog` / `Dialog` |
 
 ### 页面清单
@@ -23,7 +23,7 @@
 | 专辑详情 / 分曲编辑 / 分 P 曲名编辑 / 艺术家 / 导入 / 登录 / 诊断 / 缓存管理 | T2 | 各自上游 | `BiliDetailScaffold` |
 | 我的歌单 / 歌单详情 / 听歌统计 / 最近播放 | T2 | 发现页四个区块 | `BiliDetailScaffold` |
 | 正在播放 | T3 | 迷你条上滑 | 自管 |
-| 歌词视频 | T3 | 播放页内 | 自管（覆盖在播放页上方） |
+| 歌词页 | T3 | 播放页「看歌词」 | 自管（覆盖在播放页上方） |
 
 ## 2. 组件种类（再选组件）
 
@@ -62,7 +62,7 @@
 | `LoadingBox` / `EmptyState` | 加载 / 空态 |
 | `CoverImage` | 统一封面加载 + 圆角 |
 | `MiniPlayerBar` | 唯一允许毛玻璃的组件 |
-| `VideoSurface` 等 | T3 专用，不参与页面模板 |
+| `LyricLineRow` / 歌词面板等 | T3 歌词页专用，不参与页面模板 |
 
 ## 3. 设计 token
 
@@ -93,14 +93,14 @@
 
 - 导入页的预览/格式说明卡片、登录页二维码卡片：内容形态专用；页面壳已经是 T2 模板；
 - 专辑详情的 Hero/封面大图、分曲编辑的时间轴行：专用媒体组件；页面壳/顶栏已统一；
-- 播放页/歌词视频：T3 沉浸页，按设计自管；
+- 播放页/歌词页：T3 沉浸页，按设计自管；
 - 封面选择/播放列表等 T4 弹层：组件自身状态；
 - 设置里带进度/按钮的特殊卡片（整库备份操作行、用户数据按钮区）：使用 `SettingsCard` + `BiliGroupHeader`，
   操作区是专用内容，不强行套 `BiliGroupItem`。
 
 ## 6. 自动守卫
 
-`UiArchitectureConsistencyTest` 当前检查（131 个测试中的 5 个）：
+`UiArchitectureConsistencyTest` 当前检查（192 个测试中的 5 个）：
 
 - 详情页必须使用 `BiliDetailScaffold`；
 - UI 层禁止 `onClick = {}` 空实现；

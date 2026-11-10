@@ -11,7 +11,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * 播放层纯逻辑单元测试：队列构建、分曲 → MediaItem 规格映射、进度换算、错误文案、视频同步阈值。
+ * 播放层纯逻辑单元测试：队列构建、分曲 → MediaItem 规格映射、进度换算、错误文案。
  *
  * 不依赖 Android 运行时（MediaItem 转换的 Android 部分由 [PlaybackMapping.toMediaItem] 承担，
  * 这里验证其纯数据前驱 [TrackPlaySpec]，可在 JVM 上稳定运行）。
@@ -275,25 +275,5 @@ class PlaybackMappingTest {
             PlayerErrorMessages.AUDIO_STREAM_UNAVAILABLE,
             PlayerErrorMessages.forException(RuntimeException("boom")),
         )
-    }
-
-    // ---------------------------------------------------------------- 视频同步
-
-    @Test
-    fun videoSync_correctsOnlyWhenDriftExceedsThreshold() {
-        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 10_000L, videoPositionMs = 10_000L))
-        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 10_800L, videoPositionMs = 10_000L))
-        assertFalse(VideoSync.needsCorrection(audioAlbumPositionMs = 9_200L, videoPositionMs = 10_000L))
-        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 10_801L, videoPositionMs = 10_000L))
-        assertTrue(VideoSync.needsCorrection(audioAlbumPositionMs = 9_199L, videoPositionMs = 10_000L))
-        // 自定义阈值
-        assertTrue(VideoSync.needsCorrection(2_000L, 0L, thresholdMs = 1_000L))
-        assertFalse(VideoSync.needsCorrection(2_000L, 0L, thresholdMs = 2_000L))
-    }
-
-    @Test
-    fun videoSync_targetPositionNeverNegative() {
-        assertEquals(0L, VideoSync.targetPosition(-1L))
-        assertEquals(12_345L, VideoSync.targetPosition(12_345L))
     }
 }

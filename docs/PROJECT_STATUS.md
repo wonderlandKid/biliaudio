@@ -1,12 +1,12 @@
-# 项目现状与交接（v0.26.1）
+# 项目现状与交接（v0.27.0）
 
-> 最后更新：2026-11-08 · 版本 v0.26.1 · tag `v0.26.1`（release commit 以 `git rev-parse v0.26.1` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-10 · 版本 v0.27.0 · tag `v0.27.0`（release commit 以 `git rev-parse v0.27.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
 
 把 B 站整张专辑视频导入为「专辑 → 分曲」，支持扫码登录、BV/文本/归档导入、
-按专辑/分曲播放（后台 + 通知）、歌词页看原视频（全屏/非全屏）、整库备份恢复。
+按专辑/分曲播放（后台 + 通知）、在线歌词页（逐行/逐字高亮）、整库备份恢复。
 
 ## 2. 工程与产物
 
@@ -18,8 +18,8 @@
 | 技术栈 | Kotlin 2.3.21 / Compose BOM 2026.09 / AGP 9.5.0 / Gradle 9.6（腾讯镜像）/ Media3 1.11.1 / Room / OkHttp / Coil / zxing |
 | 最低支持 | Android 7.0（API 24），targetSdk 37 |
 | 构建 | 交付/性能验收：`./gradlew :app:assembleRelease`（R8，debug 签名可安装）；开发调试用 `assembleDebug` |
-| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 152 个全绿） |
-| APK 产物 | `app/build/outputs/apk/debug/app-debug.apk`；发布放置 `dist/biliaudio-vX.Y.Z-debug.apk` |
+| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 192 个全绿） |
+| APK 产物 | `app/build/outputs/apk/release/app-release.apk`（性能验收/交付，发布放置 `dist/biliaudio-vX.Y.Z-release.apk`）；`app-debug.apk` 仅开发调试 |
 
 **环境注意**
 - 本机 **GitHub 不可达**（因此 Gradle wrapper 使用 `https://mirrors.cloud.tencent.com/gradle/`；
@@ -43,7 +43,8 @@
 | 播放（ExoPlayer 分曲裁剪、专辑连续、单曲点播） | ✅ | 点歌/专辑播放=单专辑队列；「播放全部歌曲」=全库 |
 | 播放列表（当前专辑分曲展开、跳转） | ✅ | NowPlaying 播放列表面板 |
 | 后台播放 + MediaSession 通知 + 锁屏控制 | ✅ | Android 13+ 通知权限已申请 |
-| 歌词页原视频（同步、全屏/非全屏、加载状态） | ✅ | 独立第二路 ExoPlayer；清晰度标签；慢加载提示+重试 |
+| **在线歌词页（SPICaMusic 方案）** | ✅ | 在线多来源匹配 + Room 缓存 + 来源选择/时间偏移 + 逐行/逐字高亮；v0.27.0 起替换原视频页 |
+| 专辑音频离线缓存（按分 P） | ✅ | 多 P 按 `sourceCid` 逐 P 缓存/补缓存；缓存管理按专辑聚合；v0.27.0 起只缓存音频（视频缓存已移除） |
 | 音乐库歌曲/专辑/艺术家搜索、最近播放 | ✅ | 分曲逐首显示、可搜索 |
 | **音乐库三分栏 + A-Z 快速索引** | ✅ | 歌曲/专辑/艺术家；拼音分组、索引拖动定位、拖动气泡 |
 | **艺术家详情页** | ✅ | 封面取第一张专辑、专辑网格 + 歌曲列表 |
@@ -55,12 +56,13 @@
 | 浅色/深色主题（Material 3 扁平） | ✅ | material-kolor 动态色板；无液态玻璃 |
 | 诊断日志（查看/复制/导出/清空） | ✅ | tag `BiliDiag`；设置 → 诊断与维护 |
 | 旧版占位曲自动清理 | ✅ | 启动时迁移旧数据 |
-| 多 P 视频自动分曲 | ❌ 未做 | 契约 Track 无 cid；当前按整段导入后手动分曲 |
+| 多 P 视频自动分曲 | ✅ | v0.25.0 起每个分 P 一首；v0.27.0 起音频缓存也按分 P |
 | YAML 只读导入 | ❌ 未做（M3 可选） | 当前只 JSON |
-| B 站收藏夹导入 / 离线缓存 / 自动静音切分 / EQ | ❌ 未做 | 路线图 |
+| B 站收藏夹导入 / 自动静音切分 / EQ | ❌ 未做 | 路线图 |
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.27.0** 移除「看歌词视频」（视频播放/视频缓存全部删除，缓存只留歌曲并按分 P）；在线歌词（SPICaMusic 方案：多来源 API + LRC/YRC/AMLL + Room 缓存 + 歌词页）；Room v6
 - **v0.1.0** 首版：登录/导入/分曲/播放/歌词页/音乐库/设置，模拟器+真机走查通过
 - **v0.2.0** 音乐库归档：统一 JSON 备份/恢复/分割点文件，覆盖全库自动备份
 - **v0.3.0** 文本识别分割点（三种格式）、未分割导入不再生成占位曲、歌词视频清晰度修复（选流）
@@ -103,9 +105,9 @@
 - **v0.9.0** 归档数据层 v2：DB v3（source + (source,bvid,page) 唯一键 + tracks.uid）、v2 schema/kind/features/cover hash/空语义；
   v1 归档不再兼容，旧快捷导入文本仍归一化为 v2
 
-## 5. 最近验证状态（截至 v0.4.0）
+## 5. 最近验证状态（截至 v0.27.0）
 
-- 单元测试 **152 / 0 失败**（wbi、批量/归档解析、导入模式、播放映射、选流、占位曲判定、封面归档、目录归档等）。
+- 单元测试 **192 / 0 失败**（wbi、批量/归档解析、导入模式、播放映射、音频缓存逻辑、歌词 LRC/YRC/AMLL 解析与匹配、曲名清洗、UI 架构守卫等）。
 - 模拟器端到端已验证：
   - 真实导入 `BV1GJ411x7h7`（3:33）与 `BV1sp4y1B7bH`（59:25，13 分 P）；
   - 用「格式 1」14 首文本导入 → 14 首、播放第 2 首（03:57）专辑进度映射正确；
@@ -147,11 +149,20 @@
   - 列表性能 gfxinfo：90/95/99th 37/44/59ms → 32/35/46ms，Slow UI thread −60%，Missed Vsync 2→0
     （headless 软渲染绝对值仅作相对参考）；根因验证模拟 250ms tick 下 uiState 重建 ≥30 次 → 0 次。
 - **真机（用户 Xiaomi）历史验证**：登录、导入、播放、歌词页 HEVC 硬解、通知均正常（v0.2 时代）。
+- v0.27.0 真机（Xiaomi 23113RKC6C / Android 16，串号 `7a7ca1d5`）验证：
+  - Room v5→v6 自动迁移：原 110 首 / 7 专辑数据完好；release（R8）包安装运行正常；
+  - 播放页「看歌词」→ 歌词层从右滑入（播放页保持展开、迷你条隐藏），返回优先关歌词页；
+  - 在线自动匹配成功（Beatles「Come Together」按标题+时长选中 04:19 版本）：当前行居中高亮、已唱/未唱分层、
+    翻译行、自动滚动、点击行跳转均正常；
+  - 偏移面板 +0.1s 立即生效并持久化；来源面板候选/打勾/重新搜索/本地导入/关闭歌词/恢复自动匹配全链路正常；
+  - release（R8）下在线歌词搜索与解析正常，HTTP 歌词域名经 `network_security_config` 放行生效；
+  - 截屏：`docs/screenshots/v027_00_nowplaying_lyrics_entry.png`、`v027_01..06_lyrics_*.png`。
 - **未验证/待用户配合**：
   1. 扫码登录成功后的完整链路（头像/昵称、高清流）——需要真实账号扫码；
-  2. 登录后歌词页 720P 画质/加载速度（真机已验证未登录 480P/登录态下 720P 出现）；
-  3. 本地相册上传封面在 MIUI 系统相册选择器的完整 UI 走查（代码路径已实现，在线封面/恢复 B 站已真机验证）；
-  4. 归档「自定义封面」端到端 UI 走查（数据层单测已覆盖 cover 对象导出/导入）。
+  2. 本地相册上传封面在 MIUI 系统相册选择器的完整 UI 走查（代码路径已实现，在线封面/恢复 B 站已真机验证）；
+  3. 归档「自定义封面」端到端 UI 走查（数据层单测已覆盖 cover 对象导出/导入）；
+  4. 歌词逐字 KaraOK（在线源当前为 LRC 行级时间轴）：需本地导入 YRC/TTML 或逐字歌词源后再真机复验；
+  5. 多 P 专辑「逐 P 缓存 + 断网离线播放」端到端（逻辑/单测已覆盖，真机多 P 离线未走查）。
 
 ## 6. 待办 / 下一步（按优先级）
 
@@ -161,22 +172,23 @@
 4. **P1** 真机扫码登录成功路径 QA（头像昵称、音质/画质提升）。
 5. **P2** 网易云封面接口为**非官方接口**，未来可能变更/限流；失败时静默降级（只影响在线搜封面），
    可后续加备用源（如 QQ 音乐/豆瓣）或内置占位图选择。
-6. **P2** 歌词页 CDN 节点慢的兜底：目前 8s 提示可手动重试（会作废旧流地址重新解析）；可考虑用 playurl 的 backupUrl 自动切换线路。
+6. **P2** 在线歌词第三方 HTTP 服务可用性：base URL 可配置 + 失败降级（本地导入/重试）；接口失效不影响播放。
 7. **P2** 音乐库大数据量（数千首）索引滚动性能与分组重算（当前用 remember 缓存，需实测）。
-8. **P2** 多 P 视频自动分曲（若做：需 Track 增加 cid，归档/播放映射扩展）。
-9. **P3** 路线图：B 站收藏夹导入、离线缓存、自动静音切分、播放历史/歌单、YAML 只读导入、画质设置项。
+8. **P2** 歌词增强：迷你条单行歌词（MiniLyric）、逐字 YRC/TTML 真机复验、自定义搜索关键词。
+9. **P3** 路线图：B 站收藏夹导入、后台缓存下载/断点续传/Wi-Fi-only、自动静音切分、YAML 只读导入、画质设置项。
 
 ## 7. 关键设计约束（务必遵守）
 
-- **虚拟歌曲模型**：Track = 专辑音视频流上的 `[startMs, endMs)` 切片，**不做独立音频实体**；
+- **虚拟歌曲模型**：Track = 专辑音频流上的 `[startMs, endMs)` 切片，**不做独立音频实体**；
   单曲不设独立艺术家/封面，继承专辑（用户已确认「完全没必要做成实体」）。
 - **播放队列语义**：从专辑/音乐库点某曲 → 队列=该曲所属专辑的分曲；「播放全部歌曲」才全库。
 - **未分割专辑**：0 首曲目，播放时虚拟整张一首；旧版占位曲启动自动清理。
 - **归档格式**：一个 `.biliaudio.json` 承载整库/单专辑/分割点；只 JSON；导入模式 merge/segments-only/replace；
   replace 自动备份到 `files/backups/`（保留 10 份）。
-- **歌词页视频**：独立第二路 ExoPlayer 只播视频轨，与音频按「专辑绝对进度」同步；
-  视频选流优先最高分辨率 **≤720P**、同分辨率优先 AVC；不要选低码率低分辨率流（会糊）。
-  未出首帧用当前专辑封面占位；加载提示延迟 500ms 且只显示一次；音画校正阈值 800ms + 最小间隔 3s。
+- **歌词（v0.27.0）**：在线多来源歌词 API（按曲名搜索，不传 UP 主艺术家）→ 候选按标题+时长匹配 →
+  Room v6 `lyrics` 按 `Track.uid` 存原文；解析 LRC/YRC/AMLL-TTML/纯文本；歌词页是播放页上方覆盖层（非路由）；
+  歌词是设备本地缓存，不进归档/备份；在线接口为 HTTP，仅放行该域名（network_security_config）。见 [LYRICS.md](LYRICS.md)。
+- **离线缓存（v0.27.0）**：只缓存音频，按分 P（`bvid+cid` key）；多 P 专辑逐 P 缓存/补缓存；视频缓存/视频播放已移除。
 - **自定义封面**：`Album.coverLocalPath` 优先于远程 `coverUrl`；封面文件存 `files/covers/`（JPEG，长边≤1080）；
   在线来源为网易云专辑搜索（非官方接口）；归档用 `cover` 对象（MIME/SHA-256/字节）内嵌封面；删除专辑时清理封面文件。
 - **UI 规范**：Tab 页统一 `BiliPageHeader`；转场在 `AppNavHost` 统一定义（Tab fade、详情横向共享轴、播放页底部上滑）；
@@ -203,14 +215,14 @@ app/src/main/java/com/wonderlandkid/biliaudio
 │   ├── repository/Repositories.kt      仓库接口（契约）
 │   ├── repository/LibraryArchiveRepository.kt
 │   ├── net/BiliApi.kt                  B站 API、wbi、扫码、playurl、搜索
-│   ├── net/WbiSigner.kt / StreamSelector.kt / CookieStore.kt
-│   ├── db/                             Room（albums/tracks）
+│   ├── net/WbiSigner.kt / StreamSelector.kt / CookieStore.kt / LyricsApiClient.kt
+│   ├── lyrics/                         歌词解析（LRC/YRC/AMLL）、格式识别、候选匹配、曲名清洗
+│   ├── db/                             Room（albums/tracks/playlists/track_stats/lyrics，v6）
 │   └── impl/                           仓库实现 + BatchImportParser + SplitTextParser +
-│                                       LibraryArchiveCodec / LibraryArchiveRepositoryImpl + Diag 打点
+│                                       LibraryArchiveCodec / LibraryArchiveRepositoryImpl + AudioCacheLogic + Diag 打点
 ├── player/
 │   ├── PlaybackEngine.kt               单 ExoPlayer + ClippingMediaItem 队列（Diag tag Play）
 │   ├── PlaybackService.kt              MediaSessionService/通知
-│   ├── AlbumVideoPlayer.kt             歌词页第二路视频播放器（Diag tag Video）
 │   └── PlaybackMapping.kt              队列/裁剪/进度映射（纯函数 + 单测）
 ├── ui/
 │   ├── theme/ · components/            设计系统与通用组件（集成层）
@@ -218,7 +230,7 @@ app/src/main/java/com/wonderlandkid/biliaudio
 │   ├── home/ library/ album/           发现、音乐库、专辑详情、分曲编辑（含文本导入）
 │   ├── imports/                        BV/搜索/归档导入、分割点文本识别预览
 │   ├── login/ settings/                扫码登录、设置、备份恢复、诊断日志
-│   └── player/                         正在播放、播放列表面板、歌词页（加载阶段/重试/清晰度）
+│   └── player/                         正在播放、播放列表面板、歌词页（lyrics/ 子目录）
 └── util/Diag.kt                       诊断日志（内存环形 + Logcat BiliDiag）
 ```
 
@@ -243,4 +255,6 @@ app/src/main/java/com/wonderlandkid/biliaudio
 - [CHANGELOG.md](CHANGELOG.md)（版本）
 - [API_NOTES.md](API_NOTES.md)（B 站接口）
 - [LIBRARY_ARCHIVE.md](LIBRARY_ARCHIVE.md)（归档格式）
+- [OFFLINE_CACHE.md](OFFLINE_CACHE.md)（音频缓存）
+- [LYRICS.md](LYRICS.md)（在线歌词方案）
 - [IMPORT_FORMATS.md](IMPORT_FORMATS.md)（导入/分割点文本格式）

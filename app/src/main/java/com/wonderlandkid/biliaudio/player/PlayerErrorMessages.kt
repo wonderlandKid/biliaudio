@@ -14,9 +14,6 @@ internal object PlayerErrorMessages {
     /** 音频流不可用（解析失败 / 地址过期）。 */
     const val AUDIO_STREAM_UNAVAILABLE = "音频流获取失败，请重试"
 
-    /** 歌词页视频流不可用。 */
-    const val VIDEO_STREAM_UNAVAILABLE = "视频流获取失败，请重试"
-
     /** 通用网络错误。 */
     const val NETWORK = "网络连接失败，请检查网络后重试"
 

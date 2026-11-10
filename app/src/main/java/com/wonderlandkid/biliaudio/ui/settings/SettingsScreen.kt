@@ -691,7 +691,7 @@ private fun AboutCard() {
             Text(
                 text = "哔哩专辑（BiliAudio）把 B 站上「一整张专辑装在一个视频里」的内容，" +
                     "转换成可按歌曲搜索、可按分曲播放的音乐库：支持 BV 号 / 批量 / 搜索导入、" +
-                    "自定义分曲时间点、后台播放与歌词页看原视频。",
+                    "自定义分曲时间点、后台播放与歌词显示。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1014,7 +1014,7 @@ private fun CacheManagementEntryCard(onClick: () -> Unit) {
     BiliGroup(contentPadding = PaddingValues(0.dp)) {
         BiliGroupItem(
             title = "缓存管理",
-            subtitle = "查看已缓存的专辑音频/歌词视频，删除或清空全部",
+            subtitle = "查看已缓存的专辑音频，删除或清空全部",
             onClick = onClick,
             leading = {
                 Icon(

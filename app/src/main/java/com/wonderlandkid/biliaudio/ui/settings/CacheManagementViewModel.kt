@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.data.repository.AudioCacheRepository
-import com.wonderlandkid.biliaudio.data.repository.CachedMediaSummary
+import com.wonderlandkid.biliaudio.data.repository.CachedAlbumAudio
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,11 +13,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 缓存管理列表项：一张专辑的聚合缓存 + 关联的专辑（已删除时为 null）。 */
 data class CachedItemUi(
-    val summary: CachedMediaSummary,
+    val summary: CachedAlbumAudio,
     val album: Album?,
 ) {
-    val key: String get() = "${summary.bvid}_${summary.cid}"
+    val key: String
+        get() = if (summary.albumId > 0L) "album:${summary.albumId}" else "bvid:${summary.bvid}"
 }
 
 data class CacheManagementUiState(
@@ -29,7 +31,7 @@ data class CacheManagementUiState(
 )
 
 /**
- * 缓存管理页：列出应用私有目录里的专辑音频/歌词视频缓存，支持逐条删除与清空。
+ * 缓存管理页：列出应用私有目录里的专辑音频缓存（按专辑聚合多 P），支持逐条删除与清空。
  *
  * 缓存本身不写数据库；这里通过 AudioCacheRepository 扫目录，再按 albumId 关联专辑标题/封面。
  * 若专辑已被删除但缓存文件还在（历史遗留），仍会展示并允许删除。
@@ -53,7 +55,7 @@ class CacheManagementViewModel(
                 val summaries = cacheRepository.listCached()
                 val albums = albumRepository.albums.first().associateBy { album -> album.id }
                 val items = summaries.map { summary -> CachedItemUi(summary, albums[summary.albumId]) }
-                items to items.sumOf { it.summary.totalBytes }
+                items to items.sumOf { it.summary.bytes }
             }.onSuccess { (items, total) ->
                 _uiState.update {
                     it.copy(isLoading = false, items = items, totalBytes = total)
@@ -77,7 +79,7 @@ class CacheManagementViewModel(
                         val left = state.items.filterNot { it.key == item.key }
                         state.copy(
                             items = left,
-                            totalBytes = left.sumOf { it.summary.totalBytes },
+                            totalBytes = left.sumOf { it.summary.bytes },
                             message = "已删除缓存",
                         )
                     }

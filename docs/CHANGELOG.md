@@ -1,5 +1,37 @@
 # 版本记录
 
+## v0.27.0（2026-11-10 · tag `v0.27.0`）
+
+**移除「看歌词视频」+ 音频缓存按分 P + 在线歌词（SPICaMusic 方案）**
+
+按用户要求做三项改造：
+
+1. **摈弃「看歌词视频」功能（-2388 行）**
+   - 删除 `AlbumVideoPlayer` / `VideoContracts` / `VideoSync` / `VideoScreen` / `VideoScreenViewModel`
+     及全部引用（AppContainer 注入、AppNavHost 覆盖层、播放页入口按钮、视频选流、`ResolvedStreams.videoUrl/videoHeight`、
+     `Dash.video` 解析、视频缓存、视频动效 token、视频错误文案、相关测试）；
+   - 保留 B 站视频**元数据/搜索导入**（`videoInfo`/`searchVideos`/`previewVideo`）——那是导入功能，不属于视频播放；
+   - 旧版本遗留的 `<bvid>_<cid>_video.*` 视频缓存文件在打开缓存管理/删除/清空时自动清理。
+2. **缓存只剩歌曲，并修复多 P 只缓存首 P 的问题**
+   - 旧实现只缓存 `album.cid`（多 P 专辑=首 P），其他分 P 离线仍要联网；现已改为按
+     `{Track.sourceCid ?: album.cid}` 去重逐 P 缓存，整张专辑离线可用；
+   - 专辑详情缓存状态显示「已缓存 x/y 分P」，支持补缓存；缓存管理按专辑聚合（分 P 数/总大小/档位）；
+   - 新增纯逻辑 `AudioCacheLogic` + 11 个单测（key/分 P 去重/聚合/删除匹配/详情汇总）；
+   - 播放引擎多 P 曲目 `bvid+cid` 缓存命中已确认无需改动。
+3. **在线歌词（使用 SPICaMusic 的歌词方案）**
+   - 在线多来源歌词 API（参考项目同款接口，按曲名搜索；专辑艺术家是 UP 主，不传给接口）+ 候选按标题/时长自动匹配；
+   - 解析器移植：LRC（含增强型逐字/翻译合并/错位降级）、YRC、AMLL/TTML，另有纯文本兜底；
+   - Room v6 新增 `lyrics` 表（按 `Track.uid` 存原文/来源/偏移/手动/关闭标记，无外键，不进归档/备份）；
+   - 全屏歌词页（播放页上方覆盖层，500ms Emphasized 右进右出）：当前行高亮居中、逐行/逐字上色、
+     自动滚动（手动滚动暂停 3s）、点击行跳转、来源面板（在线候选/重新搜索/本地导入 LRC·YRC·TTML·TXT/关闭/恢复）、
+     时间偏移面板（±0.1s/±0.5s/重置）；
+   - 歌词接口是 HTTP：Manifest 保持 `usesCleartextTraffic=false`，仅通过 `network_security_config` 放行该域名；
+   - 新增文档 [LYRICS.md](LYRICS.md)。
+- 单测 132 → **192 全绿**（新增 56 歌词 + 11 缓存逻辑 − 7 视频用例）；
+- release（R8）真机验证：Room v5→v6 迁移数据完好、在线歌词搜索/解析、歌词页全流程正常；
+  截屏 `docs/screenshots/v027_*.png`；
+- 说明：在线源目前为 LRC 行级时间轴，逐字 KaraOK 需本地导入 YRC/TTML 后再复验。
+
 ## v0.26.1（2026-11-08 · tag `v0.26.1`）
 
 **全局底部安全区：迷你条 / 键盘不再遮挡页面最后内容**

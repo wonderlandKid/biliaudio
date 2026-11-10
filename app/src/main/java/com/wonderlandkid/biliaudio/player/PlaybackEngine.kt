@@ -231,7 +231,7 @@ class PlaybackEngine private constructor(
             albumCache.remove(albumId)
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
-            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
+            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑音频流（startMs=0, endMs=duration）
             val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
             val audioUrls = resolveAudioUrls(entries = entries, forceRefresh = false)
@@ -263,7 +263,7 @@ class PlaybackEngine private constructor(
             albumCache.remove(albumId)
             val album = requireAlbum(albumId)
             val storedTracks = albumRepository.getTracks(albumId).sortedBy { it.index }
-            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑视频（startMs=0, endMs=duration）
+            // 未分割专辑：逻辑上作为一首歌参与队列，物理上就是整段专辑音频流（startMs=0, endMs=duration）
             val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
             val entries = PlaybackMapping.buildQueueEntries(album, tracks)
             val targetIndex = entries.indexOfFirst { it.track.id == trackId }
@@ -565,8 +565,6 @@ class PlaybackEngine private constructor(
                     audioUrl = fileUri,
                     audioQualityId = cached.audioQualityId,
                     audioQualityLabel = cached.audioQualityLabel,
-                    videoUrl = null,
-                    videoHeight = null,
                     expiresAtEpochMs = Long.MAX_VALUE,
                     headers = emptyMap(),
                 )
@@ -578,12 +576,12 @@ class PlaybackEngine private constructor(
             throw IllegalStateException(PlayerErrorMessages.AUDIO_STREAM_UNAVAILABLE)
         }
         if (cacheAlbum) albumCache[album.id] = album
-        // 记录该流需要的请求头（音频；视频地址留给歌词页自己的播放器使用）
+        // 记录该流需要的请求头（音频流）
         streamHeadersByUrl[stream.audioUrl] = MediaHttp.mergeHeaders(stream.headers)
         Diag.log(
             TAG,
             "resolve album=${album.id} in ${costMs}ms audio=${stream.audioQualityLabel}" +
-                "(${stream.audioQualityId}) video=${stream.videoHeight?.let { "${it}p" } ?: "-"} force=$forceRefresh",
+                "(${stream.audioQualityId}) force=$forceRefresh",
         )
         return stream
     }

@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.26.1**（tag `v0.26.1`，2026-11-08；release commit 以 `git rev-parse v0.26.1` 为准）
+- **版本：v0.27.0**（tag `v0.27.0`，2026-11-10；release commit 以 `git rev-parse v0.27.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**132 个**（v0.26.1；含 5 个 UI 架构守卫）
+- 单元测试：**192 个**（v0.27.0；含 5 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.26.1: 132 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.27.0: 192 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -34,7 +34,8 @@ scripts/screenshot.sh home 8
 ## 开发约定（重要）
 
 1. **契约文件不要随意改**：`data/model/Models.kt`、`data/repository/Repositories.kt`、
-   `player/PlaybackContracts.kt`、`player/VideoContracts.kt`、`di/AppContainer.kt`、
+   `player/PlaybackContracts.kt`、`data/model/Lyrics.kt`、`data/repository/LyricsRepository.kt`、
+   `di/AppContainer.kt`、
    `ui/navigation/**`、`ui/theme/**`、`ui/components/**`、`AndroidManifest.xml`、`build.gradle.kts`
    属于集成层，改动前先确认影响面（或按 docs/DECISIONS.md 的架构约定来）。
 2. **每次发版**：`versionCode +1`、`versionName` 升级 → 全量单测 + **构建 release**（性能验收/交付用；
@@ -45,7 +46,7 @@ scripts/screenshot.sh home 8
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/大面积毛玻璃**；
    （v0.7.0 起用户明确要求：仅迷你播放条可使用 Haze 毛玻璃，其余页面保持扁平）
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **信息架构（v0.26.1）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
+4. **信息架构（v0.27.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
    最近播放 → 听歌统计 → 我的歌单 → 随机专辑排列（详情从右上角进入；最近播放详情 10 张）；
    听歌统计预览可切专辑时长/歌曲次数，选择持久化到 `AppSettings.homeStatsMode`；
    设置卡片首行用 `BiliGroupHeader` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
@@ -54,15 +55,23 @@ scripts/screenshot.sh home 8
    播放前预解析全部分 P 并入队，完整分 P 不裁剪，自动无缝衔接；
    歌单/统计持久化在 Room v4；**不进入音乐库归档**，通过设置 → 用户数据 →「歌单与听歌统计备份」
    独立 JSON 导出/导入（按专辑稳定键 + startMs 关联，统计恢复用 max 合并）；详见 [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md)。
-5. **离线缓存**：`AudioCacheRepository` 把一张专辑的整段 DASH 音频/歌词视频缓存到应用私有目录
-   `files/audio_cache`（音频分曲共享同一文件；视频单独文件）；缓存**不进入 Room/归档/备份**。
-   播放引擎/视频播放器优先读缓存；音视频独立删除、删除专辑一起清理；**B 站 DASH 视频轨不含音频**，
-   缓存歌词视频时自动补音频，旧视频缓存提供「补缓存音频」入口；
+5. **离线缓存（v0.27.0 只缓存音频、按分 P）**：`AudioCacheRepository` 按 `Track.sourceCid` 逐 P
+   把整段 DASH 音频缓存到应用私有目录 `files/audio_cache`（同一 P 的分曲共享同一文件）；
+   缓存**不进入 Room/归档/备份**；播放引擎优先读缓存（`bvid+cid` key），删除专辑一起清理；
+   多 P 专辑「缓存整张专辑音频」会缓存所有分 P，支持补缓存（已缓存 x/y 分P）；
+   **歌词视频缓存及其视频播放功能已在 v0.27.0 整体移除**（旧 `_video` 文件自动清理）；
    设置 → 存储 → **缓存管理** 可查看总量、逐条删除、清空全部；
    详见 [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md)。
-6. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
+6. **歌词（v0.27.0 起，参考 SPICaMusic_Android 方案）**：在线多来源歌词 API（按曲名搜索，
+   不传 UP 主艺术家）→ 候选按标题+时长自动匹配 → Room v6 `lyrics` 表按 `Track.uid` 缓存原文 →
+   `LyricsParser` 解析 LRC / YRC / AMLL-TTML / 纯文本（纯文本 `isSynced=false` 静态展示）。
+   歌词页是**播放页上方覆盖层**（不是路由，T3 沉浸页）；支持来源选择、本地导入（LRC/YRC/TTML/TXT）、
+   时间偏移、逐行/逐字高亮；歌词是设备本地缓存，**不进入归档/备份**；
+   在线接口是 HTTP，仅通过 `res/xml/network_security_config.xml` 放行该域名；
+   详见 [docs/LYRICS.md](docs/LYRICS.md)。
+7. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
-7. **UI 规范（v0.12.0 页面模板化）**：
+8. **UI 规范（v0.12.0 页面模板化）**：
    - 页面分四类：T1 一级 Tab（`BiliPageHeader`，不自己套 Scaffold）、T2 层级详情页（必须用
      `ui/template/BiliPageTemplates.kt` 的 `BiliDetailScaffold`/`BiliTopBar`）、T3 沉浸页（播放/歌词，页面自管）、
      T4 弹层/对话框；禁止再手写“Row + 返回 + 标题”式顶栏；
@@ -74,7 +83,7 @@ scripts/screenshot.sh home 8
      音乐内容行点击必须真正播放并高亮；
    - 页面级留白/迷你条底部留白用 `BiliLayout` token；新增规则要同步 `UiArchitectureConsistencyTest`；
    - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) / [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
-8. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
+9. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
    - **层级页面统一 push/pop（完整宽度）**：push = 新页从右侧整页滑入、旧页同时整页向左滑出；
@@ -84,8 +93,8 @@ scripts/screenshot.sh home 8
      手势只提交普通 back，之后走 NavHost 普通 pop（方向稳定，避免反向扫动/快速浮现）；
    - **一级 Tab 行为平级**：音乐库/设置返回不回到发现，进入退出流程；根 Tab 返回需 2 秒内连续两次
      （第一次 Toast 提示「再返回一次退出应用」）；键盘弹出时 BackHandler 让位给键盘；
-   - 歌词页是播放页上方覆盖层（不是路由）：视频层从右盖在播放页上/向右滑出，底下始终是播放页，
-     不闪父页面、不露迷你条；全屏返回先退全屏；迷你条 ↔ 播放页是上下关系（连续跟手展开，顶部栏可下滑关闭）；
+   - 歌词页是播放页上方覆盖层（不是路由）：歌词层从右盖在播放页上/向右滑出，底下始终是播放页，
+     不闪父页面、不露迷你条；返回先关歌词页；迷你条 ↔ 播放页是上下关系（连续跟手展开，顶部栏可下滑关闭）；
    - 一级 Tab 入场规则：**固定页头/搜索/登录卡等静态元素不动；只有列表/内容区播放「淡入 + 上浮」**
      （320ms 起、50ms/项、封顶 650ms、交错 45ms；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）；
    - 底部导航出现/消失做高度展开/收缩 + 淡入淡出（300/250ms），Scaffold 高度和迷你条避让同步；
@@ -93,15 +102,15 @@ scripts/screenshot.sh home 8
      `BiliMotion` token，详见 [docs/MOTION.md](docs/MOTION.md)；
    - **按压反馈全局统一**：`AppTheme` 提供自绘 `LocalIndication`（水波纹 + 按压底色），
      Material 默认 ripple 关闭；只对 enabled 的可点击组件生效。
-9. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
+10. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽上滑打开播放页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
    否则会抛 `Padding must be non-negative` 闪退）。
-10. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
+11. **列表性能规范**：ViewModel 里不要直接 combine `playbackController.state`（会随进度 tick 重建）；
    要 map 成 `(trackId,isPlaying)` 后 distinctUntilChanged；重计算（分组/排序）放数据变化阶段；
    Lazy 列表加 contentType + 稳定 key；索引栏高亮用 provider 在组件内部读取，父级不要读滚动派生状态。
 
-10. **页面底部安全区**：迷你条可见时由 `AppNavHost` 全局抬升 NavHost 内容区，页面最后一项不会被 Haze 遮住；
+12. **页面底部安全区**：迷你条可见时由 `AppNavHost` 全局抬升 NavHost 内容区，页面最后一项不会被 Haze 遮住；
     键盘打开时全局 `imePadding()` 接管，并撤销迷你条 inset，避免重复叠加；页面不要再单独写 Snackbar 迷你条避让。
 
 ## 文档索引
@@ -109,9 +118,9 @@ scripts/screenshot.sh home 8
 | 文档 | 内容 |
 | --- | --- |
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、视频选流等） |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.26.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.27.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
@@ -121,7 +130,8 @@ scripts/screenshot.sh home 8
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | **页面种类 / 组件目录 / token / 选型流程 / 豁免清单（新页面唯一入口）** |
 | [docs/MOTION.md](docs/MOTION.md) | **动效时长/曲线总表、跟手例外、调参入口（新增动效前必读）** |
 | [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md) | **歌单与听歌统计：信息架构、Room v4、记录规则、边界** |
-| [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md) | **专辑音频/歌词视频离线缓存：可行性、边界、实现位置、后续规划** |
+| [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md) | **专辑音频离线缓存：按分 P 缓存、多 P 专辑、缓存管理、边界** |
+| [docs/LYRICS.md](docs/LYRICS.md) | **在线歌词（SPICaMusic 方案）：数据流、格式解析、自动匹配、Room 缓存、歌词页边界** |
 | [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md) | 批量导入与分割点文本格式（三种粘贴格式） |
 | [docs/samples/](docs/samples/) | 归档示例、分割点文本真实样例 |
 | [docs/screenshots/](docs/screenshots/) | 模拟器/真机走查截图 |

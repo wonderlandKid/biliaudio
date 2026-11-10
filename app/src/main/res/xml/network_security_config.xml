@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络明文（HTTP）策略。
+
+  背景：在线歌词服务（SPICaMusic 参考项目同款接口）是 HTTP，
+  而 Manifest 保留 usesCleartextTraffic="false" 的默认收紧策略。
+
+  - base-config：默认禁止所有明文请求；
+  - domain-config：仅放行歌词 API 所在域名 106.54.25.152（不包含子域）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">106.54.25.152</domain>
+    </domain-config>
+</network-security-config>

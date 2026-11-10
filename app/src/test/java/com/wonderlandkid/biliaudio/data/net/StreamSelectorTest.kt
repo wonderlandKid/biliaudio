@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** DASH 音频/视频流选择单测（数据取自真实 playurl 响应）。 */
+/** DASH 音频流选择单测（数据取自真实 playurl 响应）。 */
 class StreamSelectorTest {
 
     private fun audio(id: Int, bandwidth: Long = 1000L, url: String? = "https://x/$id", backup: String? = null) =
@@ -16,22 +16,6 @@ class StreamSelectorTest {
             bandwidth = bandwidth,
             codecs = "mp4a.40.2",
         )
-
-    private fun video(
-        id: Int,
-        height: Int,
-        width: Int,
-        bandwidth: Long,
-        url: String? = "https://v/$id/$height",
-        codecs: String = "hev1.1.6.L120.90",
-    ) = DashMedia(
-        id = id,
-        baseUrlCamel = url,
-        bandwidth = bandwidth,
-        codecs = codecs,
-        width = width,
-        height = height,
-    )
 
     @Test
     fun `自动音质选最高可用`() {
@@ -86,55 +70,5 @@ class StreamSelectorTest {
             AudioQualityPreference.AUTO,
         )
         assertEquals("https://backup/30280", choice?.url)
-    }
-
-    @Test
-    fun `视频优先最高分辨率（480P 优先于 360P）`() {
-        // 真实响应：480P HEVC 218550 / 480P AVC 786766 / 360P HEVC 153220 / 360P AVC 350253
-        val videos = listOf(
-            video(32, 480, 852, 218_550, url = "https://v/480-hevc", codecs = "hev1"),
-            video(32, 480, 852, 786_766, url = "https://v/480-avc", codecs = "avc1"),
-            video(16, 360, 640, 153_220, url = "https://v/360-hevc", codecs = "hev1"),
-            video(16, 360, 640, 350_253, url = "https://v/360-avc", codecs = "avc1"),
-        )
-        val choice = StreamSelector.selectVideo(videos)
-        assertEquals(480, choice?.height)
-        assertEquals(32, choice?.qualityId)
-        assertEquals("https://v/480-avc", choice?.url)
-    }
-
-    @Test
-    fun `同分辨率优先 AVC，其次码率高`() {
-        val hevcHighBitrate = video(64, 720, 1280, 3_000_000, url = "https://v/720-hevc", codecs = "hev1")
-        val avcLowBitrate = video(64, 720, 1280, 1_500_000, url = "https://v/720-avc", codecs = "avc1")
-        assertEquals(
-            "https://v/720-avc",
-            StreamSelector.selectVideo(listOf(hevcHighBitrate, avcLowBitrate))?.url,
-        )
-    }
-
-    @Test
-    fun `视频优先最高分辨率且不超过 1080P`() {
-        val videos = listOf(
-            video(80, 1080, 1920, 3_000_000, url = "https://v/1080"),
-            video(64, 720, 1280, 2_500_000, url = "https://v/720"),
-            video(32, 480, 852, 800_000, url = "https://v/480"),
-        )
-        assertEquals("https://v/1080", StreamSelector.selectVideo(videos)?.url)
-    }
-
-    @Test
-    fun `只有高于 1080P 的流时取最低分辨率兜底`() {
-        val videos = listOf(
-            video(120, 2160, 3840, 9_000_000, url = "https://v/2160"),
-            video(112, 1440, 2560, 5_000_000, url = "https://v/1440"),
-        )
-        assertEquals("https://v/1440", StreamSelector.selectVideo(videos)?.url)
-    }
-
-    @Test
-    fun `没有可用视频返回 null`() {
-        assertNull(StreamSelector.selectVideo(emptyList()))
-        assertNull(StreamSelector.selectVideo(listOf(video(16, 360, 640, 100, url = null))))
     }
 }

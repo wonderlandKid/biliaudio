@@ -89,7 +89,7 @@ import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
-import com.wonderlandkid.biliaudio.ui.player.VideoScreen
+import com.wonderlandkid.biliaudio.ui.player.lyrics.LyricsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
 import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
@@ -114,6 +114,8 @@ import kotlinx.coroutines.launch
  *   三个 Tab 之间按 Tab 顺序决定左右方向（发现→音乐库→设置 向右推进）。
  * - **迷你播放条 → 正在播放页 = 上下关系**：迷你条跟手上滑，播放页以底部卡片形式连续展开
  *   （进度 0→1 由拖拽距离连续控制，松手弹簧收敛；下滑/返回键收起），不是跳转淡入。
+ * - **歌词页 = 播放页上方覆盖层**（非导航目的地）：从右整页盖在播放页上/向右滑出，
+ *   底层始终是播放页；打开时隐藏迷你条与播放页拖拽手势。
  *
  * 布局：NavHost 作为 Haze source；悬浮迷你条 + 播放页卡片覆盖在内容层上；底部导航在播放页展开时隐藏。
  */
@@ -136,10 +138,10 @@ fun AppNavHost() {
     )
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
-    // 歌词视频是播放页上方的一层覆盖页，不是独立导航目的地：
+    // 歌词页是播放页上方的一层覆盖页，不是独立导航目的地：
     // 进入/退出时底下始终是「正在播放」页，不会闪回专辑页，也不会让迷你条滑上来。
-    var videoOpen by remember { mutableStateOf(false) }
-    val isImmersive = videoOpen
+    var lyricsOpen by remember { mutableStateOf(false) }
+    val isImmersive = lyricsOpen
     val showMiniPlayer = (showChrome || showMiniPlayerOnly) && !isImmersive
 
     val hazeState = rememberHazeState()
@@ -548,13 +550,14 @@ fun AppNavHost() {
                     }
                     NowPlayingScreen(
                         onBack = { animatePlayerTo(false) },
-                        dragModifier = playerDragModifier,
-                        onOpenVideo = {
-                            // 播放页保持完全展开作为视频页背景，只把视频层盖上来
+                        onOpenLyrics = {
+                            // 播放页保持完全展开作为歌词页背景，只把歌词层盖上来
                             settleJob?.cancel()
                             playerProgress = 1f
-                            videoOpen = true
+                            lyricsOpen = true
                         },
+                        // 歌词层打开时禁用下层播放页的拖拽，避免歌词空白区的下拉手势穿透
+                        dragModifier = if (lyricsOpen) Modifier else playerDragModifier,
                         onOpenAlbum = { albumId ->
                             animatePlayerTo(false)
                             navController.navigate(Routes.album(albumId))
@@ -566,32 +569,33 @@ fun AppNavHost() {
                             .align(Alignment.TopCenter)
                             .fillMaxWidth()
                             .height(48.dp)
-                            .then(playerDragModifier),
+                            .then(if (lyricsOpen) Modifier else playerDragModifier),
                     )
                 }
             }
 
-            // 歌词视频：盖在播放页上方（播放页保持展开，避免闪回父页面/迷你条上滑）
+            // 歌词页：盖在播放页上方（播放页保持展开，避免闪回父页面/迷你条上滑）。
+            // 转场与页面 push/pop 同一条 Emphasized 曲线（固定 500ms，从右滑入/向右滑出）。
             AnimatedVisibility(
-                visible = videoOpen,
+                visible = lyricsOpen,
                 enter = slideInHorizontally(animationSpec = PageSlideSpec) { it },
                 exit = slideOutHorizontally(animationSpec = PageSlideSpec) { it },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                // 视频页用独立 ViewModelStore：关闭视频后立即 clear，释放第二路视频播放器。
-                val videoViewModelStore = remember {
+                // 歌词页用独立 ViewModelStore：关闭后立即 clear，释放 LyricsViewModel 与其协程
+                val lyricsViewModelStore = remember {
                     object : ViewModelStoreOwner {
                         override val viewModelStore = ViewModelStore()
                     }
                 }
-                DisposableEffect(videoViewModelStore) {
-                    onDispose { videoViewModelStore.viewModelStore.clear() }
+                DisposableEffect(lyricsViewModelStore) {
+                    onDispose { lyricsViewModelStore.viewModelStore.clear() }
                 }
-                CompositionLocalProvider(LocalViewModelStoreOwner provides videoViewModelStore) {
-                    // 视频页自己处理 systemBars inset；不要再叠加 Scaffold innerPadding，
-                    // 否则视频页顶部会留出一条浅色边。
+                CompositionLocalProvider(LocalViewModelStoreOwner provides lyricsViewModelStore) {
+                    // 歌词页自己处理 systemBars inset；不要再叠加 Scaffold innerPadding，
+                    // 否则顶部会留出一条浅色边。
                     Page {
-                        VideoScreen(onBack = { videoOpen = false })
+                        LyricsScreen(onBack = { lyricsOpen = false })
                     }
                 }
             }

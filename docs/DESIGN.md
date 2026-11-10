@@ -13,8 +13,9 @@
 - **未分割专辑**：导入未指定分割点 = 0 首，播放时虚拟整张一首；旧版占位曲启动自动清理；
 - **播放队列语义**：点歌/专辑播放 = 只播该专辑（分割点展开为该专辑分曲）；「播放全部歌曲」= 全库；
 - **导入**：新增分割点文本识别（三种粘贴格式）；音乐库归档 `.biliaudio.json` 统一备份/恢复/分割点文件；
-- **歌词页**：独立第二路 ExoPlayer 播放原视频；视频选流封顶 **720P**、同分辨率优先 AVC；
-  加载阶段诊断/等待提示/慢加载重试；音画校正只在视频 READY 时进行；
+- **歌词页（v0.27.0 已重做）**：移除「看歌词视频」（视频播放/视频缓存全部删除），
+  改为在线歌词页（SPICaMusic 方案：在线多来源自动匹配 + LRC/YRC/AMLL 解析 + Room 缓存 + 来源/偏移）；
+- **离线缓存（v0.27.0）**：只缓存音频、按分 P（多 P 专辑逐 P 缓存）；
 - **诊断**：`Diag` 统一日志（Logcat tag `BiliDiag`），设置页可查看/复制/导出。
 
 ## 1. 产品目标
@@ -27,7 +28,7 @@ B 站上很多 UP 主发布“完整专辑”视频（一个视频包含整张�
 本 App 把这些视频变成“专辑 → 歌曲”：
 1. 登录 B 站（扫码）；
 2. 用 BV 号 / 链接 / 文件批量导入专辑，可选自定义分曲时间点；
-3. 在 App 里按歌曲播放（后台播放、通知栏控制、歌词页看原视频）；
+3. 在 App 里按歌曲播放（后台播放、通知栏控制、在线歌词页）；
 4. 全部专辑/歌曲本地可搜索。
 
 ## 2. 核心功能（MVP 范围）
@@ -39,7 +40,7 @@ B 站上很多 UP 主发布“完整专辑”视频（一个视频包含整张�
 | 专辑 | 专辑详情：封面/标题/艺术家/BV 号/总时长/分曲列表；整张播放、单曲播放；删除；重新编辑元信息 |
 | 分曲 | 时间点分割：播放中打点、手动输入时间、重命名、拖拽/批量编辑、保存；多 P 视频可按分 P 自动生成曲目 |
 | 播放 | 专辑音频流连续播放；分曲队列（播放列表 = 当前专辑的分割点）；上一首/下一首/随机/循环；播放进度按分曲展示；进度条 seek；后台播放 + 媒体通知 + 锁屏控制；音频焦点/耳机拔出处理 |
-| 歌词页 | 播放专辑原视频（非全屏：视频 + 信息/分曲；全屏：视频铺满 + 沉浸式），与音频播放进度同步，可切换 |
+| 歌词页 | **v0.27.0 起为在线歌词页**：播放页上方覆盖层，逐行/逐字高亮、来源选择、时间偏移、本地导入（原视频方案已删除） |
 | 音乐库 | 全部歌曲（按标题/专辑/艺术家搜索）、全部专辑（网格 + 搜索）、最近播放 |
 | 设置 | 账号、音质（自动/192K/132K/64K）、深浅色跟随系统/强制、关于 |
 
@@ -62,10 +63,10 @@ com.wonderlandkid.biliaudio
 │   └── impl/                   [Data] 仓库实现、媒体流解析
 ├── player/
 │   ├── PlaybackContracts.kt    播放状态/控制器接口（冻结契约，Lead 所有）
-│   ├── VideoContracts.kt       歌词页视频播放器接口（冻结契约，Lead 所有）
+│   ├── PlaybackContracts.kt    播放控制接口（冻结契约，Lead 所有）
 │   ├── PlaybackEngine.kt       [Player] 单例播放引擎（ExoPlayer + 队列 + 分曲映射）
 │   ├── PlaybackService.kt      [Player] MediaSessionService + 通知
-│   └── AlbumVideoPlayer.kt     [Player] 第二路 ExoPlayer 只解码视频轨
+│   └── (v0.27.0 起不再有独立视频播放器)
 ├── ui/
 │   ├── theme/                  Lead：Material3 动态色板、字体、圆角、间距
 │   ├── components/             Lead：CoverImage/AlbumCard/TrackRow/SearchField/MiniPlayerBar 等
@@ -76,7 +77,7 @@ com.wonderlandkid.biliaudio
 │   ├── imports/                [U2] 导入（单条/批量/搜索）
 │   ├── login/                  [U2] 扫码登录
 │   ├── settings/               [U2] 设置
-│   └── player/                 [P] 正在播放页、播放列表面板、歌词视频页
+│   └── player/                 [P] 正在播放页、播放列表面板、歌词页（lyrics/）
 └── util/TimeUtils.kt           时间格式化/解析（共享）
 ```
 
@@ -89,7 +90,7 @@ com.wonderlandkid.biliaudio
    - 曲内进度 = `player.currentPosition`；
    - 专辑绝对进度 = `track.startMs + player.currentPosition`。
 5. **专辑连续播放**：队列 = 该专辑全部分曲（首尾相接），上一首/下一首/播放列表面板跳转都在队列内完成；跨专辑的搜索结果播放也能工作（每个条目重新解析所属专辑流）。
-6. **歌词页视频**：**独立第二路 ExoPlayer**，只加载视频轨（复用解析结果中的 videoUrl + 请求头），不带音频、静音渲染；打开歌词页时按“专辑绝对进度”定位并同步，UI 周期性检查漂移（仅在视频 READY 时校正，避免越 seek 越慢）。这样音频管线完全不动，避免双流合并的复杂度；代价仅是歌词页打开时多一路视频流量。视频清晰度上限 720P，详见 DECISIONS.md D7。
+6. **歌词页（v0.27.0 已替换）**：初版设计为「独立第二路 ExoPlayer 播放原视频」，v0.27.0 按用户要求整体移除，改为在线歌词方案（见 [LYRICS.md](LYRICS.md) / DECISIONS.md D53）。
 7. **多 P 视频**：`Album.cid` 表示当前使用的分 P；导入时若选择“按分 P”，每个 P 生成一首歌（其 `startMs` 语义变为“第几个 P”由实现转换为“P 内播放”？——MVP 简化：多 P 模式每首曲目仍映射到**同一个**播放流，因此导入逻辑将多 P 合并为“单专辑时间轴”是不对的；正确做法是每首歌带自己的 cid。**当前契约 `Track` 无 cid 字段，MVP 先只支持单 P 视频（`SINGLE_VIDEO`）**，多 P 模式在导入时提示“即将支持”，或把多 P 视频按整段视频导入后手动切分。后续迭代再扩展 Track.cid。
 
 ### 数据持久化
@@ -105,7 +106,7 @@ com.wonderlandkid.biliaudio
 - `data/model/Models.kt`：`Album / Track / AlbumWithTracks / TrackWithAlbum / BiliVideoInfo / ResolvedStreams / AlbumImportRequest / ImportResult / BiliApiException ...`
 - `data/repository/Repositories.kt`：`AlbumRepository / BiliRepository / AuthRepository / SettingsRepository / MediaStreamResolver / AuthState / QrLoginState / AppSettings`
 - `player/PlaybackContracts.kt`：`PlaybackState / PlaybackController / QueueEntry / RepeatMode`
-- `player/VideoContracts.kt`：`AlbumVideoController / VideoPlaybackState`
+- `player/PlaybackContracts.kt`：`PlaybackController / PlaybackState`（歌词页不再有视频契约）
 - `ui/theme/**`、`ui/components/**`：Lead 提供的设计系统与通用组件
 - `ui/AppCompositionLocals.kt`：`rememberAppContainer()`、`appViewModel {}` 工厂
 
@@ -122,8 +123,8 @@ com.wonderlandkid.biliaudio
   - 音乐库：顶部“音乐库”+ 搜索框 + Tab（歌曲/专辑）；歌曲行=封面/标题/艺术家·专辑/时长；专辑=网格卡片。
   - 专辑详情：顶部大封面 + 标题/艺术家/BV 号胶囊 + 总时长/曲目数 + 播放全部 / 编辑分割点；下方分曲列表（当前曲高亮 + 正在播放图标）。
   - 导入页：Tab（BV 号导入 / 批量导入 / 搜索 B 站）；BV 预览卡片（封面/标题/时长/UP 主）；分曲模式选择；导入按钮；批量导入提供格式说明与示例、粘贴文本或选择文件。
-  - 正在播放页：封面大图 + 渐变背景 + 标题/艺术家 + 分曲进度条 + 控制按钮（上一首/播放/下一首/循环/随机）+ 播放列表面板（专辑分曲，点击跳转）+ “看歌词视频”按钮。
-  - 歌词页：视频区域 + 下方当前曲信息/控制；全屏按钮切换沉浸式视频铺满。
+  - 正在播放页：封面大图 + 渐变背景 + 标题/艺术家 + 分曲进度条 + 控制按钮（上一首/播放/下一首/循环/随机）+ 播放列表面板（专辑分曲，点击跳转）+「看歌词」按钮。
+  - 歌词页：顶栏 + 居中歌词区（逐行/逐字高亮、自动滚动）+ 底部播放控制 + 来源/偏移面板。
   - 设置：账号卡片（未登录→登录按钮；已登录→头像/昵称/退出）、音质选择、深色模式、关于。
   - 底部迷你播放条：封面 + 标题/艺术家 + 播放/暂停 + 下一首 + 细进度条；位于底部导航之上，点击进入正在播放页。
 - 空状态、加载态、错误提示要完整（不要只做 happy path）。
@@ -134,7 +135,7 @@ com.wonderlandkid.biliaudio
 | --- | --- | --- |
 | Lead | 根构建、manifest、di、data/model、repository 接口、player 契约、ui/theme、ui/components、ui/navigation、集成、QA | 可编译工程、集成、验收 |
 | Data | `data/net/**`、`data/db/**`、`data/impl/**`、`app/src/test/java/**/data/**` | 真实 B 站 API + Room + 仓库 + 单元测试（wbi 签名、批量导入解析、时间工具） |
-| Player | `player/**`（除契约）、`ui/player/**` | PlaybackEngine、MediaSessionService、通知、歌词页视频播放器、正在播放页/播放列表/歌词页 UI |
+| Player | `player/**`（除契约）、`ui/player/**` | PlaybackEngine、MediaSessionService、通知、正在播放页/播放列表/歌词页 UI |
 | U1 | `ui/home/**`、`ui/library/**`、`ui/album/**` | 发现页、音乐库、专辑详情、分曲编辑 |
 | U2 | `ui/imports/**`、`ui/login/**`、`ui/settings/**` | 导入、扫码登录、设置 |
 
@@ -146,4 +147,4 @@ com.wonderlandkid.biliaudio
 - `./gradlew :app:testDebugUnitTest`（Lead 统一跑）
 - `./gradlew :app:assembleDebug`（Lead 统一出 APK）
 - 模拟器（API 36，headless，KVM）安装运行 + `adb exec-out screencap` 截图走查主要页面
-- 真机使用时需自备 B 站账号扫码登录；未登录也可低画质播放（音频 192K 实测未登录可获取，视频最高 480P）。
+- 真机使用时需自备 B 站账号扫码登录；未登录也可播放（音频 192K 实测未登录可获取）。
