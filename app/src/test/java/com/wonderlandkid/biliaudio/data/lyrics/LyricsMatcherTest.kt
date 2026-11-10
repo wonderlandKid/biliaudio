@@ -55,11 +55,12 @@ class LyricsMatcherTest {
     }
 
     @Test
-    fun bestMatch_rejectsExactTitleWhenDurationIsFarOff() {
-        // 曲名完全相同但时长差 31s（>20s）：很可能是不同版本，宁缺毋滥
-        val wrongVersion = candidate(1, "晴天", 300)
+    fun bestMatch_acceptsExactTitleWhenDurationIsFarOff() {
+        // 曲名完全相同但时长差 31s：可能是翻唱/现场版；歌词一般仍可用，因此精确标题兜底匹配，
+        // 时长只用于在多个同名候选之间排序（不再是硬性拒绝条件）。
+        val differentVersion = candidate(1, "晴天", 300)
 
-        assertNull(LyricsMatcher.bestMatch(listOf(wrongVersion), "晴天", 269_000))
+        assertSame(differentVersion, LyricsMatcher.bestMatch(listOf(differentVersion), "晴天", 269_000))
     }
 
     @Test

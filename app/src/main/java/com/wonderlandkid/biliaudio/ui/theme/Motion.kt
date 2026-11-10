@@ -76,6 +76,13 @@ object BiliMotion {
     const val AxisTranslationFraction = 0.24f
     const val AxisVerticalFraction = 0.14f
 
+    // ---------------- 歌词（v0.28.0 播放页内嵌歌词） ----------------
+    /** 歌词自动滚动到当前行：长缓出，Apple Music 式平滑滑动（不是短促跳转）。 */
+    const val LyricsScrollMs = 520
+
+    /** 歌词当前行放大/着色/透明度过渡。 */
+    const val LyricsActiveMs = 380
+
     // ---------------- Fade（错误/覆盖层等简单显隐） ----------------
     const val FadeInMs = 250
     const val FadeOutMs = 150

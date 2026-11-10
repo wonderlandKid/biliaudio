@@ -13,8 +13,9 @@
 - **未分割专辑**：导入未指定分割点 = 0 首，播放时虚拟整张一首；旧版占位曲启动自动清理；
 - **播放队列语义**：点歌/专辑播放 = 只播该专辑（分割点展开为该专辑分曲）；「播放全部歌曲」= 全库；
 - **导入**：新增分割点文本识别（三种粘贴格式）；音乐库归档 `.biliaudio.json` 统一备份/恢复/分割点文件；
-- **歌词页（v0.27.0 已重做）**：移除「看歌词视频」（视频播放/视频缓存全部删除），
-  改为在线歌词页（SPICaMusic 方案：在线多来源自动匹配 + LRC/YRC/AMLL 解析 + Room 缓存 + 来源/偏移）；
+- **歌词（v0.27.0 重做，v0.28.0 并入播放页）**：移除「看歌词视频」（视频播放/视频缓存全部删除），
+  改为在线歌词（SPICaMusic 方案：多来源自动匹配 + LRC/YRC/AMLL 解析 + Room 缓存 + 来源/偏移），
+  且是「正在播放」页内左右滑动的第二页（封面页 ↔ 歌词页）；
 - **离线缓存（v0.27.0）**：只缓存音频、按分 P（多 P 专辑逐 P 缓存）；
 - **诊断**：`Diag` 统一日志（Logcat tag `BiliDiag`），设置页可查看/复制/导出。
 
@@ -28,7 +29,7 @@ B 站上很多 UP 主发布“完整专辑”视频（一个视频包含整张�
 本 App 把这些视频变成“专辑 → 歌曲”：
 1. 登录 B 站（扫码）；
 2. 用 BV 号 / 链接 / 文件批量导入专辑，可选自定义分曲时间点；
-3. 在 App 里按歌曲播放（后台播放、通知栏控制、在线歌词页）；
+3. 在 App 里按歌曲播放（后台播放、通知栏控制、播放页内左右滑动看歌词）；
 4. 全部专辑/歌曲本地可搜索。
 
 ## 2. 核心功能（MVP 范围）
@@ -40,7 +41,7 @@ B 站上很多 UP 主发布“完整专辑”视频（一个视频包含整张�
 | 专辑 | 专辑详情：封面/标题/艺术家/BV 号/总时长/分曲列表；整张播放、单曲播放；删除；重新编辑元信息 |
 | 分曲 | 时间点分割：播放中打点、手动输入时间、重命名、拖拽/批量编辑、保存；多 P 视频可按分 P 自动生成曲目 |
 | 播放 | 专辑音频流连续播放；分曲队列（播放列表 = 当前专辑的分割点）；上一首/下一首/随机/循环；播放进度按分曲展示；进度条 seek；后台播放 + 媒体通知 + 锁屏控制；音频焦点/耳机拔出处理 |
-| 歌词页 | **v0.27.0 起为在线歌词页**：播放页上方覆盖层，逐行/逐字高亮、来源选择、时间偏移、本地导入（原视频方案已删除） |
+| 歌词页 | **v0.27.0 起为在线歌词、v0.28.0 起并入播放页**：播放页左右滑动的第二页，逐行/逐字高亮、Apple Music 式平滑滚动、来源选择、时间偏移、本地导入（原视频方案已删除） |
 | 音乐库 | 全部歌曲（按标题/专辑/艺术家搜索）、全部专辑（网格 + 搜索）、最近播放 |
 | 设置 | 账号、音质（自动/192K/132K/64K）、深浅色跟随系统/强制、关于 |
 
@@ -106,7 +107,7 @@ com.wonderlandkid.biliaudio
 - `data/model/Models.kt`：`Album / Track / AlbumWithTracks / TrackWithAlbum / BiliVideoInfo / ResolvedStreams / AlbumImportRequest / ImportResult / BiliApiException ...`
 - `data/repository/Repositories.kt`：`AlbumRepository / BiliRepository / AuthRepository / SettingsRepository / MediaStreamResolver / AuthState / QrLoginState / AppSettings`
 - `player/PlaybackContracts.kt`：`PlaybackState / PlaybackController / QueueEntry / RepeatMode`
-- `player/PlaybackContracts.kt`：`PlaybackController / PlaybackState`（歌词页不再有视频契约）
+- `player/PlaybackContracts.kt`：`PlaybackController / PlaybackState`（歌词不再有视频契约）
 - `ui/theme/**`、`ui/components/**`：Lead 提供的设计系统与通用组件
 - `ui/AppCompositionLocals.kt`：`rememberAppContainer()`、`appViewModel {}` 工厂
 
@@ -123,8 +124,9 @@ com.wonderlandkid.biliaudio
   - 音乐库：顶部“音乐库”+ 搜索框 + Tab（歌曲/专辑）；歌曲行=封面/标题/艺术家·专辑/时长；专辑=网格卡片。
   - 专辑详情：顶部大封面 + 标题/艺术家/BV 号胶囊 + 总时长/曲目数 + 播放全部 / 编辑分割点；下方分曲列表（当前曲高亮 + 正在播放图标）。
   - 导入页：Tab（BV 号导入 / 批量导入 / 搜索 B 站）；BV 预览卡片（封面/标题/时长/UP 主）；分曲模式选择；导入按钮；批量导入提供格式说明与示例、粘贴文本或选择文件。
-  - 正在播放页：封面大图 + 渐变背景 + 标题/艺术家 + 分曲进度条 + 控制按钮（上一首/播放/下一首/循环/随机）+ 播放列表面板（专辑分曲，点击跳转）+「看歌词」按钮。
-  - 歌词页：顶栏 + 居中歌词区（逐行/逐字高亮、自动滚动）+ 底部播放控制 + 来源/偏移面板。
+  - 正在播放页：左右分页（封面页 / 歌词页）+ 固定底部进度条与播放控制；封面页 = 大封面 + 标题/艺术家；
+    歌词页 = 曲名/艺术家 + 来源/偏移 + 居中歌词区（逐行/逐字高亮、Apple Music 式平滑滚动）。
+  - 播放列表面板：ModalBottomSheet，点击分曲跳转。
   - 设置：账号卡片（未登录→登录按钮；已登录→头像/昵称/退出）、音质选择、深色模式、关于。
   - 底部迷你播放条：封面 + 标题/艺术家 + 播放/暂停 + 下一首 + 细进度条；位于底部导航之上，点击进入正在播放页。
 - 空状态、加载态、错误提示要完整（不要只做 happy path）。
@@ -135,7 +137,7 @@ com.wonderlandkid.biliaudio
 | --- | --- | --- |
 | Lead | 根构建、manifest、di、data/model、repository 接口、player 契约、ui/theme、ui/components、ui/navigation、集成、QA | 可编译工程、集成、验收 |
 | Data | `data/net/**`、`data/db/**`、`data/impl/**`、`app/src/test/java/**/data/**` | 真实 B 站 API + Room + 仓库 + 单元测试（wbi 签名、批量导入解析、时间工具） |
-| Player | `player/**`（除契约）、`ui/player/**` | PlaybackEngine、MediaSessionService、通知、正在播放页/播放列表/歌词页 UI |
+| Player | `player/**`（除契约）、`ui/player/**` | PlaybackEngine、MediaSessionService、通知、正在播放页（封面/歌词分页）/播放列表 UI |
 | U1 | `ui/home/**`、`ui/library/**`、`ui/album/**` | 发现页、音乐库、专辑详情、分曲编辑 |
 | U2 | `ui/imports/**`、`ui/login/**`、`ui/settings/**` | 导入、扫码登录、设置 |
 

@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.27.0**（tag `v0.27.0`，2026-11-10；release commit 以 `git rev-parse v0.27.0` 为准）
+- **版本：v0.28.0**（tag `v0.28.0`，2026-11-11；release commit 以 `git rev-parse v0.28.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**192 个**（v0.27.0；含 5 个 UI 架构守卫）
+- 单元测试：**194 个**（v0.28.0；含 5 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.27.0: 192 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.28.0: 194 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -46,7 +46,7 @@ scripts/screenshot.sh home 8
 3. **用户偏好**：中文 UI/中文沟通；Material 3 扁平风格，**不要液态玻璃/大面积毛玻璃**；
    （v0.7.0 起用户明确要求：仅迷你播放条可使用 Haze 毛玻璃，其余页面保持扁平）
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **信息架构（v0.27.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
+4. **信息架构（v0.28.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
    最近播放 → 听歌统计 → 我的歌单 → 随机专辑排列（详情从右上角进入；最近播放详情 10 张）；
    听歌统计预览可切专辑时长/歌曲次数，选择持久化到 `AppSettings.homeStatsMode`；
    设置卡片首行用 `BiliGroupHeader` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
@@ -62,12 +62,13 @@ scripts/screenshot.sh home 8
    **歌词视频缓存及其视频播放功能已在 v0.27.0 整体移除**（旧 `_video` 文件自动清理）；
    设置 → 存储 → **缓存管理** 可查看总量、逐条删除、清空全部；
    详见 [docs/OFFLINE_CACHE.md](docs/OFFLINE_CACHE.md)。
-6. **歌词（v0.27.0 起，参考 SPICaMusic_Android 方案）**：在线多来源歌词 API（按曲名搜索，
-   不传 UP 主艺术家）→ 候选按标题+时长自动匹配 → Room v6 `lyrics` 表按 `Track.uid` 缓存原文 →
-   `LyricsParser` 解析 LRC / YRC / AMLL-TTML / 纯文本（纯文本 `isSynced=false` 静态展示）。
-   歌词页是**播放页上方覆盖层**（不是路由，T3 沉浸页）；支持来源选择、本地导入（LRC/YRC/TTML/TXT）、
-   时间偏移、逐行/逐字高亮；歌词是设备本地缓存，**不进入归档/备份**；
-   在线接口是 HTTP，仅通过 `res/xml/network_security_config.xml` 放行该域名；
+6. **歌词（v0.28.0：与播放页合一，参考 SPICaMusic_Android 方案）**：在线多来源歌词 API（按曲名搜索，
+   不传 UP 主艺术家；多 P 曲名会去掉「专辑_01_」前缀，匹配不到时补搜原始曲名）→ 候选按标题+时长自动匹配 →
+   Room v6 `lyrics` 表按 `Track.uid` 缓存原文 → `LyricsParser` 解析 LRC / YRC / AMLL-TTML / 纯文本。
+   **歌词是「正在播放」页内左右滑动的第二页**（第 1 页封面/曲名，第 2 页歌词；底部进度/控制固定），
+   不是独立路由、也不是覆盖层；返回键在歌词页先回封面页。滚动用 `BiliMotion.LyricsScrollMs` 长缓出 +
+   当前行放大/着色 + 上下渐隐遮罩（Apple Music 手感）；支持来源选择、本地导入、时间偏移、逐行/逐字高亮。
+   歌词是设备本地缓存，**不进入归档/备份**；在线接口是 HTTP，仅通过 `network_security_config` 放行该域名；
    详见 [docs/LYRICS.md](docs/LYRICS.md)。
 7. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
@@ -93,8 +94,8 @@ scripts/screenshot.sh home 8
      手势只提交普通 back，之后走 NavHost 普通 pop（方向稳定，避免反向扫动/快速浮现）；
    - **一级 Tab 行为平级**：音乐库/设置返回不回到发现，进入退出流程；根 Tab 返回需 2 秒内连续两次
      （第一次 Toast 提示「再返回一次退出应用」）；键盘弹出时 BackHandler 让位给键盘；
-   - 歌词页是播放页上方覆盖层（不是路由）：歌词层从右盖在播放页上/向右滑出，底下始终是播放页，
-     不闪父页面、不露迷你条；返回先关歌词页；迷你条 ↔ 播放页是上下关系（连续跟手展开，顶部栏可下滑关闭）；
+   - 播放页内部是**左右分页**（v0.28.0）：第 1 页封面/曲名、第 2 页歌词；横向滑动切换（跟手 + pager 默认 fling），
+     底部进度/控制固定不跟页；歌词页按返回先滑回封面页；迷你条 ↔ 播放页仍是上下关系（连续跟手展开，顶部栏可下滑关闭）；
    - 一级 Tab 入场规则：**固定页头/搜索/登录卡等静态元素不动；只有列表/内容区播放「淡入 + 上浮」**
      （320ms 起、50ms/项、封顶 650ms、交错 45ms；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）；
    - 底部导航出现/消失做高度展开/收缩 + 淡入淡出（300/250ms），Scaffold 高度和迷你条避让同步；
@@ -120,7 +121,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.27.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.28.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

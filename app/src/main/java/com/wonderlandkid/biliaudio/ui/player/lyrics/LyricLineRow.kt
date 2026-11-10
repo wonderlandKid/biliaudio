@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.player.lyrics
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -34,18 +35,21 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
 /** 空歌词行（纯音乐分行）的占位文案。 */
 internal const val EMPTY_LINE_PLACEHOLDER = "· · ·"
 
-/** 当前行放大倍数（设计规格 1.06，扁平 M3：只缩放，不做玻璃/发光特效）。 */
-private const val ACTIVE_SCALE = 1.06f
+/** 当前行放大倍数（Apple Music 式当前行放大；扁平 M3：只缩放，不做玻璃/发光特效）。 */
+private const val ACTIVE_SCALE = 1.09f
+
+/** 非当前行缩放：略缩小 + 低透明度，让当前行在视觉上「浮起来」（不影响列表布局）。 */
+private const val INACTIVE_SCALE = 0.95f
 
 /** 未演唱行透明度；已唱行略高，形成「已唱 / 未唱」层次（当前行恒为 1）。 */
-private const val PAST_ALPHA = 0.62f
-private const val FUTURE_ALPHA = 0.38f
+private const val PAST_ALPHA = 0.50f
+private const val FUTURE_ALPHA = 0.28f
 
 /**
  * 单行歌词渲染（全屏歌词页的列表项）。
  *
- * - [isActive]：当前演唱行 → primary 颜色 + 1.06 放大（Emphasized 曲线）；
- * - [isPast]：已唱行 → onSurfaceVariant 较高透明度；未唱行更低透明度；
+ * - [isActive]：当前演唱行 → primary 颜色 + 1.07 放大（Apple Music 式当前行强调）；
+ * - [isPast]：已唱行 → onSurfaceVariant 较高透明度；未唱行更低透明度（拉开层次）；
  * - `WordsLyric` 且当前行时按帧做逐字卡拉 OK 上色：已唱词 primary、未唱词 onSurfaceVariant、
  *   当前词用 `(time - start) / (end - start)` 在两种颜色间 [lerp]（纯 SpanStyle，不画 mask）；
  * - 翻译（`NormalLyric.translation` / `WordsLyric.translation` 第一条）在主行下方小一号展示；
@@ -67,13 +71,14 @@ internal fun LyricLineRow(
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val mainStyle = MaterialTheme.typography.titleMedium.copy(
-        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+    // 歌词统一用 titleLarge（22sp）；切行时不改字号，只用缩放/权重/颜色做强调，避免列表高度抖动。
+    val mainStyle = MaterialTheme.typography.titleLarge.copy(
+        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
     )
     val scale by animateFloatAsState(
-        targetValue = if (isActive) ACTIVE_SCALE else 1f,
+        targetValue = if (isActive) ACTIVE_SCALE else INACTIVE_SCALE,
         animationSpec = tween(
-            durationMillis = BiliMotion.Medium2,
+            durationMillis = BiliMotion.LyricsActiveMs,
             easing = BiliMotion.Emphasized,
         ),
         label = "lyricLineScale",
@@ -85,12 +90,19 @@ internal fun LyricLineRow(
             else -> FUTURE_ALPHA
         },
         animationSpec = tween(
-            durationMillis = BiliMotion.Short4,
+            durationMillis = BiliMotion.LyricsActiveMs,
             easing = BiliMotion.Emphasized,
         ),
         label = "lyricLineAlpha",
     )
-    val mainColor = if (isActive) colorScheme.primary else colorScheme.onSurfaceVariant
+    val mainColor by animateColorAsState(
+        targetValue = if (isActive) colorScheme.primary else colorScheme.onSurfaceVariant,
+        animationSpec = tween(
+            durationMillis = BiliMotion.LyricsActiveMs,
+            easing = BiliMotion.Emphasized,
+        ),
+        label = "lyricLineColor",
+    )
 
     Column(
         modifier = modifier
@@ -101,7 +113,7 @@ internal fun LyricLineRow(
                 alpha = rowAlpha
             }
             .clickable(enabled = isSynced, onClick = onClick)
-            .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when (line) {
@@ -170,7 +182,7 @@ private fun TranslationLine(
         text = text,
         style = style,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-            alpha = if (isActive) 0.9f else 0.7f,
+            alpha = if (isActive) 0.85f else 0.55f,
         ),
         textAlign = TextAlign.Center,
         overflow = TextOverflow.Ellipsis,

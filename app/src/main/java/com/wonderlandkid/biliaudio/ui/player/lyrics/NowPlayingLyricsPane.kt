@@ -1,9 +1,9 @@
 package com.wonderlandkid.biliaudio.ui.player.lyrics
 
 import android.os.SystemClock
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -15,31 +15,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicOff
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +51,12 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,8 +69,6 @@ import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
-import com.wonderlandkid.biliaudio.util.TimeUtils
-import java.util.Locale
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -94,21 +86,18 @@ private const val AUTO_SCROLL_PAUSE_MS = 3_000L
 private const val CENTER_TOLERANCE_PX = 1f
 
 /**
- * 全屏歌词页（T3 沉浸页，覆盖在「正在播放」页上方，不是独立导航目的地）。
+ * 播放页内嵌歌词（「正在播放」左右滑动切换的第二页）。
  *
- * 结构（扁平 Material 3，沿用播放页的封面主题色竖向渐变背景，不使用毛玻璃/液态玻璃）：
- * - 顶部栏：返回 + 曲名/艺术家 + 歌词来源入口 + 歌词偏移入口；
- * - 中部：LazyColumn 歌词区（上下 40% 留白让当前行居中、逐行/逐字高亮、点行跳转、自动滚动）；
- * - 底部：当前/总时长 + 上一首/播放暂停/下一首；
- * - 状态：加载中 / 无歌词（重新搜索、导入本地）/ 已关闭歌词（恢复）；
+ * 结构（扁平 Material 3，沿用播放页主题色渐变背景，不使用毛玻璃/液态玻璃）：
+ * - 紧凑头部：曲名/艺术家 + 歌词来源入口 + 歌词偏移入口；
+ * - 中部：歌词区（上下渐隐遮罩 + 当前行高亮居中 + 逐字推进 + 平滑自动滚动 + 点行跳转）；
+ * - 状态：加载中 / 无歌词（重新搜索、导入本地）/ 已关闭歌词（恢复）/ 纯文本歌词（静态展示）；
  * - 弹层：来源面板 [LyricsSourceSheet]、偏移面板 [LyricsOffsetSheet]。
  *
- * insets 由页面自己处理（沉浸页规范）；返回键关闭歌词页（弹层打开时由弹层优先消费）。
- * 用独立 ViewModelStore 承载（见 AppNavHost 接入），关闭覆盖层时释放。
+ * 歌词在播放页内，不再是独立覆盖层：返回键在歌词页时先切回封面页（由 NowPlayingScreen 处理）。
  */
 @Composable
-fun LyricsScreen(
-    onBack: () -> Unit,
+internal fun NowPlayingLyricsPane(
     modifier: Modifier = Modifier,
     viewModel: LyricsViewModel = appViewModel { container ->
         LyricsViewModel(
@@ -125,9 +114,6 @@ fun LyricsScreen(
     var showOffsetSheet by rememberSaveable { mutableStateOf(false) }
     val lyricTimeProvider = rememberLyricTimeProvider(playback = playback, delayMs = state.delayMs)
 
-    // 返回键：优先关闭歌词页（回到完全展开的播放页）；来源/偏移弹层打开时由 ModalBottomSheet 先消费。
-    BackHandler { onBack() }
-
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -141,32 +127,20 @@ fun LyricsScreen(
         if (uri != null) viewModel.importLocal(uri)
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f),
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surface,
-                    ),
-                ),
-            ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars),
-        ) {
-            LyricsTopBar(
-                title = state.title.ifBlank { "歌词" },
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LyricsPaneHeader(
+                title = state.title,
                 artist = state.artist,
-                sourceType = state.sourceType,
                 delayMs = state.delayMs,
                 canAdjustOffset = state.parsed != null,
-                onBack = onBack,
-                onOpenSource = { showSourceSheet = true },
+                onOpenSource = {
+                    showSourceSheet = true
+                    // 候选列表不随歌词快照持久化：打开面板时补齐在线候选，避免误显示「暂无候选」
+                    if (state.candidates.isEmpty() && !state.isSearching) {
+                        viewModel.searchOnline(manual = false)
+                    }
+                },
                 onOpenOffset = { showOffsetSheet = true },
             )
             Box(
@@ -184,14 +158,14 @@ fun LyricsScreen(
                     state.suppressed -> {
                         EmptyState(
                             title = "已关闭歌词",
-                            description = "本曲不会再匹配/显示歌词，可在「歌词来源」里恢复",
+                            description = "本曲不会显示歌词，可在「歌词来源」里恢复",
                             modifier = Modifier.fillMaxSize(),
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.MusicOff,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier.size(36.dp),
                                 )
                             },
                             actionLabel = "恢复歌词",
@@ -226,21 +200,14 @@ fun LyricsScreen(
                         )
                     }
                 }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = Spacing.sm),
+                )
             }
-            LyricsBottomBar(
-                playback = playback,
-                onPrevious = viewModel::previous,
-                onTogglePlay = viewModel::togglePlayPause,
-                onNext = viewModel::next,
-            )
         }
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 88.dp),
-        )
     }
 
     if (showSourceSheet) {
@@ -276,72 +243,62 @@ fun LyricsScreen(
     }
 }
 
-// ---------------------------------------------------------------------------
-// 顶部栏 / 底部控制条 / 状态页
-// ---------------------------------------------------------------------------
-
+/**
+ * 歌词面板头部：左侧曲名/艺术家（Apple Music 歌词页同款信息位），右侧来源/偏移入口。
+ *
+ * 点击曲名区域不做任何事（不使用空点击），来源/偏移都通过图标进入对应面板。
+ */
 @Composable
-private fun LyricsTopBar(
+private fun LyricsPaneHeader(
     title: String,
     artist: String,
-    sourceType: LyricSourceType,
     delayMs: Long,
     canAdjustOffset: Boolean,
-    onBack: () -> Unit,
     onOpenSource: () -> Unit,
     onOpenOffset: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "返回播放页",
-            )
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = Spacing.xs),
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
+                text = title.ifBlank { "歌词" },
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (artist.isNotBlank()) {
                 Text(
                     text = artist,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        IconButton(onClick = onOpenSource) {
+        IconButton(
+            onClick = onOpenSource,
+            modifier = Modifier.size(36.dp),
+        ) {
             Icon(
                 imageVector = Icons.Rounded.Lyrics,
                 contentDescription = "歌词来源",
-                tint = if (sourceType == LyricSourceType.NONE) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
             )
         }
         TextButton(
             onClick = onOpenOffset,
             enabled = canAdjustOffset,
+            contentPadding = PaddingValues(horizontal = Spacing.xs),
         ) {
             Text(
                 text = formatLyricOffset(delayMs),
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = if (canAdjustOffset) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -353,78 +310,6 @@ private fun LyricsTopBar(
 }
 
 @Composable
-private fun LyricsBottomBar(
-    playback: LyricsPlaybackState,
-    onPrevious: () -> Unit,
-    onTogglePlay: () -> Unit,
-    onNext: () -> Unit,
-) {
-    val durationMs = playback.trackDurationMs.coerceAtLeast(0L)
-    val positionMs = playback.positionMs.coerceIn(0L, durationMs.coerceAtLeast(1L))
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = TimeUtils.formatDuration(positionMs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(64.dp),
-            textAlign = TextAlign.Start,
-        )
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onPrevious, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    imageVector = Icons.Rounded.SkipPrevious,
-                    contentDescription = "上一首",
-                    modifier = Modifier.size(30.dp),
-                )
-            }
-            Spacer(Modifier.width(Spacing.sm))
-            FilledIconButton(
-                onClick = onTogglePlay,
-                modifier = Modifier.size(56.dp),
-            ) {
-                if (playback.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.5.dp,
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (playback.isPlaying) "暂停" else "播放",
-                        modifier = Modifier.size(30.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(Spacing.sm))
-            IconButton(onClick = onNext, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    imageVector = Icons.Rounded.SkipNext,
-                    contentDescription = "下一首",
-                    modifier = Modifier.size(30.dp),
-                )
-            }
-        }
-        Text(
-            text = TimeUtils.formatDuration(durationMs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(64.dp),
-            textAlign = TextAlign.End,
-        )
-    }
-}
-
-@Composable
 private fun LyricsLoadingState() {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -432,13 +317,14 @@ private fun LyricsLoadingState() {
         verticalArrangement = Arrangement.Center,
     ) {
         CircularProgressIndicator(
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(28.dp),
             color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 2.5.dp,
         )
         Spacer(Modifier.height(Spacing.md))
         Text(
             text = "正在匹配歌词…",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -465,7 +351,7 @@ private fun LyricsEmptyState(
                     imageVector = Icons.Rounded.Lyrics,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(36.dp),
                 )
             },
         )
@@ -473,11 +359,11 @@ private fun LyricsEmptyState(
             TextButton(onClick = onSearch, enabled = !isSearching) {
                 if (isSearching) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Spacer(Modifier.width(Spacing.xs))
+                    Spacer(Modifier.size(Spacing.xs))
                 }
                 Text("重新搜索")
             }
@@ -493,10 +379,13 @@ private fun LyricsEmptyState(
 // ---------------------------------------------------------------------------
 
 /**
- * 有时间轴的歌词列表：逐行高亮 + 逐字推进 + 自动滚动 + 点行跳转。
+ * 有时间轴的歌词列表：逐行高亮 + 逐字推进 + 平滑自动滚动 + 点行跳转。
  *
- * 播放时间用「按帧驱动的 State<Long>」暴露：只有当前逐字行读取它，避免整页每帧重组；
- * 无时间轴歌词走 [PlainLyricsContent]（静态展示，不高亮、不滚动、不可点）。
+ * 状态：加载中 / 无歌词 / 已关闭 / 有时间轴 / 纯文本。
+ * 「Apple Music 感」的三个关键点：
+ * 1. 自动滚动用长缓出曲线（[BiliMotion.LyricsScrollMs]）而不是短促跳转，切行时从当前位置平滑重定向；
+ * 2. 当前行放大/着色 + 其余行按「已唱/未唱」分透明度，过渡统一走 Emphasized；
+ * 3. 上下边缘用渐变遮罩让歌词自然淡出，不出现生硬截断。
  */
 @Composable
 private fun SyncedLyricsContent(
@@ -570,37 +459,43 @@ private fun SyncedLyricsContent(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        // 上下各 40% 的 contentPadding：当前行滚动到视口中间时，上下仍能看到前后几行。
-        val verticalPadding = maxHeight * 0.4f
-        LazyColumn(
-            state = listState,
+        // 上下各 35% 的 contentPadding：当前行滚动到视口中间时，上下仍能看到前后几行。
+        val verticalPadding = maxHeight * 0.35f
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-            contentPadding = PaddingValues(
-                start = Spacing.lg,
-                end = Spacing.lg,
-                top = verticalPadding,
-                bottom = verticalPadding,
-            ),
         ) {
-            itemsIndexed(
-                items = sortedLines,
-                key = { index, line -> "$index:${line.key}" },
-                contentType = { _, line -> if (line is LyricItem.WordsLyric) "words" else "normal" },
-            ) { index, line ->
-                val isActive = index == playingIndex
-                val isPast = playingIndex != Int.MAX_VALUE && index < playingIndex
-                LyricLineRow(
-                    line = line,
-                    currentTimeState = frameTime,
-                    isActive = isActive,
-                    isPast = isPast,
-                    isSynced = true,
-                    onClick = { onSeekToLine(line.time) },
-                )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .lyricsEdgeFade(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                contentPadding = PaddingValues(
+                    start = Spacing.lg,
+                    end = Spacing.lg,
+                    top = verticalPadding,
+                    bottom = verticalPadding,
+                ),
+            ) {
+                itemsIndexed(
+                    items = sortedLines,
+                    key = { index, line -> "$index:${line.key}" },
+                    contentType = { _, line -> if (line is LyricItem.WordsLyric) "words" else "normal" },
+                ) { index, line ->
+                    val isActive = index == playingIndex
+                    val isPast = playingIndex != Int.MAX_VALUE && index < playingIndex
+                    LyricLineRow(
+                        line = line,
+                        currentTimeState = frameTime,
+                        isActive = isActive,
+                        isPast = isPast,
+                        isSynced = true,
+                        onClick = { onSeekToLine(line.time) },
+                    )
+                }
             }
         }
     }
@@ -683,7 +578,13 @@ private fun rememberLyricTimeProvider(
 // 自动滚动工具
 // ---------------------------------------------------------------------------
 
-/** 平滑滚动把目标行带到视口中间；目标不在可见范围内时先瞬移再微调。 */
+/**
+ * 平滑滚动把目标行带到视口中间（Apple Music 手感）。
+ *
+ * - 目标不在可见范围内时先瞬移再微调（避免长距离飞滚）；
+ * - 可见时用长缓出曲线 [BiliMotion.LyricsScrollMs]，并且在切行很快时由外层 collectLatest
+ *   取消上一条动画、从当前位置继续，视觉上是一段连续的减速滑动。
+ */
 private suspend fun LazyListState.animateCenterItem(index: Int) {
     val visible = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
     if (visible != null) {
@@ -692,7 +593,7 @@ private suspend fun LazyListState.animateCenterItem(index: Int) {
             animateScrollBy(
                 value = distance,
                 animationSpec = tween(
-                    durationMillis = BiliMotion.Medium2,
+                    durationMillis = BiliMotion.LyricsScrollMs,
                     easing = BiliMotion.Emphasized,
                 ),
             )
@@ -706,7 +607,7 @@ private suspend fun LazyListState.animateCenterItem(index: Int) {
         animateScrollBy(
             value = distance,
             animationSpec = tween(
-                durationMillis = BiliMotion.Medium2,
+                durationMillis = BiliMotion.LyricsScrollMs,
                 easing = BiliMotion.Emphasized,
             ),
         )
@@ -729,12 +630,31 @@ private fun LazyListState.centerDistance(item: LazyListItemInfo): Float {
 }
 
 // ---------------------------------------------------------------------------
-// 格式化
+// 视觉辅助
 // ---------------------------------------------------------------------------
 
-/** 歌词偏移展示：`+0.3s` / `-0.5s` / `0.0s`（正数 = 歌词提前显示）。 */
+/**
+ * 歌词上下边缘渐隐遮罩：用 DstIn 让绘制内容按渐变透明度淡出，
+ * 不依赖背景色（播放页是渐变背景，不能用 surface 色块盖）。
+ */
+private fun Modifier.lyricsEdgeFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.verticalGradient(
+                0.0f to Color.Transparent,
+                0.12f to Color.Black,
+                0.88f to Color.Black,
+                1.0f to Color.Transparent,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+/** 格式化歌词偏移展示：`+0.3s` / `-0.5s` / `0.0s`（正数 = 歌词提前显示）。 */
 internal fun formatLyricOffset(delayMs: Long): String {
     if (delayMs == 0L) return "0.0s"
     val sign = if (delayMs > 0L) "+" else "-"
-    return String.format(Locale.US, "%s%.1fs", sign, abs(delayMs) / 1000.0)
+    return String.format(java.util.Locale.US, "%s%.1fs", sign, abs(delayMs) / 1000.0)
 }

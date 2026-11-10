@@ -21,6 +21,9 @@ object LyricsMatcher {
     /** 匹配总分门槛；低于该分数视为没有可信候选。 */
     private const val THRESHOLD = 70.0
 
+    /** 标题完全相等时的最低总分：不同版本/翻唱的时长可能差很多，但歌词通常仍可用。 */
+    private const val EXACT_TITLE_MIN_SCORE = 75.0
+
     private const val SCORE_TITLE_EXACT = 100.0
     private const val SCORE_CONTAINS_BASE = 50.0
     private const val SCORE_CONTAINS_RATIO = 40.0
@@ -75,8 +78,13 @@ object LyricsMatcher {
         for (candidate in candidates) {
             val normalizedName = normalizeTitle(candidate.name)
             if (normalizedName.isEmpty()) continue
-            val score = titleScore(normalizedTitle, normalizedName) +
-                durationScore(candidate.durationSec, durationMs)
+            val titlePart = titleScore(normalizedTitle, normalizedName)
+            var score = titlePart + durationScore(candidate.durationSec, durationMs)
+            // 标题完全相等时几乎可以确定是同一首歌：封底到 EXACT_TITLE_MIN_SCORE，
+            // 避免因翻唱/现场版时长差异被时长惩罚误杀（时长仍参与排序，挑最接近的版本）。
+            if (titlePart >= SCORE_TITLE_EXACT) {
+                score = maxOf(score, EXACT_TITLE_MIN_SCORE)
+            }
             if (score > bestScore) {
                 bestScore = score
                 best = candidate

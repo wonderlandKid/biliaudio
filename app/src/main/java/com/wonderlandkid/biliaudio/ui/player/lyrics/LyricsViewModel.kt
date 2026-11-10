@@ -235,27 +235,14 @@ class LyricsViewModel(
     }
 
     /**
-     * 自动在线匹配：清洗标题（去掉分曲序号等）→ 搜索 → 按时长/标题挑最佳候选 → 保存并解析。
-     *
-     * 专辑艺术家是 UP 主不可靠，因此搜索 artist 传空串。
+     * 自动在线匹配：清洗标题（去掉分曲序号/「专辑_01_」前缀）→ 搜索 → 按时长/标题挑最佳候选 →
+     * 保存并解析。专辑艺术家是 UP 主不可靠，因此搜索 artist 传空串。
      */
     private suspend fun searchAndApplyAuto(key: TrackKey, version: Long) {
-        val searchTitle = LyricsText.cleanTitle(key.title).ifBlank { key.title }
-        var failed = false
-        val candidates = withContext(Dispatchers.IO) {
-            try {
-                lyricsRepository.searchOnline(searchTitle, "")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                failed = true
-                Diag.log(TAG, "search online failed: ${e.javaClass.simpleName}: ${e.message}", e)
-                emptyList()
-            }
-        }
+        val pool = searchCandidatePool(key)
         if (!isCurrent(version)) return
 
-        if (failed) {
+        if (pool.failed && pool.candidates.isEmpty()) {
             updateIfCurrent(version) {
                 it.copy(
                     isLoading = false,
@@ -268,7 +255,8 @@ class LyricsViewModel(
             return
         }
 
-        val matched = LyricsMatcher.bestMatch(candidates, searchTitle, key.durationMs)
+        val candidates = pool.candidates
+        val matched = LyricsMatcher.bestMatch(candidates, pool.searchTitle, key.durationMs)
         if (matched != null) {
             val parsed = parseOnDefault(matched.rawLyrics)
             if (!isCurrent(version)) return
@@ -320,6 +308,52 @@ class LyricsViewModel(
         }
     }
 
+    /**
+     * 在线候选池：先按清洗后的曲名搜索；没有可信匹配时再补搜原始曲名
+     * （多 P 分曲标题常带「专辑_01_」前缀，两种查询命中的候选集合可能不同），合并去重。
+     *
+     * 艺人是 UP 主、不可靠，所以 artist 一律传空串；已有可信匹配就不再发第二次请求。
+     */
+    private suspend fun searchCandidatePool(key: TrackKey): CandidatePoolResult {
+        val cleanedTitle = LyricsText.cleanTitle(key.title).ifBlank { key.title.trim() }
+        val rawTitle = key.title.trim()
+        val queries = LinkedHashSet<String>().apply {
+            add(cleanedTitle)
+            if (rawTitle.isNotEmpty() && rawTitle != cleanedTitle) add(rawTitle)
+        }
+        val merged = LinkedHashMap<Long, OnlineLyricCandidate>()
+        var failed = false
+        var index = 0
+        for (query in queries) {
+            index++
+            val results = withContext(Dispatchers.IO) {
+                try {
+                    lyricsRepository.searchOnline(query, "")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failed = true
+                    Diag.log(TAG, "search online failed q=$query: ${e.javaClass.simpleName}: ${e.message}", e)
+                    emptyList()
+                }
+            }
+            results.forEach { candidate -> merged.putIfAbsent(candidate.id, candidate) }
+            val matched = LyricsMatcher.bestMatch(merged.values.toList(), cleanedTitle, key.durationMs)
+            if (matched != null) break
+            if (index == 1 && queries.size > 1) {
+                Diag.log(TAG, "no confident match for cleaned title, retry raw title uid=${key.uid}")
+            }
+        }
+        return CandidatePoolResult(candidates = merged.values.toList(), searchTitle = cleanedTitle, failed = failed)
+    }
+
+    /** [searchCandidatePool] 的结果：候选、用于打分的清洗标题、是否发生过网络失败。 */
+    private data class CandidatePoolResult(
+        val candidates: List<OnlineLyricCandidate>,
+        val searchTitle: String,
+        val failed: Boolean,
+    )
+
     // ------------------------------------------------------------------
     // 用户动作：来源 / 偏移 / 播放控制
     // ------------------------------------------------------------------
@@ -338,28 +372,21 @@ class LyricsViewModel(
             )
         }
         searchJob = viewModelScope.launch {
-            val searchTitle = LyricsText.cleanTitle(key.title).ifBlank { key.title }
-            var failed = false
-            val candidates = withContext(Dispatchers.IO) {
-                try {
-                    lyricsRepository.searchOnline(searchTitle, "")
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    failed = true
-                    Diag.log(TAG, "manual search failed: ${e.javaClass.simpleName}: ${e.message}", e)
-                    emptyList()
-                }
-            }
+            val pool = searchCandidatePool(key)
             if (!isCurrent(version)) return@launch
             updateIfCurrent(version) {
                 it.copy(
                     isLoading = false,
                     isSearching = false,
-                    candidates = candidates,
-                    searchError = if (failed) "歌词搜索失败，请稍后重试" else null,
-                    errorMessage = if (failed) it.errorMessage ?: "歌词搜索失败，请稍后重试" else
-                        if (candidates.isEmpty() && it.parsed == null) "暂无歌词" else it.errorMessage,
+                    candidates = pool.candidates,
+                    searchError = if (pool.failed && pool.candidates.isEmpty()) "歌词搜索失败，请稍后重试" else null,
+                    errorMessage = if (pool.failed && pool.candidates.isEmpty()) {
+                        it.errorMessage ?: "歌词搜索失败，请稍后重试"
+                    } else if (pool.candidates.isEmpty() && it.parsed == null) {
+                        "暂无歌词"
+                    } else {
+                        it.errorMessage
+                    },
                 )
             }
         }

@@ -36,11 +36,23 @@ object LyricsText {
         Regex("""^(?:Track|TRACK|track)\.?\s*[0-9０-９]{1,3}\s*[.、．,，:：)）\-–—]?\s*"""),
     )
 
-    /** 纯数字前缀：`1.` / `01、` / `3）` / `02:`。 */
+    /** 纯数字前缀：`1.` / `01、` / `3）` / `02:` / `01_`。 */
     private val NUMBER_PREFIXES = listOf(
-        Regex("""^[0-9０-９]{1,3}\s*[.、．,，:：)）\]】]\s*"""),
+        Regex("""^[0-9０-９]{1,3}\s*[.、．,，:：)）\]】_]\s*"""),
         // `1 - 晴天`（连字符后需有空白，避免误伤 `1-800` 之类）
         Regex("""^[0-9０-９]{1,3}\s*[-–—]\s+"""),
+    )
+
+    /**
+     * 分 P 曲名里的「专辑前缀_编号_歌名」形态（B 站多 P 导入常见）：
+     * `葉惠美_01_以父之名` → `以父之名`；`Abbey Road_01_Come Together` → `Come Together`。
+     *
+     * 只认明确分隔符（`_`/`-`/`–`/`—`）夹住的中间编号；空格分隔的形态要求编号是
+     * 补零的 2~3 位（`周杰伦 02 晴天`），避免误伤 `Love 2 Hate` 这类真实歌名。
+     */
+    private val NUMBERED_SEGMENT = listOf(
+        Regex("""^(.{1,40}?)[_\-–—]+[0-9０-９]{1,3}[_\-–—]+(.+)$"""),
+        Regex("""^(.{1,40}?)\s+[0-9０-９]{2,3}\s+(.+)$"""),
     )
 
     /** 剥离前缀后可能残留的分隔符（仅当后面还有内容时才清理）。 */
@@ -69,7 +81,23 @@ object LyricsText {
             current = next
             round++
         }
+        // 「专辑前缀_编号_歌名」：去掉前缀与编号段，只留歌名
+        current = stripNumberedSegment(current)
         return current.trim().ifEmpty { input }
+    }
+
+    /** 去掉「前缀_编号_歌名」中的前缀与编号段；不匹配时原样返回。 */
+    private fun stripNumberedSegment(value: String): String {
+        val candidate = value.trim()
+        if (candidate.isEmpty()) return value
+        for (pattern in NUMBERED_SEGMENT) {
+            val match = pattern.matchEntire(candidate) ?: continue
+            val head = match.groupValues[1].trim()
+            val tail = match.groupValues[2].trim()
+            if (head.isEmpty() || tail.isEmpty()) continue
+            return tail
+        }
+        return value
     }
 
     /** 尝试剥离一层序号前缀；没有可剥离内容时原样返回。 */

@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | **T1 一级 Tab** | 无自己的 Scaffold；有底部导航；有 `BiliPageHeader`；内容按区块/列表组织 | 发现 / 音乐库 / 设置 | `BiliPageHeader` + `BiliSection` / 业务列表 |
 | **T2 层级详情页** | 有返回、无底部导航；统一 push/pop；页面内系统 inset 由外层管 | 专辑详情、分曲编辑、艺术家、导入、搜索、归档导入、登录、诊断、缓存管理、我的歌单、歌单详情、听歌统计、最近播放 | `BiliDetailScaffold` |
-| **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片、歌词页覆盖层 | `NowPlayingScreen` / `LyricsScreen` |
+| **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片（页内左右分页：封面/歌词） | `NowPlayingScreen` / `NowPlayingLyricsPane` |
 | **T4 弹层/对话框** | 盖在当前页上，不参与导航转场 | 播放列表、封面选择、封面大图、确认框、新建/重命名歌单 | `ModalBottomSheet` / `AlertDialog` / `Dialog` |
 
 ### 页面清单
@@ -22,8 +22,7 @@
 | 设置 | T1 | 底部 Tab | `BiliPageHeader` + `BiliGroup` 卡片 |
 | 专辑详情 / 分曲编辑 / 分 P 曲名编辑 / 艺术家 / 导入 / 登录 / 诊断 / 缓存管理 | T2 | 各自上游 | `BiliDetailScaffold` |
 | 我的歌单 / 歌单详情 / 听歌统计 / 最近播放 | T2 | 发现页四个区块 | `BiliDetailScaffold` |
-| 正在播放 | T3 | 迷你条上滑 | 自管 |
-| 歌词页 | T3 | 播放页「看歌词」 | 自管（覆盖在播放页上方） |
+| 正在播放（封面页 ↔ 歌词页） | T3 | 迷你条上滑 | 自管（页面内左右分页，v0.28.0） |
 
 ## 2. 组件种类（再选组件）
 
@@ -100,7 +99,7 @@
 
 ## 6. 自动守卫
 
-`UiArchitectureConsistencyTest` 当前检查（192 个测试中的 5 个）：
+`UiArchitectureConsistencyTest` 当前检查（194 个测试中的 5 个）：
 
 - 详情页必须使用 `BiliDetailScaffold`；
 - UI 层禁止 `onClick = {}` 空实现；

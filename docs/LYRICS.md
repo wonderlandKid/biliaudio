@@ -1,4 +1,4 @@
-# 在线歌词（v0.27.0，SPICaMusic 方案）
+# 在线歌词（v0.28.0，SPICaMusic 方案）
 
 > 背景：v0.27.0 按用户要求**移除「看歌词视频」功能**（不再播放 B 站原视频），
 > 歌词页改用**真实歌词**；方案参考 [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android)
@@ -14,8 +14,9 @@
   │    └─ 有原文 → LyricsParser.parse → 歌词页
   │
   └─ 无快照 → 自动在线匹配：
-       LyricsText.cleanTitle(标题)            // 去「01、」等序号前缀
+       LyricsText.cleanTitle(标题)            // 去「01、」「专辑_01_」等前缀
        → LyricsApiClient.search(title, "")    // 只按曲名（专辑艺术家是 UP 主，不可靠）
+       → 无可信匹配时补搜原始标题，合并候选
        → LyricsMatcher.bestMatch(候选, 标题, 曲目时长)
        → 命中 → save(isManual = false) 落库 → 解析展示
        → 未命中/失败 → 「暂无歌词」+ 手动选源/本地导入
@@ -54,8 +55,9 @@
 - 标题归一化：全角转半角、小写、去 `feat./ft.`、去括号后缀（Live/伴奏/版等）、去噪音词、去标点空白；
 - 标题得分：完全相等 > 包含（按长度比）> 二元组相似度；
 - 时长得分：候选时长与曲目时长差 ≤3s 加满分、3~20s 线性衰减、>20s 扣分；
+- **标题完全相等时兜底到 75 分**（不同版本/翻唱时长可能差很多，但歌词通常可用；时长仍参与排序挑最接近的版本）；
 - 总分低于阈值（70）返回 `null`，宁缺毋滥（避免「晴天」匹配到无关歌）；
-- 匹配失败时歌词页显示「暂无歌词」并保留候选列表，用户可在“歌词来源”里手动选择。
+- 匹配失败时歌词面板显示「暂无歌词」并保留候选列表，用户可在「歌词来源」里手动选择。
 
 ## 5. 本机缓存（Room v6 `lyrics` 表）
 
@@ -73,19 +75,23 @@
 - 无外键（曲目删除后残留的歌词不会被展示，也不影响功能）；
 - 歌词属于设备本地缓存，**不进入音乐库归档/用户数据备份**。
 
-## 6. UI
+## 6. UI（v0.28.0：与播放页合一）
 
-入口：正在播放页底部 **「看歌词」**（`Icons.Rounded.Lyrics`）→ 播放页上方覆盖层
-（与旧视频页相同的覆盖层拓扑：播放页保持展开、歌词层从右滑入/向右滑出、500ms Emphasized、
-独立 `ViewModelStore`、隐藏迷你条；不是导航目的地）。
+歌词就在「正在播放」页里，是页内**左右滑动的第二页**（不再是独立页面/覆盖层，也没有「看歌词」按钮）：
 
-歌词页（`ui/player/lyrics/`，T3 沉浸页，自管 systemBars inset，扁平 Material 3）：
+- 第 1 页（封面页）：大封面 + 曲名/艺术家；点封面也可以进入歌词页；
+- 第 2 页（歌词页）：紧凑头部（曲名/艺术家 + 歌词来源 + 偏移）→ 歌词区；
+- 底部进度条/时间/播放控制固定，不随分页滑动；两页之间用 HorizontalPager 横向滑动切换；
+- 两页之间的指示器是两个小圆点（当前页拉长为胶囊），点击也能切换；返回键在歌词页先滑回封面页。
 
-- 顶栏：返回 / 曲名 + 艺术家 / 歌词来源 / 时间偏移；
-- 歌词区：LazyColumn 居中展示；当前行 primary 色 + 轻微放大（Emphasized），已唱/未唱不同透明度；
-  逐字歌词按词推进颜色（`SpanStyle` 颜色 lerp，不做自绘遮罩）；翻译行小一号展示；
-  自动滚动到当前行（用户手动滚动后暂停 3 秒再恢复）；点击某行跳转到该行时间；
-- 底部：当前/总时长 + 上一首/播放暂停/下一首；
+歌词渲染（Apple Music 手感，扁平 Material 3、无毛玻璃）：
+
+- 统一 22sp 大字号；当前行 primary 色 + 1.09 放大 + Bold，非当前行 0.95 缩放 + 分层透明度；
+- 逐字歌词按词推进颜色（`SpanStyle` 颜色 lerp，不做自绘遮罩）；翻译行小一号展示；
+- 自动滚动到当前行：**520ms Emphasized 长缓出**（`BiliMotion.LyricsScrollMs`），切行快速重定向不跳变；
+  用户手动滚动后暂停 3 秒再恢复；
+- 歌词区上下边缘用 DstIn 渐变遮罩淡出，不出现生硬截断；
+- 点击某行跳转到该行时间；
 - 状态：加载中「正在匹配歌词…」/ 无歌词（重新搜索、导入本地）/ 已关闭（恢复歌词）/ Snackbar 错误；
 - 歌词来源面板（ModalBottomSheet）：在线候选列表（当前使用项打勾）、重新搜索、导入本地歌词文件
   （SAF `OpenDocument`，≤1 MiB，LRC/YRC/TTML/TXT 扩展名 + 内容校验）、关闭歌词、恢复自动匹配；
@@ -109,14 +115,14 @@
 | 网络 | `data/net/LyricsApiClient.kt` | 在线歌词接口（OkHttp + kotlinx.serialization） |
 | 存储 | `data/db/LyricEntity.kt`、`LyricsDao.kt`、`AppDatabase.kt`（v6） | Room `lyrics` 表与迁移 |
 | 仓库 | `data/repository/LyricsRepository.kt`、`data/impl/LyricsRepositoryImpl.kt` | 在线搜索 + 本机快照读写语义 |
-| UI | `ui/player/lyrics/LyricsViewModel.kt`、`LyricsScreen.kt`、`LyricsSourceSheet.kt`、`LyricsOffsetSheet.kt`、`LyricLineRow.kt` | 歌词页与两个面板 |
-| 入口 | `ui/player/NowPlayingScreen.kt`、`ui/navigation/AppNavHost.kt` | 「看歌词」按钮 + 播放页上方覆盖层 |
+| UI | `ui/player/lyrics/NowPlayingLyricsPane.kt`、`LyricsViewModel.kt`、`LyricsSourceSheet.kt`、`LyricsOffsetSheet.kt`、`LyricLineRow.kt` | 播放页内嵌歌词 + 两个面板 |
+| 入口 | `ui/player/NowPlayingScreen.kt` | 封面页 ↔ 歌词页左右分页（HorizontalPager）；点封面或滑动切换 |
 | 容器 | `di/AppContainer.kt` | 注入 `lyricsRepository` |
 
 ## 9. 后续可做（未排期）
 
 1. 迷你播放条单行歌词（参考 SPICaMusic `MiniLyric`）；
-2. 「歌词搜索」自定义关键词/重新匹配；
+2. 「歌词搜索」自定义关键词/重新匹配（多来源候选手动切换已支持）；
 3. 歌词随用户数据备份导出/导入；
 4. 在线歌词源 base URL 可配置（服务迁移时无需发版）；
 5. 双语/音译行、对唱歌手标签等 AMLL 高级展示。

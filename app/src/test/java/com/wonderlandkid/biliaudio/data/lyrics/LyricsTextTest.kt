@@ -47,6 +47,21 @@ class LyricsTextTest {
     }
 
     @Test
+    fun cleanTitle_stripsAlbumPrefixNumberSegment() {
+        // B 站多 P 导入的分曲标题常为「专辑前缀_编号_歌名」
+        assertEquals("以父之名", LyricsText.cleanTitle("葉惠美_01_以父之名"))
+        assertEquals("Come Together", LyricsText.cleanTitle("Abbey Road_01_Come Together"))
+        assertEquals("晴天", LyricsText.cleanTitle("周杰伦 02 晴天"))
+        assertEquals("晴天", LyricsText.cleanTitle("周杰伦_02_晴天"))
+    }
+
+    @Test
+    fun cleanTitle_stripsUnderscoreNumberPrefix() {
+        assertEquals("晴天", LyricsText.cleanTitle("01_晴天"))
+        assertEquals("晴天", LyricsText.cleanTitle("2_晴天"))
+    }
+
+    @Test
     fun cleanTitle_keepsTitlesThatStartWithDigits() {
         // 「7 Years」「1973」「24K Magic」都是真实歌名，不能当序号剥掉
         assertEquals("7 Years", LyricsText.cleanTitle("7 Years"))

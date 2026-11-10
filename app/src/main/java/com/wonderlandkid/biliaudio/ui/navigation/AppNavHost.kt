@@ -40,8 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -62,10 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -89,7 +84,6 @@ import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
-import com.wonderlandkid.biliaudio.ui.player.lyrics.LyricsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
 import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
@@ -138,11 +132,7 @@ fun AppNavHost() {
     )
     val showChrome = currentRoute in tabRoutes
     val showMiniPlayerOnly = currentRoute in miniPlayerOnlyRoutes
-    // 歌词页是播放页上方的一层覆盖页，不是独立导航目的地：
-    // 进入/退出时底下始终是「正在播放」页，不会闪回专辑页，也不会让迷你条滑上来。
-    var lyricsOpen by remember { mutableStateOf(false) }
-    val isImmersive = lyricsOpen
-    val showMiniPlayer = (showChrome || showMiniPlayerOnly) && !isImmersive
+    val showMiniPlayer = showChrome || showMiniPlayerOnly
 
     val hazeState = rememberHazeState()
     val density = LocalDensity.current
@@ -550,14 +540,7 @@ fun AppNavHost() {
                     }
                     NowPlayingScreen(
                         onBack = { animatePlayerTo(false) },
-                        onOpenLyrics = {
-                            // 播放页保持完全展开作为歌词页背景，只把歌词层盖上来
-                            settleJob?.cancel()
-                            playerProgress = 1f
-                            lyricsOpen = true
-                        },
-                        // 歌词层打开时禁用下层播放页的拖拽，避免歌词空白区的下拉手势穿透
-                        dragModifier = if (lyricsOpen) Modifier else playerDragModifier,
+                        dragModifier = playerDragModifier,
                         onOpenAlbum = { albumId ->
                             animatePlayerTo(false)
                             navController.navigate(Routes.album(albumId))
@@ -569,34 +552,8 @@ fun AppNavHost() {
                             .align(Alignment.TopCenter)
                             .fillMaxWidth()
                             .height(48.dp)
-                            .then(if (lyricsOpen) Modifier else playerDragModifier),
+                            .then(playerDragModifier),
                     )
-                }
-            }
-
-            // 歌词页：盖在播放页上方（播放页保持展开，避免闪回父页面/迷你条上滑）。
-            // 转场与页面 push/pop 同一条 Emphasized 曲线（固定 500ms，从右滑入/向右滑出）。
-            AnimatedVisibility(
-                visible = lyricsOpen,
-                enter = slideInHorizontally(animationSpec = PageSlideSpec) { it },
-                exit = slideOutHorizontally(animationSpec = PageSlideSpec) { it },
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                // 歌词页用独立 ViewModelStore：关闭后立即 clear，释放 LyricsViewModel 与其协程
-                val lyricsViewModelStore = remember {
-                    object : ViewModelStoreOwner {
-                        override val viewModelStore = ViewModelStore()
-                    }
-                }
-                DisposableEffect(lyricsViewModelStore) {
-                    onDispose { lyricsViewModelStore.viewModelStore.clear() }
-                }
-                CompositionLocalProvider(LocalViewModelStoreOwner provides lyricsViewModelStore) {
-                    // 歌词页自己处理 systemBars inset；不要再叠加 Scaffold innerPadding，
-                    // 否则顶部会留出一条浅色边。
-                    Page {
-                        LyricsScreen(onBack = { lyricsOpen = false })
-                    }
                 }
             }
 

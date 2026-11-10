@@ -18,8 +18,9 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 - 🎵 **按歌曲播放**：专辑音频流连续播放，播放列表 = 当前专辑的分割点，点哪首播哪首；
   从音乐库点歌默认**只播放该曲所属专辑**（不是整个音乐库）；后台播放 + 媒体通知 + 锁屏控制；
   底部迷你播放条支持**上滑打开播放页、下滑收起为细条**
-- 🎤 **在线歌词（SPICaMusic 方案）**：播放页「看歌词」→ 全屏歌词页；在线多来源自动匹配（按曲名+时长）、
-  逐行/逐字高亮、歌词来源切换、本地 LRC/YRC/TTML/TXT 导入、时间偏移；歌词本机缓存、离线可显示
+- 🎤 **在线歌词（SPICaMusic 方案）**：歌词与播放页合一——**左右滑动**在封面页 / 歌词页之间切换
+  （无「看歌词」按钮）；在线多来源自动匹配、逐行/逐字高亮、Apple Music 式平滑滚动、
+  歌词来源切换、本地 LRC/YRC/TTML/TXT 导入、时间偏移；歌词本机缓存、离线可显示
 - 💾 **专辑音频离线缓存**：专辑详情可缓存整张专辑音频（多 P 专辑按分 P 全部缓存、支持补缓存）；
   设置 → 缓存管理可查看/删除；v0.27.0 起只缓存音频，不再缓存/播放视频
 - 🔎 **可搜索的音乐库**：歌曲 / 专辑搜索，按艺术家、专辑名检索
@@ -29,9 +30,9 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 ## 界面截图
 
-| 发现 | 正在播放 | 歌词页 |
+| 发现 | 播放页（封面页） | 播放页（歌词页，右滑） |
 | --- | --- | --- |
-| ![home](docs/screenshots/final_01_home.png) | ![player](docs/screenshots/real_10_now_playing.png) | ![lyrics](docs/screenshots/v027_01_lyrics_fullscreen.png) |
+| ![home](docs/screenshots/final_01_home.png) | ![player](docs/screenshots/v028_00_nowplaying_cover.png) | ![lyrics](docs/screenshots/v028_01_nowplaying_lyrics.png) |
 
 | 分曲编辑 | 搜索导入 | 深色主题 |
 | --- | --- | --- |
@@ -41,17 +42,17 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 | --- | --- | --- |
 | ![backup](docs/screenshots/archive_01_settings.png) | ![preview](docs/screenshots/archive_04_preview.png) | ![report](docs/screenshots/archive_09_replace_report.png) |
 
-| 专辑详情（底部迷你播放条） | 歌词页（release 包） | 批量导入 |
+| 专辑详情（底部迷你播放条） | 歌词来源面板 | 批量导入 |
 | --- | --- | --- |
-| ![album](docs/screenshots/final_04_album_mini.png) | ![lyrics-release](docs/screenshots/v027_06_lyrics_release_build.png) | ![batch](docs/screenshots/real_31_batch_result.png) |
+| ![album](docs/screenshots/final_04_album_mini.png) | ![source](docs/screenshots/v028_02_lyrics_source_sheet.png) | ![batch](docs/screenshots/real_31_batch_result.png) |
 
 | 分割点文本识别（导入预览） | 文本导入弹窗 | 长专辑 14 首 |
 | --- | --- | --- |
 | ![textimport](docs/screenshots/v03_09_import_text_preview.png) | ![dialog](docs/screenshots/v03_06_text_import_dialog.png) | ![longalbum](docs/screenshots/v03_11_long_album_detail.png) |
 
-| 点歌只播该专辑（播放列表 14 首） | 歌词来源面板 | 诊断日志 |
+| 点歌只播该专辑（播放列表 14 首） | 歌词偏移面板 | 诊断日志 |
 | --- | --- | --- |
-| ![albumqueue](docs/screenshots/v04_playlist_album_only.png) | ![source](docs/screenshots/v027_03_lyrics_source_sheet.png) | ![diag](docs/screenshots/v04_diagnostics.png) |
+| ![albumqueue](docs/screenshots/v04_playlist_album_only.png) | ![offset](docs/screenshots/v028_03_lyrics_offset_sheet.png) | ![diag](docs/screenshots/v04_diagnostics.png) |
 
 | 自定义封面（专辑详情） | 首页卡片同步 | 导入预览换封面 |
 | --- | --- | --- |
@@ -146,11 +147,12 @@ scripts/screenshot.sh home 8
    - 音乐库点某首歌 = 只播放该曲所属专辑，从选中曲开始（播放列表面板显示该专辑分曲）；
    - 音乐库「播放全部歌曲」= 显式播放当前歌曲列表全部；
    - 底部迷你播放条 → 正在播放页（播放列表面板 = 当前专辑分曲）。
-5. **歌词**：正在播放页 →「看歌词」→ 全屏歌词页（播放页上方覆盖层，返回优先关歌词页）：
-   - 自动按曲名在线匹配多来源歌词（含翻译）；匹配不到时在右上角「歌词来源」手动选候选、
-     导入本地 LRC / YRC / TTML / TXT，或「关闭本曲歌词」；
-   - 右上角偏移按钮可 ±0.1s / ±0.5s 微调歌词时间（持久化）；
-   - 歌词本机缓存（Room），离线可显示；歌词不进入归档备份。详见 [docs/LYRICS.md](docs/LYRICS.md)。
+5. **歌词**：歌词就在「正在播放」页里，左右滑动切换「封面页 ↔ 歌词页」，底部进度/播放控制固定：
+   - 自动按曲名在线匹配多来源歌词（含翻译、平滑滚动、当前行高亮/逐字推进）；匹配不到时在歌词页
+     左上角曲名旁的「歌词来源」手动选候选、导入本地 LRC / YRC / TTML / TXT，或「关闭本曲歌词」；
+   - 右上角偏移按钮可 ±0.1s / ±0.5s 微调歌词时间（持久化）；点歌词行可跳到该时间；
+   - 歌词页按返回键先滑回封面页；歌词本机缓存（Room），离线可显示，不进入归档备份。
+     详见 [docs/LYRICS.md](docs/LYRICS.md)。
 
 ### 整库备份 / 恢复（v0.10.0+ 推荐）
 
@@ -164,8 +166,8 @@ scripts/screenshot.sh home 8
 ## 已知限制 / 路线图
 
 - **多 P 视频**：v0.25.0 起按分 P 自动分曲；v0.27.0 起音频缓存也按分 P 缓存整张专辑；
-- **歌词**：在线歌词为第三方 HTTP 服务（依据曲名+时长自动匹配，可能匹配不到，可手动选源/导入本地）；
-  在线源目前提供 LRC 行级时间轴，逐字 KaraOK 需导入 YRC/TTML；迷你条暂无歌词；
+- **歌词**：歌词与播放页同页（左右滑动）；在线歌词为第三方 HTTP 服务（依据曲名+时长自动匹配，可能匹配不到，
+  可手动选源/导入本地）；在线源目前提供 LRC 行级时间轴，逐字 KaraOK 需导入 YRC/TTML；迷你条暂无歌词；
 - 播放地址会过期，出错时自动重新解析一次；专辑音频可手动缓存（按分 P），不做自动缓存；
 - 搜索接口偶发被 B 站风控（会提示可重试）；
 - 目录归档使用系统文件夹选择器（SAF）；Android 限制直接选 Download 根目录，需新建子文件夹；首次选择后要允许访问；
@@ -191,7 +193,7 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.27.0 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.28.0 版本记录
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记
 - [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md)：音乐库归档格式 / [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md)：导入与分割点文本格式

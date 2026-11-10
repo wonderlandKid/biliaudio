@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.27.0）
+# 项目现状与交接（v0.28.0）
 
-> 最后更新：2026-11-10 · 版本 v0.27.0 · tag `v0.27.0`（release commit 以 `git rev-parse v0.27.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-11 · 版本 v0.28.0 · tag `v0.28.0`（release commit 以 `git rev-parse v0.28.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -18,7 +18,7 @@
 | 技术栈 | Kotlin 2.3.21 / Compose BOM 2026.09 / AGP 9.5.0 / Gradle 9.6（腾讯镜像）/ Media3 1.11.1 / Room / OkHttp / Coil / zxing |
 | 最低支持 | Android 7.0（API 24），targetSdk 37 |
 | 构建 | 交付/性能验收：`./gradlew :app:assembleRelease`（R8，debug 签名可安装）；开发调试用 `assembleDebug` |
-| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 192 个全绿） |
+| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 194 个全绿） |
 | APK 产物 | `app/build/outputs/apk/release/app-release.apk`（性能验收/交付，发布放置 `dist/biliaudio-vX.Y.Z-release.apk`）；`app-debug.apk` 仅开发调试 |
 
 **环境注意**
@@ -43,7 +43,7 @@
 | 播放（ExoPlayer 分曲裁剪、专辑连续、单曲点播） | ✅ | 点歌/专辑播放=单专辑队列；「播放全部歌曲」=全库 |
 | 播放列表（当前专辑分曲展开、跳转） | ✅ | NowPlaying 播放列表面板 |
 | 后台播放 + MediaSession 通知 + 锁屏控制 | ✅ | Android 13+ 通知权限已申请 |
-| **在线歌词页（SPICaMusic 方案）** | ✅ | 在线多来源匹配 + Room 缓存 + 来源选择/时间偏移 + 逐行/逐字高亮；v0.27.0 起替换原视频页 |
+| **在线歌词（SPICaMusic 方案）** | ✅ | 与播放页合一：封面页 ↔ 歌词页左右滑动（无「看歌词」按钮）；在线多来源匹配 + Room 缓存 + 来源选择/时间偏移 + 逐行/逐字高亮 + Apple Music 式平滑滚动 |
 | 专辑音频离线缓存（按分 P） | ✅ | 多 P 按 `sourceCid` 逐 P 缓存/补缓存；缓存管理按专辑聚合；v0.27.0 起只缓存音频（视频缓存已移除） |
 | 音乐库歌曲/专辑/艺术家搜索、最近播放 | ✅ | 分曲逐首显示、可搜索 |
 | **音乐库三分栏 + A-Z 快速索引** | ✅ | 歌曲/专辑/艺术家；拼音分组、索引拖动定位、拖动气泡 |
@@ -62,6 +62,7 @@
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.28.0** 歌词并入播放页（封面页 ↔ 歌词页左右滑动，去掉「看歌词」按钮）+ Apple Music 式平滑歌词滚动；多 P 曲名清洗 + 歌词候选补搜
 - **v0.27.0** 移除「看歌词视频」（视频播放/视频缓存全部删除，缓存只留歌曲并按分 P）；在线歌词（SPICaMusic 方案：多来源 API + LRC/YRC/AMLL + Room 缓存 + 歌词页）；Room v6
 - **v0.1.0** 首版：登录/导入/分曲/播放/歌词页/音乐库/设置，模拟器+真机走查通过
 - **v0.2.0** 音乐库归档：统一 JSON 备份/恢复/分割点文件，覆盖全库自动备份
@@ -105,7 +106,7 @@
 - **v0.9.0** 归档数据层 v2：DB v3（source + (source,bvid,page) 唯一键 + tracks.uid）、v2 schema/kind/features/cover hash/空语义；
   v1 归档不再兼容，旧快捷导入文本仍归一化为 v2
 
-## 5. 最近验证状态（截至 v0.27.0）
+## 5. 最近验证状态（截至 v0.28.0）
 
 - 单元测试 **192 / 0 失败**（wbi、批量/归档解析、导入模式、播放映射、音频缓存逻辑、歌词 LRC/YRC/AMLL 解析与匹配、曲名清洗、UI 架构守卫等）。
 - 模拟器端到端已验证：
@@ -157,6 +158,12 @@
   - 偏移面板 +0.1s 立即生效并持久化；来源面板候选/打勾/重新搜索/本地导入/关闭歌词/恢复自动匹配全链路正常；
   - release（R8）下在线歌词搜索与解析正常，HTTP 歌词域名经 `network_security_config` 放行生效；
   - 截屏：`docs/screenshots/v027_00_nowplaying_lyrics_entry.png`、`v027_01..06_lyrics_*.png`。
+- v0.28.0 模拟器（biliaudio_api36，1080x1920 @420dpi，headless）验证：
+  - 播放页无「看歌词」按钮；左右滑动在封面页 ↔ 歌词页之间切换，底部进度/控制固定；
+  - 歌词页自动在线匹配（多 P 曲名清洗后命中）、当前行放大/着色居中、翻译行、上下渐隐遮罩；
+  - 逐行平滑滚动（520ms Emphasized）：录屏逐帧看到中间过渡位置，无跳变；
+  - 点歌词行跳转、点指示器切换、歌词页按返回先回封面页、来源/偏移面板；
+  - 截屏：`docs/screenshots/v028_*.png`。
 - **未验证/待用户配合**：
   1. 扫码登录成功后的完整链路（头像/昵称、高清流）——需要真实账号扫码；
   2. 本地相册上传封面在 MIUI 系统相册选择器的完整 UI 走查（代码路径已实现，在线封面/恢复 B 站已真机验证）；
@@ -185,8 +192,9 @@
 - **未分割专辑**：0 首曲目，播放时虚拟整张一首；旧版占位曲启动自动清理。
 - **归档格式**：一个 `.biliaudio.json` 承载整库/单专辑/分割点；只 JSON；导入模式 merge/segments-only/replace；
   replace 自动备份到 `files/backups/`（保留 10 份）。
-- **歌词（v0.27.0）**：在线多来源歌词 API（按曲名搜索，不传 UP 主艺术家）→ 候选按标题+时长匹配 →
-  Room v6 `lyrics` 按 `Track.uid` 存原文；解析 LRC/YRC/AMLL-TTML/纯文本；歌词页是播放页上方覆盖层（非路由）；
+- **歌词（v0.28.0）**：在线多来源歌词 API（按曲名搜索，不传 UP 主艺术家；多 P 曲名去「专辑_01_」前缀，
+  匹配不到补搜原始标题）→ 候选按标题+时长匹配 → Room v6 `lyrics` 按 `Track.uid` 存原文；解析 LRC/YRC/AMLL-TTML/纯文本。
+  歌词是「正在播放」页内左右滑动的第二页（封面页 ↔ 歌词页，非路由/非覆盖层），底部进度/控制固定；
   歌词是设备本地缓存，不进归档/备份；在线接口为 HTTP，仅放行该域名（network_security_config）。见 [LYRICS.md](LYRICS.md)。
 - **离线缓存（v0.27.0）**：只缓存音频，按分 P（`bvid+cid` key）；多 P 专辑逐 P 缓存/补缓存；视频缓存/视频播放已移除。
 - **自定义封面**：`Album.coverLocalPath` 优先于远程 `coverUrl`；封面文件存 `files/covers/`（JPEG，长边≤1080）；
@@ -230,7 +238,7 @@ app/src/main/java/com/wonderlandkid/biliaudio
 │   ├── home/ library/ album/           发现、音乐库、专辑详情、分曲编辑（含文本导入）
 │   ├── imports/                        BV/搜索/归档导入、分割点文本识别预览
 │   ├── login/ settings/                扫码登录、设置、备份恢复、诊断日志
-│   └── player/                         正在播放、播放列表面板、歌词页（lyrics/ 子目录）
+│   └── player/                         正在播放（封面/歌词左右分页）、播放列表面板、歌词组件（lyrics/）
 └── util/Diag.kt                       诊断日志（内存环形 + Logcat BiliDiag）
 ```
 

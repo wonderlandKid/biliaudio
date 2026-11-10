@@ -9,7 +9,7 @@
 | --- | --- | --- | --- | --- | --- |
 | **T1 一级 Tab 页** | `HOME/LIBRARY/SETTINGS` | 有 | `BiliPageHeader` 大标题页头 | Tab 瞬时切换 + 内容入场 | 发现 / 音乐库 / 设置 |
 | **T2 层级详情页** | `ALBUM/SPLIT_EDITOR/ARTIST/IMPORT/SEARCH/IMPORT_ARCHIVE/DIAGNOSTICS/LOGIN` | 无 | `BiliDetailScaffold`（返回 + 标题 + actions） | 层级 push/pop（右进右出） | 专辑详情 / 编辑分割点 / 艺术家 / 导入 / 诊断 / 登录 |
-| **T3 沉浸页** | `PLAYER`（卡片覆盖层）/ 歌词覆盖层（非路由） | 无 | 页面自己处理（播放页顶部栏/下拉关闭） | 播放页上下跟手；歌词页从右盖在播放页上 | 正在播放 / 歌词页 |
+| **T3 沉浸页** | `PLAYER`（卡片覆盖层；页内左右分页：封面/歌词） | 无 | 页面自己处理（播放页顶部栏/下拉关闭） | 播放页上下跟手；页内歌词左右滑动切换 | 正在播放（封面页/歌词页） |
 | **T4 弹层/对话框** | ModalBottomSheet / AlertDialog | - | 系统/自定义 | 组件自身 | 播放列表、封面选择、确认框 |
 
 规则：
@@ -28,7 +28,7 @@
 - **T2 一律用 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`）。禁止在页面里手写一行
   `Row { IconButton(back); Text(title) }` 的顶栏；
 - **T3 不使用 T1/T2 模板**：全屏、insets、关闭手势都由页面自己管；
-  歌词页是播放页上方的覆盖层（v0.27.0 起），不是 NavHost 目的地（保证进入/退出时底层始终是播放页）；
+  歌词是「正在播放」页内部左右滑动的第二页（v0.28.0 起），不是独立路由/覆盖层，底部进度与控制不跟页；
 - **T4 不要再复制一套 `ModalBottomSheet` 的配置**，优先复用现有组件。
 
 ## 2. 层级页面模板
@@ -156,7 +156,7 @@ fun BiliDetailScaffold(
 | 诊断日志 | T2 | `BiliDetailScaffold` |
 | 扫码登录 | T2 | `BiliDetailScaffold` |
 | 正在播放 | T3 | 页面自管 |
-| 歌词页（`ui/player/lyrics/`） | T3 | 页面自管 |
+| 正在播放（封面页 ↔ 歌词页，`ui/player/lyrics/`） | T3 | 页面自管（内部左右分页） |
 | 播放列表/封面选择/确认 | T4 | ModalBottomSheet/AlertDialog |
 
 
