@@ -17,7 +17,6 @@ import com.wonderlandkid.biliaudio.data.repository.LyricsRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.player.PlaybackState
 import com.wonderlandkid.biliaudio.util.Diag
-import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +30,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 /**
  * 歌词页 UI 状态（不随播放进度 tick 变化，只有歌词/来源/偏移变化时才更新）。

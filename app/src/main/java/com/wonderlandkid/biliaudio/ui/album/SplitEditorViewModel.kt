@@ -8,12 +8,12 @@ import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.repository.AlbumRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.util.TimeUtils
+import kotlin.math.roundToLong
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.math.roundToLong
 
 /** 分曲编辑列表中的一个草稿分割点（未保存到数据库）。 */
 data class SegmentDraft(

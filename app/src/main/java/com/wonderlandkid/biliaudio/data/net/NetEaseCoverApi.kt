@@ -6,14 +6,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 
 /**
  * 网易云音乐封面搜索（网易云官方 `music.163.com/api` 公开接口，无需登录/签名）。
@@ -65,7 +62,6 @@ class NetEaseCoverApi(
     }
 
     companion object {
-        private const val TAG = "CoverApi"
         private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
 
         private val HEADERS: Headers = Headers.Builder()

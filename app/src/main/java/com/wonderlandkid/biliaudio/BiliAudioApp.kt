@@ -1,16 +1,16 @@
 package com.wonderlandkid.biliaudio
 
 import android.app.Application
+import com.wonderlandkid.biliaudio.data.net.BiliConstants
+import com.wonderlandkid.biliaudio.di.AppContainer
+import com.wonderlandkid.biliaudio.util.Diag
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
-import com.wonderlandkid.biliaudio.data.net.BiliConstants
-import com.wonderlandkid.biliaudio.di.AppContainer
-import com.wonderlandkid.biliaudio.util.Diag
-import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
 
 class BiliAudioApp : Application(), SingletonImageLoader.Factory {
 

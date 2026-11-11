@@ -1,7 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.stats
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,11 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
@@ -39,8 +37,6 @@ import com.wonderlandkid.biliaudio.ui.components.LoadingBox
 import com.wonderlandkid.biliaudio.ui.components.TrackRow
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
-import com.wonderlandkid.biliaudio.ui.theme.Dimens
-import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -16,7 +15,6 @@ import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.BiliAlbumRow
 import com.wonderlandkid.biliaudio.ui.components.BiliGroup
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
-import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing

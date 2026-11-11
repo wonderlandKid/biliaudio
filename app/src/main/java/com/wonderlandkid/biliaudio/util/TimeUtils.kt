@@ -1,7 +1,7 @@
 package com.wonderlandkid.biliaudio.util
 
-import java.util.Locale
 import kotlin.math.roundToLong
+import java.util.Locale
 
 object TimeUtils {
     /** 毫秒 → "mm:ss" 或 "h:mm:ss"。 */

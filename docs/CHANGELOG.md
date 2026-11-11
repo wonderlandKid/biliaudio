@@ -1,5 +1,32 @@
 # 版本记录
 
+## v0.39.0（2026-11-11 · tag `v0.39.0`）
+
+**代码整理：播放页 UI 拆分、清理无用代码、README 修复（无行为变更）**
+
+### 代码可维护性
+
+- 把 1000+ 行的 `NowPlayingScreen.kt` 拆分为 4 个职责单一的文件：
+  - `NowPlayingScreen.kt`：页面壳、顶部标题、分页、权限/频谱状态；
+  - `PlaybackSeekBar.kt`：实时频谱 seekbar（Canvas 绘制 + 拖动/点击）；
+  - `PlaybackControls.kt`：播放模式/上一首/播放/下一首/播放列表控制行；
+  - `VolumeFineTune.kt`：贴边 Haze 音量微调条。
+- 删除 v0.34 之前遗留的迷你条「自由拉伸」死代码（`stretchProgress`、拉伸 lerp、进度线），
+  mini player 现在只作为 morph 起点；
+- 删除未使用的 `PlaceholderScreens.kt`、`LetterIndex.sectionStartIndices()`、`NetEaseCoverApi.TAG` 等；
+- 全项目清理未使用的 import，统一 import 分组/排序；修正导入重复和空行；
+- 行为、UI、测试数量均不变（204 单测）。
+
+### README 修复
+
+- 删除重复的「## 构建」章节，合并为「## 构建与运行」；
+- 修正技术栈里已删除的「第二路视频播放器」描述，补充真实频谱（Visualizer/Goertzel）；
+- 更新功能列表、歌词/播放页/音量条/连续展开描述；
+- 修正歌词操作位置（来源/偏移在右下角）、歌词页隐藏底部控制、备份/导入编号；
+- 更新真实频谱与 `RECORD_AUDIO` 说明；
+- 深色播放页截图更新为 `v039_player_dark.png`；
+- 修正文档索引（CHANGELOG 版本）、FAQ 安装包版本路径。
+
 ## v0.38.0（2026-11-11 · tag `v0.38.0`）
 
 **播放进度条改为成熟「实时频谱 seekbar」+ 音量条完美隐藏/贴边点按显形**

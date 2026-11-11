@@ -1,12 +1,12 @@
 package com.wonderlandkid.biliaudio.data.lyrics
 
 import com.wonderlandkid.biliaudio.data.model.LyricItem
+import kotlin.math.roundToLong
+import java.io.StringReader
+import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import org.xml.sax.InputSource
-import java.io.StringReader
-import kotlin.math.roundToLong
-import javax.xml.parsers.DocumentBuilderFactory
 
 /** Parser for AMLL/Apple-style TTML lyrics. */
 object AmllParser {

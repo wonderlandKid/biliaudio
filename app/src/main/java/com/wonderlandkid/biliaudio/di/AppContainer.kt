@@ -3,17 +3,17 @@ package com.wonderlandkid.biliaudio.di
 import android.content.Context
 import com.wonderlandkid.biliaudio.data.db.AppDatabase
 import com.wonderlandkid.biliaudio.data.impl.AlbumCoverRepositoryImpl
-import com.wonderlandkid.biliaudio.data.impl.AudioCacheRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AlbumRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.AudioCacheRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.AuthRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.BiliRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.LibraryArchiveRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.LyricsRepositoryImpl
-import com.wonderlandkid.biliaudio.data.impl.PlaylistRepositoryImpl
-import com.wonderlandkid.biliaudio.data.impl.UserDataBackupRepositoryImpl
-import com.wonderlandkid.biliaudio.data.impl.PlaybackStatsRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.MediaStreamResolverImpl
+import com.wonderlandkid.biliaudio.data.impl.PlaybackStatsRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.PlaylistRepositoryImpl
 import com.wonderlandkid.biliaudio.data.impl.SettingsRepositoryImpl
+import com.wonderlandkid.biliaudio.data.impl.UserDataBackupRepositoryImpl
 import com.wonderlandkid.biliaudio.data.net.BiliApi
 import com.wonderlandkid.biliaudio.data.net.CookieStore
 import com.wonderlandkid.biliaudio.data.net.LyricsApiClient
@@ -24,18 +24,18 @@ import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.BiliRepository
 import com.wonderlandkid.biliaudio.data.repository.LibraryArchiveRepository
 import com.wonderlandkid.biliaudio.data.repository.LyricsRepository
-import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
-import com.wonderlandkid.biliaudio.data.repository.UserDataBackupRepository
-import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
 import com.wonderlandkid.biliaudio.data.repository.MediaStreamResolver
+import com.wonderlandkid.biliaudio.data.repository.PlaybackStatsRepository
+import com.wonderlandkid.biliaudio.data.repository.PlaylistRepository
 import com.wonderlandkid.biliaudio.data.repository.SettingsRepository
+import com.wonderlandkid.biliaudio.data.repository.UserDataBackupRepository
 import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.player.PlaybackEngine
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import com.wonderlandkid.biliaudio.util.Diag
 
 /**
  * 应用级依赖容器（手写 DI，避免额外框架）。

@@ -1,7 +1,6 @@
 package com.wonderlandkid.biliaudio.player
 
 import androidx.compose.runtime.Immutable
-
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.data.model.Track
 import com.wonderlandkid.biliaudio.data.model.TrackWithAlbum

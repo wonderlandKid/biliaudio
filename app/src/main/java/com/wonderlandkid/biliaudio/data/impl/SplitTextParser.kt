@@ -1,8 +1,8 @@
 package com.wonderlandkid.biliaudio.data.impl
 
 import com.wonderlandkid.biliaudio.data.model.SegmentSpec
-import kotlin.math.roundToLong
 import com.wonderlandkid.biliaudio.util.Diag
+import kotlin.math.roundToLong
 
 /**
  * 分割点文本解析器。

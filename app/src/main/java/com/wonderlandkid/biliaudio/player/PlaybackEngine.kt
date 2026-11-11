@@ -41,9 +41,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 单例播放引擎：全局唯一的 [ExoPlayer] + 专辑分曲队列 + [PlaybackState] 状态流。

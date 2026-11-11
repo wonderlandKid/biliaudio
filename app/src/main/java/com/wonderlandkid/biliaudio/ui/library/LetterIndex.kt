@@ -128,16 +128,6 @@ object LetterIndex {
  *
  * @param prefixItems 列表顶部固定 item 数（如歌曲列表顶部的「全部歌曲 / 播放全部」行）
  */
-fun <T> List<LetterSection<T>>.sectionStartIndices(prefixItems: Int = 0): Map<String, Int> {
-    val result = LinkedHashMap<String, Int>(size)
-    var index = prefixItems
-    for (section in this) {
-        result[section.label] = index
-        index += section.items.size
-    }
-    return result
-}
-
 /** 根据 Lazy 列表当前首个可见下标反推它属于哪个分组标签（不在任何分组时返回 null）。 */
 fun <T> List<LetterSection<T>>.labelAt(flatIndex: Int, prefixItems: Int = 0): String? {
     var index = prefixItems

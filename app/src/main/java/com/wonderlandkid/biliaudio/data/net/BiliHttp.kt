@@ -1,9 +1,9 @@
 package com.wonderlandkid.biliaudio.data.net
 
+import java.util.concurrent.TimeUnit
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
 
 /**
  * OkHttp 客户端工厂。

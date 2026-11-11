@@ -10,12 +10,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,8 +70,6 @@ fun MiniPlayerBar(
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
     dragModifier: Modifier = Modifier,
-    /** 0 = 普通迷你条；0→1 = 上滑过程中的「自由拉伸」（封面变大、显示进度线）。 */
-    stretchProgress: Float = 0f,
     /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
     onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
@@ -110,11 +105,11 @@ fun MiniPlayerBar(
     ) {
         if (track == null) return@AnimatedVisibility
         val cover = state.queue.getOrNull(state.currentIndex)?.coverModel()
-        val stretch = stretchProgress.coerceIn(0f, 1f)
-        // 自由拉伸：上滑过程中封面/内边距/圆角连续变大，信息区变高，形成「被拉长」的手感。
-        val coverSize = androidx.compose.ui.unit.lerp(46.dp, 70.dp, stretch)
-        val contentVerticalPadding = androidx.compose.ui.unit.lerp(Spacing.sm + 2.dp, Spacing.md + 2.dp, stretch)
-        val shape = RoundedCornerShape(androidx.compose.ui.unit.lerp(24.dp, 28.dp, stretch))
+        // v0.38 起迷你条只作为「连续展开 morph 层」的起点，不再做自身的拉伸；
+        // 展开过程由 AppNavHost 的 PlayerMorphLayer 完成。
+        val coverSize = 46.dp
+        val contentVerticalPadding = Spacing.sm + 2.dp
+        val shape = RoundedCornerShape(24.dp)
         val containerColor = MaterialTheme.colorScheme.surfaceContainer
         val onContainer = MaterialTheme.colorScheme.onSurface
         val blurStyle = remember(containerColor) {
@@ -172,7 +167,7 @@ fun MiniPlayerBar(
                         modifier = Modifier
                             .size(coverSize)
                             .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
-                        cornerRadius = androidx.compose.ui.unit.lerp(14.dp, 18.dp, stretch),
+                        cornerRadius = 14.dp,
                     )
                     Column(
                         modifier = Modifier
@@ -195,28 +190,6 @@ fun MiniPlayerBar(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
                         )
-                        if (stretch > 0.05f) {
-                            val fraction = if (state.trackDurationMs > 0L) {
-                                (state.positionMs.toFloat() / state.trackDurationMs).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = Spacing.xs)
-                                    .fillMaxWidth()
-                                    .height(2.dp)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(onContainer.copy(alpha = 0.15f)),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(fraction)
-                                        .height(2.dp)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                )
-                            }
-                        }
                     }
                     IconButton(onClick = onPrevious) {
                         Icon(

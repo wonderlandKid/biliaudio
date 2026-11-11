@@ -1048,3 +1048,18 @@
   实时频谱只反映当前瞬间，历史位置用已播放染色表达；如需 SoundCloud 式整曲波形，可后续增加
   「缓存音频 → 预先计算 peaks」的离线分析任务。
 - **影响**：NowPlayingScreen（频谱 seekbar、贴边 Haze 音量条、Haze source）修改；文档；204 单测；release v0.38.0。
+
+
+## D66 播放页 UI 拆分与代码整理（v0.39.0）
+
+- **日期**：2026-11-11
+- **背景**：经历 v0.34–v0.38 多轮播放页改造后，`NowPlayingScreen.kt` 超过 1000 行，
+  同时遗留了 v0.34 之前的迷你条 stretch 死代码、占位页、未使用函数与 import。
+- **决策**：
+  1. 按职责拆成 `NowPlayingScreen.kt`（页面壳/顶部标题/分页/频谱权限）、`PlaybackSeekBar.kt`
+     （实时频谱进度条）、`PlaybackControls.kt`（控制行）、`VolumeFineTune.kt`（贴边音量条）；
+  2. 删除不再使用的 `MiniPlayerBar.stretchProgress` 与拉伸布局、`PlaceholderScreens.kt`、
+     `LetterIndex.sectionStartIndices()` 等死代码；
+  3. 全项目清理未使用 import，统一 import 分组并删除多余空行/重复 import；
+  4. README 修复重复「构建」章节、过期技术栈、歌词/播放页操作说明与截图版本。
+- **影响**：无行为/UI 变更；204 单测保持全绿；v0.39.0 为整理版发布。
