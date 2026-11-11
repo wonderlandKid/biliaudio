@@ -73,6 +73,13 @@ fun BiliDetailScaffold(
 - ModalBottomSheet/AlertDialog：属于 T4；
 - 页面内嵌的局部卡片：用 `Surface`/`SettingsCard` 等组件，不是页面模板。
 
+## 2.1 内容组合（v0.32.0）
+
+导航拓扑是严格的树；页面内容不是。页面内部用容器族自由组合：
+`BiliSection`（Box：Card / Plain）+ `BiliShelf` + `BiliGroup`/`BiliGroupItem` + 页面专属业务块，
+内容槽接受任意 Composable（不是只能放 item）。容器族说明见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) §1.1。
+页面专属业务块不等于视觉实验：字体/页头/整体版式仍按严格 M3 规范，视觉例外必须先登记。
+
 ## 3. 状态与数据流约定
 
 每个 Screen 对应一个 ViewModel，Screen 只做：

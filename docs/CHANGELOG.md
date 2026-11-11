@@ -1,5 +1,25 @@
 # 版本记录
 
+## v0.32.0（2026-11-11 · tag `v0.32.0`）
+
+**容器族扩展：Section 支持卡片/无卡片两种模式 + 通用 Shelf；澄清「导航树 ≠ 内容树」**
+
+- 背景：用户询问当前是否强约束（page 必须严格拓扑树、page 只能 group、group 只能 item），
+  并建议多发展几种 group，避免阻碍页面设计。
+- 澄清（文档化）：
+  - **导航拓扑是严格树**（T1/T2/T3/T4、转场只在 AppNavHost），但**页面内容不是**；
+  - `BiliGroup`/`BiliSection` 的内容槽本来就是任意 Composable，`BiliGroupItem` 只是常用行 helper；
+  - 真正的瓶颈是容器族太少：`BiliSection` 之前总是把内容包进卡片，网格/横向墙/编辑式列表只能页面手写。
+- 实现：
+  - `BiliSection` 增加 `container = Card（默认）/ Plain`：Plain 直接把内容放在页面背景上（网格/编辑式列表/横向墙可用），
+    标题/操作/留白仍由容器统一；
+  - 新增通用 `BiliShelf`：带标题栏的横向滚动容器，内容槽是 `LazyListScope`（专辑卡/榜单卡/歌单卡/自定义卡都可放）；
+  - `AlbumShelf` 改为复用 `BiliShelf`（视觉不变，消除重复实现）；
+  - 容器族说明写入 DESIGN_SYSTEM §1.1，PAGE_INVENTORY/UI_ARCHITECTURE/AGENTS 同步澄清「页面不是只能 group+item」。
+- 约束不变：导航/转场/insets/颜色/动效/三态/无障碍仍是强约束；页面版式仍保持严格 M3、不改字体/页头；
+  视觉例外仍需登记并经用户确认。
+- 验证：202 单测全绿；assembleDebug/assembleRelease 成功；发现页标准版式无变化（容器 API 变更向后兼容）。
+
 ## v0.31.1（2026-11-11 · tag `v0.31.1`）
 
 **回退 v0.31.0 发现页大胆版式，恢复严格 Material 3 实用风格**

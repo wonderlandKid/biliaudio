@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.31.1**（tag `v0.31.1`，2026-11-11；release commit 以 `git rev-parse v0.31.1` 为准）
+- **版本：v0.32.0**（tag `v0.32.0`，2026-11-11；release commit 以 `git rev-parse v0.32.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**202 个**（v0.31.1；含 7 个 UI 架构守卫）
+- 单元测试：**202 个**（v0.32.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.31.1: 202 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.32.0: 202 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -74,7 +74,7 @@ scripts/screenshot.sh home 8
    详见 [docs/LYRICS.md](docs/LYRICS.md)。
 7. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
-8. **UI 规范（v0.31.1：严格 Material 3 实用风格 + 页面登记制）**：
+8. **UI 规范（v0.32.0：严格 Material 3 实用风格 + 页面登记制 + 容器族）**：
    - **新页面先登记到 [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)**（类型 T1-T4、路由、入口、默认壳、例外），再写代码；
    - **L0 全局强制**：导航/转场只在 AppNavHost 定义；insets 由外层统一；迷你条留白用 `BiliLayout`；
      loading/empty/error 三态齐全；内容行可播放可高亮；禁止空 `onClick={}`；颜色只用 `MaterialTheme` 语义色；
@@ -84,6 +84,9 @@ scripts/screenshot.sh home 8
      确需例外必须先登记 PAGE_INVENTORY §5，经用户确认后再做；
    - **L2 页面内部实现自由，但版式保持实用克制**：不得私自改字体/页头/版式风格；视觉例外需登记并先经用户确认；
      页面私有 Composable 只用于业务结构（不是视觉实验），且不得复制已有共享组件；
+   - **导航拓扑树 ≠ 页面内容树**：页面内部不是「只能 group 包 item」，而是自由组合容器族
+     （`BiliSection` Card/Plain、`BiliShelf`、`BiliGroup`、页面专属块；内容槽接受任意 Composable）；
+     容器族见 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) §1.1；
    - 共享组件是工具箱：`CoverImage`/`AlbumCard`/`TrackRow`/`BiliGroup`/`BiliSection`/`SearchField`/`EmptyState` 等按需使用；
      设置卡片首行仍用 `BiliGroupHeader`；
    - 发现页保持标准 M3 模板（`BiliPageHeader` + `BiliSection` + `BiliAlbumRow`），由守卫保证；不要擅自改字体/版式；
@@ -126,7 +129,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.31.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.32.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

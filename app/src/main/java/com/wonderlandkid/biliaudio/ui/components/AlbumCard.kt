@@ -70,21 +70,19 @@ fun AlbumShelf(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    Column(modifier = modifier) {
-        if (title != null) {
-            SectionHeader(title = title, actionLabel = actionLabel, onAction = onAction)
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            contentPadding = PaddingValues(horizontal = Spacing.lg),
-        ) {
-            items(albums, key = { it.id }) { album ->
-                AlbumCard(
-                    album = album,
-                    onClick = { onAlbumClick(album.id) },
-                    modifier = Modifier.width(140.dp),
-                )
-            }
+    BiliShelf(
+        title = title,
+        actionLabel = actionLabel,
+        onAction = onAction,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = Spacing.lg),
+    ) {
+        items(albums, key = { it.id }) { album ->
+            AlbumCard(
+                album = album,
+                onClick = { onAlbumClick(album.id) },
+                modifier = Modifier.width(140.dp),
+            )
         }
     }
 }

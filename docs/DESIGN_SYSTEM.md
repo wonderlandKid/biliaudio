@@ -15,6 +15,26 @@
 | **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片（页内左右分页：封面/歌词） | `NowPlayingScreen` / `NowPlayingLyricsPane` |
 | **T4 弹层/对话框** | 盖在当前页上，不参与导航转场 | 播放列表、封面选择、封面大图、确认框、新建/重命名歌单 | `ModalBottomSheet` / `AlertDialog` / `Dialog` |
 
+### 1.1 容器族（v0.32.0）
+
+**导航拓扑树 ≠ 页面内容树**：导航层是严格树（Tab / 详情 / 沉浸 / 弹层），
+但页面内部不是「只能 group 包 item」。容器是工具箱，页面自由组合：
+
+| 容器族 | 实现 | 内容槽 | 说明 |
+| --- | --- | --- | --- |
+| **Section** | `BiliSection` | `ColumnScope`（任意 Composable） | 区块标题 + 操作 + 内容；`container = Card`（默认，卡片）或 `Plain`（直接放页面背景，适合网格/编辑式列表） |
+| **Shelf** | `BiliShelf` | `LazyListScope`（任意横向 item） | 带标题栏的横向滚动区；专辑卡、榜单卡、歌单卡、自定义卡都可以放 |
+| **CardGroup** | `BiliGroup` + `BiliGroupHeader` + `BiliGroupItem` | `ColumnScope` | 卡片分组；`BiliGroupItem` 只是常用「行」helper，不是唯一允许内容 |
+| **Grid** | 页面级：`LazyVerticalGrid` 或 `BiliSection(Plain) { chunked 行 }` | 自定义 | 网格分区目前允许页面自定（有 letter 分组等特殊需求） |
+| **Rank / Stat** | 组合 `BiliGroupItem`/`BiliGroupHeader`/自定义行 | 任意 | 统计/榜单没有独立模板，允许页面组合容器 |
+| **Form** | `BiliGroupItem` + 输入控件 | 任意 | 设置/导入表单 |
+| **Message** | `EmptyState` / `LoadingBox` | - | 空态/加载态 |
+
+容器只负责一致性属性：页面左右留白、区块标题样式、卡片圆角/背景、点击/无障碍、间距 token。
+**内容槽接受任意 Composable**；页面可以只用容器、也可以写页面专属业务块（需在 PAGE_INVENTORY 登记）。
+不要在每个页面里复制同一套容器（例如再手写一个 `Surface(cardCorner)` 卡片）。
+
+
 ### 页面清单
 
 | 页面 | 类型 | 入口 | 页面壳 |

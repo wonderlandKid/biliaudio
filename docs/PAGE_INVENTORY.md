@@ -78,6 +78,14 @@
 
 ### L2 页面内部（自由）
 
+> **导航拓扑树 ≠ 页面内容树**。页面是导航层的节点；页面内部由容器族自由组合，
+> 不是「page 只能 group、group 只能 item」：
+> - 容器族见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) §1.1（Section card/plain、Shelf、CardGroup、Grid、Rank/Form、Message）；
+> - `BiliSection` 内容槽是 `ColumnScope`、`BiliShelf` 内容槽是 `LazyListScope`、`BiliGroup` 内容槽是 `ColumnScope`，
+>   都可以放任意 Composable；`BiliGroupItem` 只是常用行 helper，不是唯一内容类型；
+> - 页面可以不用任何共享容器，直接写页面专属业务结构（但不得复制已有共享组件的实现）。
+
+
 页面可以自由决定业务结构（区块划分、列表/网格、页面私有 Composable 的组织方式），
 但**版式保持实用克制、沿用共享 M3 组件与 token**，不得私自改字体/页头/整体版式；
 视觉例外需登记并先经用户确认。只要满足 L0 与「不复制已有共享组件」。

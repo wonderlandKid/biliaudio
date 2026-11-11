@@ -885,3 +885,23 @@
   5. 胶囊问题：M3 chip 本身就是胶囊；本次只回退新增版式，不在未确认的情况下全局替换 M3 chip。
 - **影响**：HomeScreen 恢复 429 行标准版式；PAGE_INVENTORY/UI_ARCHITECTURE/DESIGN_SYSTEM/AGENTS 同步回退；
   202 单测全绿（守卫 7 条）；release v0.31.1。
+
+
+## D59 容器族扩展：导航树 ≠ 内容树，页面不强制 group+item（v0.32.0）
+
+- **日期**：2026-11-11
+- **背景**：用户询问当前模板是否强约束（page 严格拓扑树、page 只能 group、group 只能 item），
+  并建议多发展几种 group，避免限制页面设计。
+- **澄清**：
+  - 导航拓扑确实是严格树（T1/T2/T3/T4；转场只在 AppNavHost；返回/insets 统一），这是稳定性要求；
+  - 但页面内容不是「group 包 item」：`BiliGroup`/`BiliSection` 的内容槽是 `ColumnScope`，
+    `BiliShelf` 是 `LazyListScope`，都可以放任意 Composable；`BiliGroupItem` 只是常用行 helper；
+  - 真正的限制是容器族偏少 + `BiliSection` 总是把内容包成卡片，导致网格/横向墙/编辑式列表只能页面手写。
+- **决策**：
+  1. `BiliSection` 增加容器模式：`Card`（默认，保持现网视觉）与 `Plain`（内容直接放页面背景）；
+  2. 新增通用 `BiliShelf`（标题栏 + 横向滚动内容槽），`AlbumShelf` 复用（视觉不变）；
+  3. 文档明确「导航拓扑树 ≠ 页面内容树」；容器族：Section（Card/Plain）/ Shelf / CardGroup / Grid（页面级）/
+     Rank/Form（组合）/ Message（EmptyState），容器只负责一致性属性，内容自由；
+  4. 不新增强制模板：页面可自由组合容器；T1/T2 默认壳、L0 约束与视觉克制要求不变。
+- **影响**：`BiliSection` 向后兼容；新增 `BiliShelf`；`AlbumShelf` 内部复用；DESIGN_SYSTEM/PAGE_INVENTORY/
+  UI_ARCHITECTURE/AGENTS 更新；202 单测全绿；release v0.32.0。
