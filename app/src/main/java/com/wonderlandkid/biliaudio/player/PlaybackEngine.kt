@@ -419,6 +419,27 @@ class PlaybackEngine private constructor(
         player.shuffleModeEnabled = !player.shuffleModeEnabled
     }
 
+    override fun cyclePlaybackMode() {
+        when (_state.value.playbackMode.next()) {
+            PlaybackMode.SHUFFLE -> {
+                player.repeatMode = Player.REPEAT_MODE_OFF
+                player.shuffleModeEnabled = true
+            }
+            PlaybackMode.SEQUENTIAL -> {
+                player.shuffleModeEnabled = false
+                player.repeatMode = Player.REPEAT_MODE_OFF
+            }
+            PlaybackMode.LOOP_ALL -> {
+                player.shuffleModeEnabled = false
+                player.repeatMode = Player.REPEAT_MODE_ALL
+            }
+            PlaybackMode.LOOP_ONE -> {
+                player.shuffleModeEnabled = false
+                player.repeatMode = Player.REPEAT_MODE_ONE
+            }
+        }
+    }
+
     override fun dismissError() {
         _state.update { it.copy(error = null) }
     }

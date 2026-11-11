@@ -113,7 +113,7 @@ private fun HomeContent(
         contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        item(key = "header") { HomeHeader(statsText = state.statsText) }
+        item(key = "header") { HomeHeader() }
         if (!state.isLoggedIn) {
             item(key = "loginBanner") { LoginBanner(onOpenLogin = onOpenLogin) }
         }
@@ -181,8 +181,8 @@ private fun HomeContent(
 }
 
 @Composable
-private fun HomeHeader(statsText: String) {
-    BiliPageHeader(title = "发现", subtitle = statsText)
+private fun HomeHeader() {
+    BiliPageHeader(title = "发现")
 }
 
 @Composable

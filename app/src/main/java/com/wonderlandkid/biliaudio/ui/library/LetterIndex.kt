@@ -118,10 +118,13 @@ object LetterIndex {
 
 // ---------------------------------------------------------------------------
 // Lazy 列表下标工具：用于「索引栏点击/拖动 → 滚动到分组」以及反查当前分组
+//
+// v0.33.0 起音乐库列表不再渲染字母分隔标题（LetterHeader），Lazy 列表里每个分组
+// 只占 items.size 个条目 → 下面所有下标计算都不再 +1。
 // ---------------------------------------------------------------------------
 
 /**
- * 计算每个分组在 Lazy 列表中的起始下标（每组 = 1 个分组标题 + items.size 个条目）。
+ * 计算每个分组在 Lazy 列表中的起始下标（列表不含分组标题 item，每组 = items.size 个条目）。
  *
  * @param prefixItems 列表顶部固定 item 数（如歌曲列表顶部的「全部歌曲 / 播放全部」行）
  */
@@ -130,7 +133,7 @@ fun <T> List<LetterSection<T>>.sectionStartIndices(prefixItems: Int = 0): Map<St
     var index = prefixItems
     for (section in this) {
         result[section.label] = index
-        index += 1 + section.items.size
+        index += section.items.size
     }
     return result
 }
@@ -139,7 +142,7 @@ fun <T> List<LetterSection<T>>.sectionStartIndices(prefixItems: Int = 0): Map<St
 fun <T> List<LetterSection<T>>.labelAt(flatIndex: Int, prefixItems: Int = 0): String? {
     var index = prefixItems
     for (section in this) {
-        val end = index + 1 + section.items.size
+        val end = index + section.items.size
         if (flatIndex < end) return section.label
         index = end
     }
@@ -149,6 +152,8 @@ fun <T> List<LetterSection<T>>.labelAt(flatIndex: Int, prefixItems: Int = 0): St
 /**
  * 索引栏选中 [label] 时应该滚动到的列表下标：
  * 取「标签顺序 >= label 的第一个分组」；若选中的字母没有分组，则落到下一组 / 最后一组。
+ *
+ * 列表不含分组标题 item，每个分组第一个条目的下标 = 之前所有分组的条目数之和。
  */
 fun <T> List<LetterSection<T>>.scrollTargetFor(label: String, prefixItems: Int = 0): Int {
     if (isEmpty()) return prefixItems
@@ -156,7 +161,7 @@ fun <T> List<LetterSection<T>>.scrollTargetFor(label: String, prefixItems: Int =
     var index = prefixItems
     for (section in this) {
         if (LetterIndex.letterOrder(section.label) >= wanted) return index
-        index += 1 + section.items.size
+        index += section.items.size
     }
-    return index - (1 + last().items.size)
+    return index - last().items.size
 }

@@ -905,3 +905,35 @@
   4. 不新增强制模板：页面可自由组合容器；T1/T2 默认壳、L0 约束与视觉克制要求不变。
 - **影响**：`BiliSection` 向后兼容；新增 `BiliShelf`；`AlbumShelf` 内部复用；DESIGN_SYSTEM/PAGE_INVENTORY/
   UI_ARCHITECTURE/AGENTS 更新；202 单测全绿；release v0.32.0。
+
+
+## D60 播放器精简 + 播放模式合并 + 迷你条自由拉伸（v0.33.0）
+
+- **日期**：2026-11-11
+- **背景**：用户要求：
+
+  1）迷你播放条做成类似椒盐音乐 / 柠檬音乐的「自由拉伸」展开效果；
+  2）播放页去掉顶栏（收起箭头/中央「正在播放」/跳转专辑按钮）、去掉左右分页指示条、
+  去掉「专辑进度」文字；整体播放与进度条上移，播放按钮接近原进度条位置；
+  播放模式合并为一个按钮（随机 / 顺序 / 列表循环 / 单曲循环），右侧第五个按钮改为播放列表；
+  3）进度条换成更美观的样式（参考最新 Android 的 M3 Expressive 风格）；
+  4）发现/音乐库/设置根页面去掉数量统计、「关于」分区；音乐库去掉字母分隔头。
+
+- **决策**：
+  1. **迷你条自由拉伸**：不改现有上下连续展开架构，在 AppNavHost 中把展开进度拆成
+     `miniStretch`（0→0.14，迷你条自身长大）与 `openProgress`（0.14→1，播放页卡片展开）；
+     `MiniPlayerBar` 接收 `stretchProgress`，连续插值封面大小/内边距/圆角并显示 2dp 进度线。
+  2. **播放模式单按钮**：新增 `PlaybackMode`（SHUFFLE/SEQUENTIAL/LOOP_ALL/LOOP_ONE）与
+     `PlaybackState.playbackMode` 派生属性；`PlaybackController.cyclePlaybackMode()` 由引擎映射到
+     Media3 的 shuffle + repeat 组合；顺序播放 = shuffle 关 + repeat OFF（播完停止）。
+  3. **播放页重排**：移除顶栏/分页指示条/专辑进度文字；底部只保留「进度条 + 等宽时间 + 控制行」，
+     用底部留白把控制区整体上移；控制行 = 模式 / 上一首 / 播放暂停 / 下一首 / 播放列表；
+     顶部保留 48dp 透明下拉关闭热区（无可见箭头）。
+  4. **进度条**：不引入新依赖，自绘 M3 Expressive 风格 seekbar（8dp 圆角轨道、突显滑块、
+     拖动放大、点击/拖动定位、无障碍进度语义）。
+  5. **根页面**：只删信息不改信息架构——发现/音乐库页头去统计；音乐库去字母分隔头但保留排序与索引栏；
+     设置删除「关于」分区与页头副标题。
+
+- **影响**：`PlaybackContracts`/`PlaybackEngine`/`NowPlayingViewModel`/`NowPlayingScreen`/`MiniPlayerBar`/
+  `AppNavHost`/`HomeScreen`/`LibraryScreen`/`SettingsScreen`/`LetterIndex` 修改；
+  新增 `PlaybackModeTest`；204 单测；release v0.33.0。

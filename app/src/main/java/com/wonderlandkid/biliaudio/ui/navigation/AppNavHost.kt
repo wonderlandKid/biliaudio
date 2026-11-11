@@ -193,6 +193,11 @@ fun AppNavHost() {
         },
     )
 
+    // 迷你条自由拉伸：把 0→0.14 的展开进度映射成迷你条自身的「拉伸」（封面变大、
+    // 信息变多），0.14 之后播放页卡片接管并从底部连续展开。
+    val miniStretch = (playerProgress / 0.14f).coerceIn(0f, 1f)
+    val openProgress = ((playerProgress - 0.14f) / 0.86f).coerceIn(0f, 1f)
+
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
         Routes.LIBRARY -> MainTab.LIBRARY
@@ -499,11 +504,17 @@ fun AppNavHost() {
 
             // 悬浮迷你播放条（播放页展开时淡出并让位给播放页卡片）
             if (showMiniPlayer) {
-                val miniAlpha = (1f - playerProgress / 0.16f).coerceIn(0f, 1f)
+                // 拉伸阶段保持完全不透明；播放页卡片从 0.14 起接管时再淡出，避免拉伸过程被提前遮住。
+                val miniAlpha = if (playerProgress <= 0.14f) {
+                    1f
+                } else {
+                    (1f - ((playerProgress - 0.14f) / 0.10f)).coerceIn(0f, 1f)
+                }
                 MiniPlayerHost(
                     playbackController = container.playbackController,
                     onClick = { animatePlayerTo(true) },
                     dragModifier = playerDragModifier,
+                    stretchProgress = miniStretch,
                     hazeState = hazeState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -512,17 +523,17 @@ fun AppNavHost() {
                 )
             }
 
-            // 正在播放页：以底部卡片形式连续展开（progress 0→1）
-            if (playerProgress > 0.001f) {
-                val horizontalInset = (18.dp * (1f - playerProgress))
+            // 正在播放页：迷你条先自由拉伸（0→0.14），随后播放页卡片从底部连续展开（0.14→1）
+            if (playerProgress > 0.14f) {
+                val horizontalInset = (18.dp * (1f - openProgress))
                     .coerceAtLeast(0.dp)
-                val topRadius = (28.dp * (1f - playerProgress))
+                val topRadius = (28.dp * (1f - openProgress))
                     .coerceAtLeast(0.dp)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            translationY = (1f - playerProgress) * size.height
+                            translationY = (1f - openProgress) * size.height
                         }
                         .padding(horizontal = horizontalInset)
                         .clip(
@@ -538,14 +549,7 @@ fun AppNavHost() {
                     BackHandler(enabled = playerProgress > 0.01f) {
                         animatePlayerTo(false)
                     }
-                    NowPlayingScreen(
-                        onBack = { animatePlayerTo(false) },
-                        dragModifier = playerDragModifier,
-                        onOpenAlbum = { albumId ->
-                            animatePlayerTo(false)
-                            navController.navigate(Routes.album(albumId))
-                        },
-                    )
+                    NowPlayingScreen()
                     // 播放页顶部下拉关闭区域（48dp 高、上滑展开后手指可在顶部向下拖回迷你条）
                     Box(
                         modifier = Modifier
@@ -643,6 +647,7 @@ private fun MiniPlayerHost(
     playbackController: PlaybackController,
     onClick: () -> Unit,
     dragModifier: Modifier,
+    stretchProgress: Float,
     hazeState: dev.chrisbanes.haze.HazeState?,
     modifier: Modifier = Modifier,
 ) {
@@ -655,6 +660,7 @@ private fun MiniPlayerHost(
         onNext = { playbackController.next() },
         hazeState = hazeState,
         dragModifier = dragModifier,
+        stretchProgress = stretchProgress,
         modifier = modifier,
     )
 }

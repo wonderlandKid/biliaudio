@@ -4,8 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,11 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -40,7 +42,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -55,19 +56,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.wonderlandkid.biliaudio.player.QueueEntry
+import com.wonderlandkid.biliaudio.player.PlaybackMode
 import com.wonderlandkid.biliaudio.player.PlaybackState
-import com.wonderlandkid.biliaudio.player.RepeatMode
+import com.wonderlandkid.biliaudio.player.QueueEntry
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
@@ -78,34 +84,30 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 import kotlinx.coroutines.launch
 
-/** 播放页横向分页：0 = 封面页，1 = 歌词页（左右滑动切换）。 */
+/** 播放页横向分页：0 = 封面页，1 = 歌词页（左右滑动切换，无指示条）。 */
 private const val COVER_PAGE = 0
 private const val LYRICS_PAGE = 1
 private const val PAGE_COUNT = 2
 
 /**
- * 正在播放页（全屏路由）。
+ * 正在播放页（v0.33.0）。
  *
- * 结构（v0.28.0）：主题色渐变背景 + 顶栏 + **左右滑动切换的封面页/歌词页** + 分曲进度条 +
- * 播放控制 + 播放列表面板。歌词与播放页合为一体，不再有「看歌词」按钮和独立歌词覆盖层：
- * - 第 1 页（左）：大封面 + 曲名/艺术家；点封面也可以进入歌词页；
- * - 第 2 页（右）：内嵌歌词（自动匹配、逐行/逐字高亮、平滑滚动、来源/偏移）；
- * - 底部进度/控制固定，不随分页滑动；歌词页按返回键先回到封面页。
+ * 布局：
+ * - 背景主题色渐变；
+ * - 无顶栏（去掉左上角收起箭头 / 中央「正在播放」/ 右上角专辑与队列入口）；
+ * - 左右翻页：封面页 / 歌词页（无分页指示条，点封面或左右滑仍可切歌词）；
+ * - 固定底部：自绘进度条 + 等宽时间 + 播放控制；
+ *   播放控制：①合并后的播放模式按钮（随机→顺序→列表循环→单曲循环）
+ *   ②上一首 ③播放/暂停 ④下一首 ⑤播放列表；
+ * - 去掉「专辑进度」文字；整体控制区通过底部留白上移。
  *
- * 注意：
- * - 本页是导航层之外的全屏路由，由页面内的 Scaffold 自行处理系统栏 insets；
- * - 通知权限（POST_NOTIFICATIONS）由 MainActivity 统一申请，这里不处理。
- *
- * @param onBack 返回上一页
- * @param onOpenAlbum 打开当前专辑详情（可选，不传则顶部不显示入口）
+ * 本页是导航层之外的全屏覆盖层，insets 由页面内 Scaffold 处理；
+ * 上滑展开/下拉收起由 AppNavHost 的连续手势驱动（页面顶部保留 48dp 下拉关闭热区）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingScreen(
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    dragModifier: Modifier = Modifier,
-    onOpenAlbum: (Long) -> Unit = {},
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
     },
@@ -144,15 +146,6 @@ fun NowPlayingScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                // 顶部栏整块可下拉收起播放页（内部按钮点击不受影响）
-                Box(modifier = dragModifier) {
-                    NowPlayingTopBar(
-                        onBack = onBack,
-                        canOpenAlbum = state.currentAlbumId != null,
-                        onOpenAlbum = { state.currentAlbumId?.let(onOpenAlbum) },
-                        onTogglePlaylist = { showPlaylist = true },
-                    )
-                }
                 if (state.isLoading) {
                     LinearProgressIndicator(
                         modifier = Modifier
@@ -190,8 +183,8 @@ fun NowPlayingScreen(
                         onTogglePlay = viewModel::togglePlayPause,
                         onNext = viewModel::next,
                         onPrevious = viewModel::previous,
-                        onCycleRepeat = viewModel::cycleRepeatMode,
-                        onToggleShuffle = viewModel::toggleShuffle,
+                        onCyclePlaybackMode = viewModel::cyclePlaybackMode,
+                        onOpenPlaylist = { showPlaylist = true },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -215,42 +208,10 @@ fun NowPlayingScreen(
     }
 }
 
-@Composable
-private fun NowPlayingTopBar(
-    onBack: () -> Unit,
-    canOpenAlbum: Boolean,
-    onOpenAlbum: () -> Unit,
-    onTogglePlaylist: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "返回")
-        }
-        Text(
-            text = "正在播放",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.Center,
-        )
-        if (canOpenAlbum) {
-            IconButton(onClick = onOpenAlbum) {
-                Icon(Icons.Rounded.Album, contentDescription = "专辑详情")
-            }
-        }
-        IconButton(onClick = onTogglePlaylist) {
-            Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "播放列表")
-        }
-    }
-}
-
 /**
- * 播放页主体：横向分页（封面 / 歌词）+ 分页指示器 + 固定的进度条与播放控制。
+ * 播放页主体：横向分页（封面 / 歌词）+ 底部固定进度与控制。
+ *
+ * 底部控制区上方没有分页指示条、没有专辑进度文字；控制区整体靠底部留白上移。
  */
 @Composable
 private fun NowPlayingBody(
@@ -259,15 +220,15 @@ private fun NowPlayingBody(
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onCycleRepeat: () -> Unit,
-    onToggleShuffle: () -> Unit,
+    onCyclePlaybackMode: () -> Unit,
+    onOpenPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
     val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
     val scope = rememberCoroutineScope()
 
-    // 歌词页按返回键：先滑回封面页，不直接关播放页（与「上下/左右」层级关系一致）。
+    // 歌词页按返回键：先滑回封面页，不直接关播放页。
     BackHandler(enabled = pagerState.currentPage == LYRICS_PAGE) {
         scope.launch { pagerState.animateScrollToPage(COVER_PAGE) }
     }
@@ -289,27 +250,45 @@ private fun NowPlayingBody(
                 )
             }
         }
-        PageDots(
-            currentPage = pagerState.currentPage,
-            onSelect = { page -> scope.launch { pagerState.animateScrollToPage(page) } },
-        )
         Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
-            TrackProgressSection(state = state, onSeek = onSeek)
-            Spacer(Modifier.height(Spacing.xs))
+            PlaybackSeekBar(
+                positionMs = state.positionMs,
+                durationMs = state.trackDurationMs,
+                onSeek = onSeek,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.xxs),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = TimeUtils.formatDuration(state.positionMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = TimeUtils.formatDuration(state.trackDurationMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(Spacing.sm))
             ControlsRow(
                 state = state,
                 onTogglePlay = onTogglePlay,
                 onNext = onNext,
                 onPrevious = onPrevious,
-                onCycleRepeat = onCycleRepeat,
-                onToggleShuffle = onToggleShuffle,
+                onCyclePlaybackMode = onCyclePlaybackMode,
+                onOpenPlaylist = onOpenPlaylist,
             )
-            Spacer(Modifier.height(Spacing.md))
+            // 底部留白：让控制区/进度条相对原来的「贴底」布局整体上移
+            Spacer(Modifier.height(Spacing.xxxl))
         }
     }
 }
 
-/** 封面页：大封面 + 曲名/艺术家；点封面（或左右滑动）进入歌词页。 */
+/** 封面页：大封面 + 曲名/艺术家；点封面进入歌词页（没有分页指示条）。 */
 @Composable
 private fun NowPlayingCoverPage(
     state: PlaybackState,
@@ -321,7 +300,6 @@ private fun NowPlayingCoverPage(
         modifier = modifier.padding(horizontal = Spacing.lg),
         horizontalAlignment = Alignment.Start,
     ) {
-        // 大封面：在剩余空间内取 min(可用宽, 可用高) 的正方形，小屏不会溢出
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
@@ -330,7 +308,6 @@ private fun NowPlayingCoverPage(
             contentAlignment = Alignment.Center,
         ) {
             val coverSize = minOf(maxWidth * 0.94f, maxHeight * 0.98f)
-            // 暂停时封面轻微缩小，播放时恢复；比“只换按钮图标”更有播放/暂停的体感。
             val coverScale by animateFloatAsState(
                 targetValue = if (state.isPlaying) 1f else 0.92f,
                 animationSpec = tween(
@@ -339,7 +316,6 @@ private fun NowPlayingCoverPage(
                 ),
                 label = "coverScale",
             )
-            // 封面优先用本机自定义封面（coverLocalPath），否则回退 B 站远程图
             CoverImage(
                 url = entry?.coverModel(),
                 modifier = Modifier
@@ -373,138 +349,139 @@ private fun NowPlayingCoverPage(
 }
 
 /**
- * 分页指示器：封面页 / 歌词页两个小圆点，当前页拉长为胶囊；可点击切换。
+ * 自绘播放进度条（Material 3 Expressive 风格：厚轨道 + 大滑块 + 拖动时滑块放大）。
  *
- * 代替 v0.27.0 的「看歌词」按钮：歌词与播放页同页后，用滑动 + 指示器表达两页关系。
+ * 支持点击/拖动定位、无障碍进度语义；不显示专辑进度等额外文字。
  */
 @Composable
-private fun PageDots(
-    currentPage: Int,
-    onSelect: (Int) -> Unit,
+private fun PlaybackSeekBar(
+    positionMs: Long,
+    durationMs: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier
+    val maxValue = durationMs.coerceAtLeast(1L).toFloat()
+    var dragValue by remember { mutableStateOf<Float?>(null) }
+    var dragging by remember { mutableStateOf(false) }
+    val displayValue = (dragValue ?: positionMs.toFloat()).coerceIn(0f, maxValue)
+    val progress = (displayValue / maxValue).coerceIn(0f, 1f)
+
+    val thumbRadius by animateDpAsState(
+        targetValue = if (dragging) 9.dp else 6.dp,
+        animationSpec = tween(
+            durationMillis = BiliMotion.Short4,
+            easing = BiliMotion.Emphasized,
+        ),
+        label = "seekThumbRadius",
+    )
+    val density = LocalDensity.current
+    val thumbRadiusPx = with(density) { thumbRadius.toPx() }
+    val trackHeightPx = with(density) { 8.dp.toPx() }
+    val haloRadiusPx = with(density) { 2.dp.toPx() }
+
+    val activeColor = MaterialTheme.colorScheme.primary
+    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
+    val haloColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+
+    Box(
+        modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+            .height(40.dp)
+            .semantics {
+                contentDescription = "播放进度"
+                progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f)
+            }
+            .pointerInput(maxValue) {
+                detectTapGestures { offset ->
+                    val ratio = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                    onSeek((ratio * maxValue).toLong())
+                }
+            }
+            .pointerInput(maxValue) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        dragging = true
+                        dragValue = (
+                            offset.x / size.width.toFloat() * maxValue
+                            ).coerceIn(0f, maxValue)
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        dragValue = (
+                            change.position.x / size.width.toFloat() * maxValue
+                            ).coerceIn(0f, maxValue)
+                    },
+                    onDragEnd = {
+                        dragValue?.let { onSeek(it.toLong()) }
+                        dragValue = null
+                        dragging = false
+                    },
+                    onDragCancel = {
+                        dragValue = null
+                        dragging = false
+                    },
+                )
+            },
     ) {
-        repeat(PAGE_COUNT) { index ->
-            val selected = index == currentPage
-            val dotWidth by animateDpAsState(
-                targetValue = if (selected) 18.dp else 6.dp,
-                animationSpec = tween(
-                    durationMillis = BiliMotion.LyricsActiveMs,
-                    easing = BiliMotion.Emphasized,
-                ),
-                label = "pageDotWidth$index",
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerY = size.height / 2f
+            drawRoundRect(
+                color = inactiveColor,
+                topLeft = Offset(0f, centerY - trackHeightPx / 2f),
+                size = Size(size.width, trackHeightPx),
+                cornerRadius = CornerRadius(trackHeightPx / 2f),
             )
-            val dotAlpha by animateFloatAsState(
-                targetValue = if (selected) 1f else 0.3f,
-                animationSpec = tween(
-                    durationMillis = BiliMotion.LyricsActiveMs,
-                    easing = BiliMotion.Emphasized,
-                ),
-                label = "pageDotAlpha$index",
-            )
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = Spacing.xxs)
-                    .size(width = 28.dp, height = 28.dp)
-                    .semantics {
-                        contentDescription = if (index == COVER_PAGE) "封面页" else "歌词页"
-                    }
-                    .clickable { onSelect(index) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = dotWidth, height = 6.dp)
-                        .clip(CircleShape)
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha),
-                        ),
+            val activeWidth = size.width * progress
+            if (activeWidth > 0f) {
+                drawRoundRect(
+                    color = activeColor,
+                    topLeft = Offset(0f, centerY - trackHeightPx / 2f),
+                    size = Size(activeWidth, trackHeightPx),
+                    cornerRadius = CornerRadius(trackHeightPx / 2f),
                 )
             }
-        }
-    }
-}
-
-/** 分曲进度条 + 时间 + 专辑绝对进度。 */
-@Composable
-private fun TrackProgressSection(
-    state: PlaybackState,
-    onSeek: (Long) -> Unit,
-) {
-    var dragValue by remember { mutableStateOf<Float?>(null) }
-    val maxValue = state.trackDurationMs.coerceAtLeast(1L).toFloat()
-    val displayValue = (dragValue ?: state.positionMs.toFloat()).coerceIn(0f, maxValue)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Slider(
-            value = displayValue,
-            onValueChange = { dragValue = it },
-            onValueChangeFinished = {
-                dragValue?.let { onSeek(it.toLong()) }
-                dragValue = null
-            },
-            valueRange = 0f..maxValue,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = TimeUtils.formatDuration(displayValue.toLong()),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            val safeWidth = (size.width - thumbRadiusPx).coerceAtLeast(thumbRadiusPx)
+            val centerX = activeWidth.coerceIn(thumbRadiusPx, safeWidth)
+            drawCircle(
+                color = haloColor,
+                radius = thumbRadiusPx + haloRadiusPx,
+                center = Offset(centerX, centerY),
             )
-            Text(
-                text = TimeUtils.formatDuration(state.trackDurationMs),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (state.albumDurationMs > 0L) {
-            Text(
-                text = "专辑进度 " +
-                    TimeUtils.formatDuration(state.albumPositionMs) +
-                    " / " +
-                    TimeUtils.formatDuration(state.albumDurationMs),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = Spacing.xxs),
+            drawCircle(
+                color = activeColor,
+                radius = thumbRadiusPx,
+                center = Offset(centerX, centerY),
             )
         }
     }
 }
 
-/** 随机 / 上一首 / 播放暂停 / 下一首 / 循环。 */
+/**
+ * 播放控制：合并播放模式 + 上一首 + 播放/暂停 + 下一首 + 播放列表。
+ */
 @Composable
 private fun ControlsRow(
     state: PlaybackState,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onCycleRepeat: () -> Unit,
-    onToggleShuffle: () -> Unit,
+    onCyclePlaybackMode: () -> Unit,
+    onOpenPlaylist: () -> Unit,
 ) {
+    val mode = state.playbackMode
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onToggleShuffle) {
+        IconButton(onClick = onCyclePlaybackMode) {
             Icon(
-                imageVector = Icons.Rounded.Shuffle,
-                contentDescription = if (state.shuffle) "关闭随机播放" else "开启随机播放",
-                tint = if (state.shuffle) {
-                    MaterialTheme.colorScheme.primary
-                } else {
+                imageVector = modeIcon(mode),
+                contentDescription = "播放模式：${modeLabel(mode)}（点击切换）",
+                tint = if (mode == PlaybackMode.SEQUENTIAL) {
                     MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
                 },
             )
         }
@@ -540,23 +517,26 @@ private fun ControlsRow(
                 modifier = Modifier.size(36.dp),
             )
         }
-        IconButton(onClick = onCycleRepeat) {
+        IconButton(onClick = onOpenPlaylist) {
             Icon(
-                imageVector = when (state.repeatMode) {
-                    RepeatMode.ONE -> Icons.Rounded.RepeatOne
-                    else -> Icons.Rounded.Repeat
-                },
-                contentDescription = when (state.repeatMode) {
-                    RepeatMode.OFF -> "开启列表循环"
-                    RepeatMode.ALL -> "切换为单曲循环"
-                    RepeatMode.ONE -> "关闭循环"
-                },
-                tint = if (state.repeatMode == RepeatMode.OFF) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                contentDescription = "播放列表",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
+}
+
+private fun modeIcon(mode: PlaybackMode) = when (mode) {
+    PlaybackMode.SHUFFLE -> Icons.Rounded.Shuffle
+    PlaybackMode.SEQUENTIAL -> Icons.AutoMirrored.Rounded.PlaylistPlay
+    PlaybackMode.LOOP_ALL -> Icons.Rounded.Repeat
+    PlaybackMode.LOOP_ONE -> Icons.Rounded.RepeatOne
+}
+
+private fun modeLabel(mode: PlaybackMode): String = when (mode) {
+    PlaybackMode.SHUFFLE -> "随机播放"
+    PlaybackMode.SEQUENTIAL -> "顺序播放"
+    PlaybackMode.LOOP_ALL -> "列表循环"
+    PlaybackMode.LOOP_ONE -> "单曲循环"
 }

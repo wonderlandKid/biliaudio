@@ -30,9 +30,17 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 ## 界面截图
 
-| 发现（Material 3，Light） | 播放页（封面页） | 播放页（歌词页，右滑） |
+| 发现（v0.33，Light） | 播放页（v0.33 简化版式） | 播放页（歌词页，右滑） |
 | --- | --- | --- |
-| ![home](docs/screenshots/v030_home_light.png) | ![player](docs/screenshots/v030_player_cover.png) | ![lyrics](docs/screenshots/v030_player_lyrics.png) |
+| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v033_player_light.png) | ![lyrics](docs/screenshots/v033_player_lyrics_light.png) |
+
+| 播放页（Dark） | 音乐库（无字母分隔头） | 设置（无「关于」分区） |
+| --- | --- | --- |
+| ![player-dark](docs/screenshots/v033_player_dark.png) | ![library](docs/screenshots/v033_library_light.png) | ![settings](docs/screenshots/v033_settings_light.png) |
+
+| 迷你播放条自由拉伸（上滑中） |
+| --- |
+| ![stretch](docs/screenshots/v033_mini_stretch.png) |
 
 | 分曲编辑 | 搜索导入 | 深色主题 |
 | --- | --- | --- |

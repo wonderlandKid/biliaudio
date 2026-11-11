@@ -28,7 +28,6 @@ import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FileUpload
@@ -61,12 +60,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.wonderlandkid.biliaudio.BuildConfig
 import com.wonderlandkid.biliaudio.data.model.ArchiveImportMode
 import com.wonderlandkid.biliaudio.data.model.AudioQualityPreference
 import com.wonderlandkid.biliaudio.data.repository.AuthState
@@ -78,7 +75,6 @@ import com.wonderlandkid.biliaudio.ui.components.BiliGroupSectionTitle
 import com.wonderlandkid.biliaudio.ui.components.BiliPageHeader
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
-import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
 import com.wonderlandkid.biliaudio.util.Diag
@@ -93,7 +89,7 @@ import java.util.Locale
  * - 账号卡片：未登录 → 去登录；已登录 → 头像 / 昵称 / 退出登录（二次确认）；
  * - 音质选择（写入 [SettingsRepository.setAudioQuality]）；
  * - 深色模式（跟随系统 / 浅色 / 深色，写入 [SettingsRepository.setDarkTheme]）；
- * - 关于：版本号（BuildConfig.VERSION_NAME）、应用说明、B 站内容版权说明。
+ * - 备份与恢复 / 用户数据 / 存储 / 诊断与维护入口。
  *
  * @param onOpenLogin 未登录时点击「去登录」的回调（由导航层打开扫码登录页）
  * @param onOpenBackupImport 点击「导入 / 恢复」的回调（由导航层打开导入页的「归档导入」Tab）
@@ -179,10 +175,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item(key = "header") {
-                BiliPageHeader(
-                    title = "设置",
-                    subtitle = "哔哩专辑 v${BuildConfig.VERSION_NAME} · 备份、外观与账号",
-                )
+                BiliPageHeader(title = "设置")
             }
             item {
                 SettingsPadded {
@@ -261,19 +254,6 @@ fun SettingsScreen(
                         onClick = onOpenDiagnostics,
                     )
                 }
-            }
-            item { SettingsPadded { SectionTitle("关于") } }
-            item { SettingsPadded { AboutCard() } }
-            item {
-                Text(
-                    text = "哔哩专辑 · 仅供个人学习与本地播放使用",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                )
             }
         }
         SnackbarHost(
@@ -648,85 +628,6 @@ private fun DarkThemeCard(
             if (index != options.lastIndex) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
-        }
-    }
-}
-
-/** 关于：版本号、应用说明、版权与技术栈。 */
-@Composable
-private fun AboutCard() {
-    SettingsCard {
-        BiliGroupHeader(
-            icon = Icons.Rounded.Info,
-            title = "关于哔哩专辑",
-            subtitle = "版本、版权与技术栈",
-        )
-        // 版本
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "版本",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "v${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        // 应用说明
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-        ) {
-            Text(text = "关于哔哩专辑", style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = "哔哩专辑（BiliAudio）把 B 站上「一整张专辑装在一个视频里」的内容，" +
-                    "转换成可按歌曲搜索、可按分曲播放的音乐库：支持 BV 号 / 批量 / 搜索导入、" +
-                    "自定义分曲时间点、后台播放与歌词显示。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        // 版权说明
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-        ) {
-            Text(text = "内容版权说明", style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = "所有音频、视频与图片内容版权归哔哩哔哩（bilibili）及原 UP 主所有。" +
-                    "本应用仅用于个人学习与本地播放，不提供内容下载、缓存或分发，" +
-                    "与哔哩哔哩官方无关。请支持正版并尊重 UP 主权益。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        // 技术栈
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-        ) {
-            Text(text = "技术栈", style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = "Kotlin · Jetpack Compose · Material 3 · Media3 · Room · Coil · zxing",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

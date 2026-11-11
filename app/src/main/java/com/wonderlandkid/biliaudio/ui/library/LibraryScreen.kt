@@ -1,6 +1,5 @@
 package com.wonderlandkid.biliaudio.ui.library
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,9 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -30,7 +27,6 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -43,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.data.model.Album
@@ -65,7 +60,8 @@ import kotlinx.coroutines.launch
 /**
  * 音乐库页（v0.6.0 改版）：
  * - 三分类 Tab：歌曲 / 专辑 / 艺术家；
- * - 每个分类按「# / A..Z」分组（中文按拼音），右侧快速索引栏支持点击/拖动定位；
+ * - 每个分类按「# / A..Z」字母排序（中文按拼音），右侧快速索引栏支持点击/拖动定位；
+ *   列表不再渲染字母分隔标题，索引栏下标按「纯条目」计算；
  * - 页头与发现/设置统一用 [BiliPageHeader]；
  * - 搜索时三个 Tab 都按仓库搜索结果展示，并隐藏索引栏。
  *
@@ -114,7 +110,7 @@ private fun LibraryContent(
                 .fillMaxWidth()
                 .padding(top = PageContentTopPadding),
         ) {
-            BiliPageHeader(title = "音乐库", subtitle = state.headerSubtitle)
+            BiliPageHeader(title = "音乐库")
             Spacer(Modifier.height(Spacing.lg))
             SearchField(
                 query = state.query,
@@ -199,7 +195,6 @@ private fun LibraryContent(
 // 歌曲 Tab
 // ---------------------------------------------------------------------------
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SongsTab(
     songs: List<TrackWithAlbum>,
@@ -238,7 +233,7 @@ private fun SongsTab(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
-    val prefixItems = 1 // 顶部「全部歌曲 / 播放全部歌曲」行
+    val prefixItems = 1 // 顶部「全部歌曲 / 播放全部歌曲」行（列表无字母分隔标题，每组只占条目数）
     // 索引栏点击 → 滚动到分组；remember 稳定引用，避免父级重组时反复创建
     val onSelectLetter = remember(sections, listState) {
         { label: String ->
@@ -282,17 +277,11 @@ private fun SongsTab(
                 }
             }
             sections.forEach { section ->
-                stickyHeader(
-                    key = "songs_letter_${section.label}",
-                    contentType = "letterHeader",
-                ) {
-                    LetterHeader(label = section.label, count = section.items.size)
-                }
-                itemsIndexed(
+                items(
                     items = section.items,
-                    key = { _, song -> song.track.id },
-                    contentType = { _, _ -> "song" },
-                ) { _, song ->
+                    key = { song -> song.track.id },
+                    contentType = { "song" },
+                ) { song ->
                     SongRow(
                         song = song,
                         onClick = { onPlaySong(indexById[song.track.id] ?: 0) },
@@ -375,17 +364,6 @@ private fun AlbumsTab(
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             sections.forEach { section ->
-                item(
-                    key = "albums_letter_${section.label}",
-                    span = { GridItemSpan(maxLineSpan) },
-                    contentType = "letterHeader",
-                ) {
-                    LetterHeader(
-                        label = section.label,
-                        count = section.items.size,
-                        horizontalPadding = 0.dp,
-                    )
-                }
                 gridItems(
                     items = section.items,
                     key = { album -> album.id },
@@ -415,7 +393,6 @@ private fun AlbumsTab(
 // 艺术家 Tab
 // ---------------------------------------------------------------------------
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ArtistsTab(
     artists: List<ArtistEntry>,
@@ -463,12 +440,6 @@ private fun ArtistsTab(
             contentPadding = PaddingValues(bottom = Spacing.lg),
         ) {
             sections.forEach { section ->
-                stickyHeader(
-                    key = "artists_letter_${section.label}",
-                    contentType = "letterHeader",
-                ) {
-                    LetterHeader(label = section.label, count = section.items.size)
-                }
                 items(
                     items = section.items,
                     key = { artist -> artist.name },
@@ -494,36 +465,6 @@ private fun ArtistsTab(
 // ---------------------------------------------------------------------------
 // 共用小件
 // ---------------------------------------------------------------------------
-
-/** 字母分组标题（sticky header）：主色字母 + 数量。 */
-@Composable
-private fun LetterHeader(
-    label: String,
-    count: Int,
-    horizontalPadding: Dp = Spacing.lg,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(Spacing.sm))
-            Text(
-                text = "$count",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
 
 /** 艺术家行：封面取该艺术家第一张专辑，副标题「N 张专辑 · M 首歌曲」。 */
 @Composable

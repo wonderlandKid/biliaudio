@@ -34,6 +34,9 @@ class NowPlayingViewModel(
     /** 播放列表面板点选某首。 */
     fun jumpToQueueIndex(index: Int) = controller.jumpToQueueIndex(index)
 
+    /** 合并后的播放模式按钮（随机 / 顺序 / 列表循环 / 单曲循环）。 */
+    fun cyclePlaybackMode() = controller.cyclePlaybackMode()
+
     fun cycleRepeatMode() = controller.cycleRepeatMode()
 
     fun toggleShuffle() = controller.toggleShuffle()
