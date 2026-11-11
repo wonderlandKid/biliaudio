@@ -30,17 +30,17 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 ## 界面截图
 
-| 发现（Light） | 播放页（v0.35：顶部标题 + 封面 + 隐形音量棘轮） | 歌词页（v0.35：左对齐 / 无底部工具栏 / 右下角来源偏移） |
+| 发现（Light） | 播放页（v0.36：顶部标题 + 7 档音量球 + 波浪进度条） | 歌词页（v0.35：左对齐 / 无底部工具栏 / 右下角来源偏移） |
 | --- | --- | --- |
-| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v035_player_light.png) | ![lyrics](docs/screenshots/v035_lyrics_light.png) |
+| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v036_player_light.png) | ![lyrics](docs/screenshots/v035_lyrics_light.png) |
 
 | 播放页（Dark） | 音乐库（无字母分隔头） | 设置（无「关于」分区） |
 | --- | --- | --- |
 | ![player-dark](docs/screenshots/v033_player_dark.png) | ![library](docs/screenshots/v033_library_light.png) | ![settings](docs/screenshots/v033_settings_light.png) |
 
-| 迷你条→播放页连续展开（上滑中） | 封面右侧音量微调棘轮 |
+| 迷你条→播放页连续展开（上滑中） | 7 档音量微调小球（+3） |
 | --- | --- |
-| ![stretch](docs/screenshots/v034_morph_mid.png) | ![volume](docs/screenshots/v035_volume_fine_tune.png) |
+| ![stretch](docs/screenshots/v034_morph_mid.png) | ![volume](docs/screenshots/v036_volume_knob.png) |
 
 | 分曲编辑 | 搜索导入 | 深色主题 |
 | --- | --- | --- |

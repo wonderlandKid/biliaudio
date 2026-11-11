@@ -65,8 +65,10 @@ data class PlaybackState(
     val albumDurationMs: Long = 0L,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val shuffle: Boolean = false,
-    /** 播放器音量（0..1，用于封面右侧的「音量微调」棘轮）。 */
+    /** 播放器实际音量（0..1，包含音量微调偏移）。 */
     val volume: Float = 1f,
+    /** 音量微调档位：-3..+3（0 = 居中，不偏移）；每档 ≈ 系统音量单次变化的 1/4。 */
+    val volumeOffsetSteps: Int = 0,
     val error: String? = null,
 ) {
     /** 由 shuffle/repeat 组合推导的统一播放模式（UI 用）。 */
@@ -116,8 +118,8 @@ interface PlaybackController {
     /** 合并后的播放模式按钮：随机 → 顺序 → 列表循环 → 单曲循环 → 随机。 */
     fun cyclePlaybackMode()
 
-    /** 音量微调（0..1）；由封面右侧的棘轮控件调用。 */
-    fun setVolume(volume: Float)
+    /** 音量微调档位（-3..+3）；由封面右侧的棘轮控件调用。 */
+    fun setVolumeOffsetSteps(steps: Int)
     fun dismissError()
 
     /** 把最新 UI 状态同步给系统通知（由 Service 内部实现，UI 不需要调用）。 */

@@ -1,5 +1,35 @@
 package com.wonderlandkid.biliaudio.ui.player
 
+import androidx.compose.animation.core.animateFloat
+
+import kotlin.math.sin
+
+import kotlin.math.PI
+
+import androidx.compose.ui.graphics.drawscope.Stroke
+
+import androidx.compose.ui.graphics.StrokeCap
+
+import androidx.compose.ui.graphics.Path
+
+import androidx.compose.animation.core.RepeatMode
+
+import androidx.compose.animation.core.rememberInfiniteTransition
+
+import androidx.compose.animation.core.infiniteRepeatable
+
+import androidx.compose.ui.unit.IntOffset
+
+import androidx.compose.foundation.layout.offset
+
+import androidx.compose.runtime.mutableIntStateOf
+
+import androidx.compose.ui.unit.Dp
+
+import androidx.compose.foundation.shape.CircleShape
+
+import androidx.compose.foundation.border
+
 import kotlin.math.roundToInt
 
 import kotlinx.coroutines.delay
@@ -230,7 +260,7 @@ fun NowPlayingScreen(
                         onPrevious = viewModel::previous,
                         onCyclePlaybackMode = viewModel::cyclePlaybackMode,
                         onOpenPlaylist = { showPlaylist = true },
-                        onVolumeChange = viewModel::setVolume,
+                        onVolumeOffsetChange = viewModel::setVolumeOffsetSteps,
                         onCoverBounds = onCoverBounds,
                         onTitleBounds = onTitleBounds,
                         onArtistBounds = onArtistBounds,
@@ -273,7 +303,7 @@ private fun NowPlayingBody(
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
-    onVolumeChange: (Float) -> Unit,
+    onVolumeOffsetChange: (Int) -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
@@ -335,7 +365,7 @@ private fun NowPlayingBody(
                     entry = entry,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
                     onCoverBounds = onCoverBounds,
-                    onVolumeChange = onVolumeChange,
+                    onVolumeOffsetChange = onVolumeOffsetChange,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -346,6 +376,7 @@ private fun NowPlayingBody(
             PlaybackSeekBar(
                 positionMs = state.positionMs,
                 durationMs = state.trackDurationMs,
+                isPlaying = state.isPlaying,
                 onSeek = onSeek,
             )
             Row(
@@ -388,7 +419,7 @@ private fun NowPlayingCoverPage(
     entry: QueueEntry?,
     onOpenLyrics: () -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
-    onVolumeChange: (Float) -> Unit,
+    onVolumeOffsetChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -402,7 +433,8 @@ private fun NowPlayingCoverPage(
                 .padding(vertical = Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
-            val coverSize = minOf(maxWidth * 0.94f, maxHeight * 0.98f)
+            // 比 v0.35 略小一点：给封面右侧的音量微调小球留出空间，同时保证单手可拨。
+            val coverSize = minOf(maxWidth * 0.86f, maxHeight * 0.90f)
             val coverScale by animateFloatAsState(
                 targetValue = if (state.isPlaying) 1f else 0.92f,
                 animationSpec = tween(
@@ -423,13 +455,12 @@ private fun NowPlayingCoverPage(
                     .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                 cornerRadius = 22.dp,
             )
-            // 封面右侧：平时隐形的「音量微调」棘轮（上下拨动，每格 = 系统音量一格的 1/5）。
+            // 封面右侧居中：7 档音量微调小球（默认居中，拨动后呈玻璃质感并显示 ±1..±3）。
             VolumeFineTune(
-                volume = state.volume,
-                onVolumeChange = onVolumeChange,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = Spacing.xs),
+                offsetSteps = state.volumeOffsetSteps,
+                onOffsetChange = onVolumeOffsetChange,
+                coverSize = coverSize,
+                modifier = Modifier.align(Alignment.Center),
             )
         }
         Spacer(Modifier.height(Spacing.sm))
@@ -445,6 +476,7 @@ private fun NowPlayingCoverPage(
 private fun PlaybackSeekBar(
     positionMs: Long,
     durationMs: Long,
+    isPlaying: Boolean,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -462,8 +494,36 @@ private fun PlaybackSeekBar(
         ),
         label = "seekThumbRadius",
     )
+    // 波形进度条：播放时 active 轨道按合成频谱包络摆动，暂停时收平为直线。
+    // （真正的 FFT 频谱需要 Visualizer + RECORD_AUDIO，会引入麦克风权限；这里用与播放状态同步的
+    //   程序化节拍/频谱包络做视觉摆动，避免申请录音权限。）
+    val waveTransition = rememberInfiniteTransition(label = "seekWave")
+    val wavePhase by waveTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1_800,
+                easing = BiliMotion.Emphasized,
+            ),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "seekWavePhase",
+    )
+    val waveEnergy by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 420,
+            easing = BiliMotion.Emphasized,
+        ),
+        label = "seekWaveEnergy",
+    )
+
     val density = LocalDensity.current
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
+    val waveAmplitudePx = with(density) { 3.2.dp.toPx() }
+    val waveLengthPx = with(density) { 26.dp.toPx() }
+    val activeStrokeWidthPx = with(density) { 4.5.dp.toPx() }
     val trackHeightPx = with(density) { 8.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
 
@@ -521,12 +581,34 @@ private fun PlaybackSeekBar(
             )
             val activeWidth = size.width * progress
             if (activeWidth > 0f) {
-                drawRoundRect(
-                    color = activeColor,
-                    topLeft = Offset(0f, centerY - trackHeightPx / 2f),
-                    size = Size(activeWidth, trackHeightPx),
-                    cornerRadius = CornerRadius(trackHeightPx / 2f),
-                )
+                if (waveEnergy > 0.01f) {
+                    // 沿 x 方向叠加多频正弦，形成随播放律动的「频谱波浪」；
+                    // 振幅越靠滑块越大，尾部收平，避免结束点跳动。
+                    val path = Path()
+                    var x = 0f
+                    val step = 2f
+                    while (x <= activeWidth) {
+                        val envelope = (x / activeWidth).coerceIn(0f, 1f)
+                        val spectrum = 0.55f + 0.45f * sin(x / waveLengthPx * 2.2f + wavePhase * 1.7f)
+                        val y = centerY + sin(
+                            x / waveLengthPx * (2f * PI).toFloat() + wavePhase,
+                        ) * waveAmplitudePx * waveEnergy * envelope * spectrum
+                        if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+                        x += step
+                    }
+                    drawPath(
+                        path = path,
+                        color = activeColor,
+                        style = Stroke(width = activeStrokeWidthPx, cap = StrokeCap.Round),
+                    )
+                } else {
+                    drawRoundRect(
+                        color = activeColor,
+                        topLeft = Offset(0f, centerY - trackHeightPx / 2f),
+                        size = Size(activeWidth, trackHeightPx),
+                        cornerRadius = CornerRadius(trackHeightPx / 2f),
+                    )
+                }
             }
             val safeWidth = (size.width - thumbRadiusPx).coerceAtLeast(thumbRadiusPx)
             val centerX = activeWidth.coerceIn(thumbRadiusPx, safeWidth)
@@ -631,122 +713,117 @@ private fun modeLabel(mode: PlaybackMode): String = when (mode) {
 
 
 /**
- * 封面右侧的「音量微调」棘轮（平时隐形，拨动时显示 5 格指示）。
+ * 封面右侧的「音量微调」小球（v0.36：7 档棘轮）。
  *
- * - 手势：在封面右侧的透明热区上下拨动，每跨过 18dp 走一格；
- * - 一格 ≈ 系统音量按一次变化量的 1/5（通过 AudioManager 最大档位换算），
- *   用于「按一下太大、按一下太小」的微调；到 0/1 边界后不再变化；
- * - 触觉：每走一格给一次 TextHandleMove 反馈（低端机或关闭触觉时静默降级）；
- * - 指示：拨动时浮现磨砂半透明竖条（5 段），1.4s 无操作后自动淡出。
+ * - 位置：小球默认与封面右缘垂直居中对齐；上下拨动时沿封面右缘移动，最多 ±3 档；
+ * - 档位：7 个位置（-3..+3），每档 = 系统媒体音量单次变化的 1/4；中心 0 表示不偏移；
+ * - 外观：未调整时是低调的半透明小圆点；调整后变成磨砂玻璃质感的大圆球并显示 `+1..+3` / `-1..-3`；
+ * - 手势：上下拨动，34dp 一档（避免一次跳 2 格），每档触觉反馈；到 ±3 边界停止。
  */
 @Composable
 private fun VolumeFineTune(
-    volume: Float,
-    onVolumeChange: (Float) -> Unit,
+    offsetSteps: Int,
+    onOffsetChange: (Int) -> Unit,
+    coverSize: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
-    val maxSteps = remember(context) {
-        (context.getSystemService(AudioManager::class.java)
-            ?.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
-            ?.coerceAtLeast(1) ?: 15
-    }
-    val detent = remember(maxSteps) { 1f / (maxSteps * 5f) }
-    val stepPx = remember(density) { with(density) { 18.dp.toPx() } }
+    val spacingPx = remember(density) { with(density) { 34.dp.toPx() } }
+    val coverHalfPx = remember(density, coverSize) { with(density) { coverSize.toPx() } / 2f }
 
-    val currentVolume by rememberUpdatedState(volume)
-    val currentOnChange by rememberUpdatedState(onVolumeChange)
+    val currentOffset by rememberUpdatedState(offsetSteps)
+    val currentOnChange by rememberUpdatedState(onOffsetChange)
 
-    var visible by remember { mutableStateOf(false) }
-    var dragVolume by remember { mutableFloatStateOf(volume) }
-    var accumulated by remember { mutableFloatStateOf(0f) }
-    var interactionTick by remember { mutableLongStateOf(0L) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragAccumulated by remember { mutableFloatStateOf(0f) }
+    var dragBaseOffset by remember { mutableIntStateOf(offsetSteps) }
 
-    LaunchedEffect(interactionTick) {
-        if (!visible) return@LaunchedEffect
-        delay(1_400)
-        visible = false
-    }
+    val effectiveOffset = if (dragging) dragBaseOffset else currentOffset
+    val expanded = dragging || effectiveOffset != 0
 
     Box(
         modifier = modifier
-            .width(46.dp)
-            .height(220.dp)
-            .semantics { contentDescription = "音量微调：在封面右侧上下拨动" }
+            .offset { IntOffset(coverHalfPx.roundToInt(), 0) }
+            .width(64.dp)
+            .height(300.dp)
+            .semantics { contentDescription = "音量微调：在封面右侧上下拨动，共 7 档" }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = {
-                        dragVolume = currentVolume
-                        accumulated = 0f
-                        visible = true
-                        interactionTick = SystemClock.elapsedRealtime()
+                        dragging = true
+                        dragBaseOffset = currentOffset
+                        dragAccumulated = 0f
                     },
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        accumulated -= dragAmount
-                        val steps = (accumulated / stepPx).toInt()
+                        dragAccumulated -= dragAmount
+                        val steps = (dragAccumulated / spacingPx).toInt()
                         if (steps != 0) {
-                            accumulated -= steps * stepPx
-                            val next = (dragVolume + steps * detent).coerceIn(0f, 1f)
-                            if (next != dragVolume) {
-                                dragVolume = next
+                            dragAccumulated -= steps * spacingPx
+                            val next = (dragBaseOffset + steps).coerceIn(-3, 3)
+                            if (next != dragBaseOffset) {
+                                dragBaseOffset = next
                                 currentOnChange(next)
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
-                            interactionTick = SystemClock.elapsedRealtime()
                         }
                     },
-                    onDragEnd = {
-                        interactionTick = SystemClock.elapsedRealtime()
-                    },
-                    onDragCancel = {
-                        visible = false
-                    },
+                    onDragEnd = { dragging = false },
+                    onDragCancel = { dragging = false },
                 )
             },
-        contentAlignment = Alignment.CenterEnd,
+        contentAlignment = Alignment.Center,
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(animationSpec = tween(BiliMotion.Short4)),
-            exit = fadeOut(animationSpec = tween(BiliMotion.Medium2)),
-            modifier = Modifier.align(Alignment.CenterEnd),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
-                shadowElevation = 3.dp,
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.md),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                ) {
-                    repeat(5) { index ->
-                        val active = dragVolume >= (index + 1) / 5f - 0.001f
-                        Box(
-                            modifier = Modifier
-                                .width(if (active) 20.dp else 12.dp)
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(
-                                    if (active) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
-                                    },
-                                ),
+        val knobSize = if (expanded) 44.dp else 14.dp
+        // +档向上（增大音量），-档向下；方向与手指一致。
+        val knobOffsetY = -effectiveOffset * spacingPx
+        val knobBrush = if (expanded) {
+            // 玻璃质感：上亮下暗的轻微渐变 + 描边（不使用大面积模糊）。
+            Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f),
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.38f),
+                ),
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f),
+                ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(0, knobOffsetY.roundToInt()) }
+                .size(knobSize)
+                .clip(CircleShape)
+                .background(knobBrush)
+                .then(
+                    if (expanded) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                            shape = CircleShape,
                         )
-                    }
-                    Spacer(Modifier.height(Spacing.xxs))
-                    Text(
-                        text = "${(dragVolume * 100).roundToInt()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                    } else {
+                        Modifier
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (expanded) {
+                Text(
+                    text = when {
+                        effectiveOffset > 0 -> "+$effectiveOffset"
+                        effectiveOffset < 0 -> "$effectiveOffset"
+                        else -> "0"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }

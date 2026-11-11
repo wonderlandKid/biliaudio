@@ -1,6 +1,7 @@
 package com.wonderlandkid.biliaudio.player
 
 import android.content.Context
+import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -179,6 +180,16 @@ class PlaybackEngine private constructor(
     /** 供 [PlaybackService] 构建 MediaSession 使用（同一个 ExoPlayer 实例）。 */
     internal val exoPlayer: ExoPlayer get() = player
 
+    // ---- 音量微调（7 档：-3..+3；每档 = 系统媒体音量单次变化的 1/4） ----
+    private val audioManager: AudioManager? =
+        appContext.getSystemService(AudioManager::class.java)
+    private val volumeMaxSteps: Int =
+        (audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1)
+    private val volumeDetent: Float = 1f / (volumeMaxSteps * 4f)
+    /** 居中档的基础音量：留出 +3 档的上行空间（约 -5% 幅度，听感几乎无差）。 */
+    private val volumeBase: Float = (1f - 3f * volumeDetent).coerceIn(0.5f, 1f)
+    private var volumeOffsetSteps: Int = 0
+
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
@@ -219,6 +230,8 @@ class PlaybackEngine private constructor(
 
     init {
         player.addListener(PlayerEvents())
+        player.volume = volumeBase
+        _state.update { it.copy(volume = volumeBase, volumeOffsetSteps = 0) }
         startProgressTicker()
     }
 
@@ -419,8 +432,12 @@ class PlaybackEngine private constructor(
         player.shuffleModeEnabled = !player.shuffleModeEnabled
     }
 
-    override fun setVolume(volume: Float) {
-        player.volume = volume.coerceIn(0f, 1f)
+    override fun setVolumeOffsetSteps(steps: Int) {
+        val clamped = steps.coerceIn(-3, 3)
+        volumeOffsetSteps = clamped
+        val effective = (volumeBase + clamped * volumeDetent).coerceIn(0f, 1f)
+        player.volume = effective
+        _state.update { it.copy(volume = effective, volumeOffsetSteps = clamped) }
     }
 
     override fun cyclePlaybackMode() {
@@ -696,6 +713,7 @@ class PlaybackEngine private constructor(
             repeatMode = player.repeatMode.toAppRepeatMode(),
             shuffle = player.shuffleModeEnabled,
             volume = player.volume,
+            volumeOffsetSteps = volumeOffsetSteps,
         )
         Diag.log(
             TAG,

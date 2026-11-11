@@ -982,3 +982,25 @@
 - **取舍**：音量微调控制的是 ExoPlayer 音量（与系统媒体音量叠加），不修改系统音量；0/1 边界不越界。
 - **影响**：PlayerMorphLayer/NowPlayingScreen/NowPlayingLyricsPane/LyricLineRow/AppNavHost/PlaybackContracts/
   PlaybackEngine/NowPlayingViewModel 修改；204 单测；release v0.35.0。
+
+
+## D63 音量微调 7 档棘轮 + 波浪式进度条（v0.36.0）
+
+- **日期**：2026-11-11
+- **背景**：用户要求：
+  1）音量微调直接做 7 档，每档 = 音量（系统一步）的 1/4，默认中间，向上 +3/4、向下 -3/4；
+  2）可引入新依赖，尝试全新 Android（M3 Expressive）进度条，最好能随频谱摆动；
+  3）未微调时小球居中、与专辑封面最右侧平齐；调整后小球呈玻璃质感并显示 ±数字；拨动跨度单手可及、间隔够大防跳格。
+- **决策**：
+  1. 音量档位：`PlaybackState.volumeOffsetSteps ∈ [-3,3]`；`PlaybackEngine.setVolumeOffsetSteps` 用
+     `AudioManager` 最大档位计算 `detent = 1/(maxSteps*4)`，基础音量留出 +3 档空间（约 -5%）；
+     每档 = 系统音量单步的 1/4；
+  2. 小球默认位于封面右缘垂直中心（封面宽度 0.94→0.86 留空间）；拨动 34dp/档，移动方向与手指一致；
+     未调整显示低调小圆点，调整后玻璃渐变球 + ±数字；
+  3. 进度条：采用 M3 Expressive 风格的波浪 active 轨道（自绘，保留拖动 seek 和无障碍）；
+     播放时用程序化节拍/频谱包络摆动，暂停 420ms 收平。没有直接依赖实验性
+     `LinearWavyProgressIndicator`（material3 1.5-alpha 已有，但不可拖动/无法按档位控制），
+     也没有为真实 FFT 引入 `Visualizer`（需要 RECORD_AUDIO 麦克风权限）；
+- **取舍**：当前频谱是「与播放状态同步的合成包络」，不是真实 FFT；如需要真实频谱，可加「真实频谱」开关，
+  在用户授权麦克风后启用 Visualizer。
+- **影响**：PlaybackContracts/PlaybackEngine/NowPlayingViewModel/NowPlayingScreen（音量球、进度条）、文档；204 单测；release v0.36.0。
