@@ -419,6 +419,10 @@ class PlaybackEngine private constructor(
         player.shuffleModeEnabled = !player.shuffleModeEnabled
     }
 
+    override fun setVolume(volume: Float) {
+        player.volume = volume.coerceIn(0f, 1f)
+    }
+
     override fun cyclePlaybackMode() {
         when (_state.value.playbackMode.next()) {
             PlaybackMode.SHUFFLE -> {
@@ -691,6 +695,7 @@ class PlaybackEngine private constructor(
             albumDurationMs = entry.albumDurationMs,
             repeatMode = player.repeatMode.toAppRepeatMode(),
             shuffle = player.shuffleModeEnabled,
+            volume = player.volume,
         )
         Diag.log(
             TAG,
@@ -971,6 +976,10 @@ class PlaybackEngine private constructor(
 
         override fun onRepeatModeChanged(repeatMode: Int) {
             _state.update { it.copy(repeatMode = repeatMode.toAppRepeatMode()) }
+        }
+
+        override fun onVolumeChanged(volume: Float) {
+            _state.update { it.copy(volume = volume.coerceIn(0f, 1f)) }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {

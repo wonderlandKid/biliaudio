@@ -1,4 +1,8 @@
 package com.wonderlandkid.biliaudio.ui.player.lyrics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.width
 
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -127,22 +131,18 @@ internal fun NowPlayingLyricsPane(
         if (uri != null) viewModel.importLocal(uri)
     }
 
+    // 歌词来源 / 偏移调整：从头部移到右下角，做成与播放列表入口同高度的浮动按钮组，
+    // 不再占用歌词顶部空间（曲名/艺术家由播放页顶部统一显示）。
+    val openSource = {
+        showSourceSheet = true
+        // 候选列表不随歌词快照持久化：打开面板时补齐在线候选，避免误显示「暂无候选」
+        if (state.candidates.isEmpty() && !state.isSearching) {
+            viewModel.searchOnline(manual = false)
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            LyricsPaneHeader(
-                title = state.title,
-                artist = state.artist,
-                delayMs = state.delayMs,
-                canAdjustOffset = state.parsed != null,
-                onOpenSource = {
-                    showSourceSheet = true
-                    // 候选列表不随歌词快照持久化：打开面板时补齐在线候选，避免误显示「暂无候选」
-                    if (state.candidates.isEmpty() && !state.isSearching) {
-                        viewModel.searchOnline(manual = false)
-                    }
-                },
-                onOpenOffset = { showOffsetSheet = true },
-            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -208,6 +208,48 @@ internal fun NowPlayingLyricsPane(
                 )
             }
         }
+
+        // 右下角浮动控件：歌词来源 / 时间偏移（高度接近播放列表按钮，非胶囊）
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = Spacing.lg, bottom = Spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LyricsActionSurface(
+                onClick = openSource,
+                contentDescription = "歌词来源",
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Lyrics,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(Spacing.xs))
+                Text(
+                    text = "歌词来源",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LyricsActionSurface(
+                onClick = { showOffsetSheet = true },
+                enabled = state.parsed != null,
+                contentDescription = "歌词时间偏移",
+            ) {
+                Text(
+                    text = formatLyricOffset(state.delayMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (state.parsed != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
     }
 
     if (showSourceSheet) {
@@ -243,69 +285,27 @@ internal fun NowPlayingLyricsPane(
     }
 }
 
-/**
- * 歌词面板头部：左侧曲名/艺术家（Apple Music 歌词页同款信息位），右侧来源/偏移入口。
- *
- * 点击曲名区域不做任何事（不使用空点击），来源/偏移都通过图标进入对应面板。
- */
+/** 歌词页右下角的圆角矩形操作入口（非胶囊，40dp 高）。 */
 @Composable
-private fun LyricsPaneHeader(
-    title: String,
-    artist: String,
-    delayMs: Long,
-    canAdjustOffset: Boolean,
-    onOpenSource: () -> Unit,
-    onOpenOffset: () -> Unit,
+private fun LyricsActionSurface(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    contentDescription: String,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.semantics { this.contentDescription = contentDescription },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+        shadowElevation = 2.dp,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title.ifBlank { "歌词" },
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (artist.isNotBlank()) {
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        IconButton(
-            onClick = onOpenSource,
-            modifier = Modifier.size(36.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Lyrics,
-                contentDescription = "歌词来源",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-        TextButton(
-            onClick = onOpenOffset,
-            enabled = canAdjustOffset,
-            contentPadding = PaddingValues(horizontal = Spacing.xs),
-        ) {
-            Text(
-                text = formatLyricOffset(delayMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (canAdjustOffset) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
+        Row(
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content,
+        )
     }
 }
 

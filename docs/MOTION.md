@@ -31,7 +31,7 @@
 | 播放页展开/收起（手指） | 跟手 | 手指位置 | 拖动期间实时；这是交互，不是自动动画 |
 | 播放页松手归位 | spring | damping 0.90 / stiffness 320 | 带初速度，有自然回弹但不甩 |
 | 播放页左右分页（封面 ↔ 歌词） | 跟手 | pager 默认 fling 曲线 | 水平滑动切换；底部进度/控制固定不跟页（v0.28.0） |
-| 歌词行高亮（当前行缩放/透明度/颜色） | `BiliMotion.LyricsActiveMs`（380ms） | Emphasized | 当前行 1.09 放大 + primary 色；非当前行 0.95 缩放 + 分层透明度 |
+| 歌词行高亮（颜色/透明度） | `BiliMotion.LyricsActiveMs`（380ms） | Emphasized | v0.35 起不再缩放字号：当前行主题色填充，非当前行分层透明度 |
 | 歌词自动滚动 | `BiliMotion.LyricsScrollMs`（520ms） | Emphasized | 当前行平滑滚动到视口中心（长缓出，Apple Music 手感）；用户手动滚动后暂停 3s 再恢复 |
 | 歌词上下边缘渐隐 | - | 渐变遮罩（DstIn） | 歌词在面板上下边缘淡出，避免生硬截断 |
 | 迷你条→播放页连续展开（v0.34） | 跟手（无固定 duration） | 跟手插值；松手 spring(0.90/320) | `PlayerMorphLayer`：封面 Rect 连续插值 + 卡片长到全屏；播放页 alpha 55%→85%、morph alpha 88%→99.5% 交叉 |

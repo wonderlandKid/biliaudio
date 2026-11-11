@@ -35,12 +35,6 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
 /** 空歌词行（纯音乐分行）的占位文案。 */
 internal const val EMPTY_LINE_PLACEHOLDER = "· · ·"
 
-/** 当前行放大倍数（Apple Music 式当前行放大；扁平 M3：只缩放，不做玻璃/发光特效）。 */
-private const val ACTIVE_SCALE = 1.09f
-
-/** 非当前行缩放：略缩小 + 低透明度，让当前行在视觉上「浮起来」（不影响列表布局）。 */
-private const val INACTIVE_SCALE = 0.95f
-
 /** 未演唱行透明度；已唱行略高，形成「已唱 / 未唱」层次（当前行恒为 1）。 */
 private const val PAST_ALPHA = 0.50f
 private const val FUTURE_ALPHA = 0.28f
@@ -48,7 +42,7 @@ private const val FUTURE_ALPHA = 0.28f
 /**
  * 单行歌词渲染（全屏歌词页的列表项）。
  *
- * - [isActive]：当前演唱行 → primary 颜色 + 1.07 放大（Apple Music 式当前行强调）；
+ * - [isActive]：当前演唱行 → primary 主题色填充（左对齐下不再放大字号，只靠颜色/透明度区分）；
  * - [isPast]：已唱行 → onSurfaceVariant 较高透明度；未唱行更低透明度（拉开层次）；
  * - `WordsLyric` 且当前行时按帧做逐字卡拉 OK 上色：已唱词 primary、未唱词 onSurfaceVariant、
  *   当前词用 `(time - start) / (end - start)` 在两种颜色间 [lerp]（纯 SpanStyle，不画 mask）；
@@ -75,14 +69,6 @@ internal fun LyricLineRow(
     val mainStyle = MaterialTheme.typography.titleLarge.copy(
         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
     )
-    val scale by animateFloatAsState(
-        targetValue = if (isActive) ACTIVE_SCALE else INACTIVE_SCALE,
-        animationSpec = tween(
-            durationMillis = BiliMotion.LyricsActiveMs,
-            easing = BiliMotion.Emphasized,
-        ),
-        label = "lyricLineScale",
-    )
     val rowAlpha by animateFloatAsState(
         targetValue = when {
             isActive -> 1f
@@ -107,11 +93,7 @@ internal fun LyricLineRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                alpha = rowAlpha
-            }
+            .graphicsLayer { alpha = rowAlpha }
             .clickable(enabled = isSynced, onClick = onClick)
             .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         horizontalAlignment = Alignment.Start,

@@ -158,6 +158,8 @@ fun AppNavHost() {
     // 0f = 迷你条，1f = 全屏播放页；拖拽期间实时变化
     var playerProgress by remember { mutableFloatStateOf(0f) }
     var playerOpenTarget by rememberSaveable { mutableStateOf(false) }
+    // 收起时记住当前页（0 封面 / 1 歌词），重新拉起时恢复同一页。
+    var playerPage by rememberSaveable { mutableIntStateOf(0) }
     var settleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     fun animatePlayerTo(open: Boolean, velocity: Float = 0f) {
@@ -516,7 +518,9 @@ fun AppNavHost() {
             if (showMiniPlayer) {
                 // morph 层就绪（拿到播放页封面/标题位置）前保持迷你条完全可见，
                 // 避免「迷你条先淡出、morph 还没画出来」的空白帧。
-                val morphReady = playerCoverRect != null && miniCoverRect != null
+                // 标题/艺术家在封面页与歌词页共用的顶部区域，始终存在；
+                // 用它们判断 morph 就绪，这样从歌词页收起/拉起也能连续展开。
+                val morphReady = playerTitleRect != null && miniCoverRect != null
                 val miniAlpha = if (!morphReady) {
                     1f
                 } else {
@@ -557,6 +561,8 @@ fun AppNavHost() {
                         animatePlayerTo(false)
                     }
                     NowPlayingScreen(
+                        initialPage = playerPage,
+                        onPageChanged = { playerPage = it },
                         onCoverBounds = { playerCoverRect = it },
                         onTitleBounds = { playerTitleRect = it },
                         onArtistBounds = { playerArtistRect = it },

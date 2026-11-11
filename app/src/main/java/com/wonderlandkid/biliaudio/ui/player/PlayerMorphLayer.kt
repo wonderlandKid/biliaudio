@@ -60,7 +60,7 @@ fun PlayerMorphLayer(
 ) {
     val p = progress.coerceIn(0f, 1f)
     if (p <= 0.001f || p >= 0.999f) return
-    if (miniBarRect == null || playerCoverRect == null) return
+    if (miniBarRect == null) return
 
     var origin by remember { mutableStateOf(Offset.Zero) }
     BoxWithConstraints(
@@ -89,8 +89,11 @@ fun PlayerMorphLayer(
 
         val miniBar = local(miniBarRect)
         val coverStart = miniCoverRect?.let(::local) ?: miniBar
-        val coverEnd = local(playerCoverRect)
-        val cover = lerpRect(coverStart, coverEnd, p)
+        // 从歌词页收起/拉起时播放页没有封面：封面留在迷你条位置并淡出，
+        // 卡片继续长到全屏、标题/艺术家飞到顶部标题区，保持连续展开。
+        val coverEnd = playerCoverRect?.let(::local)
+        val cover = if (coverEnd != null) lerpRect(coverStart, coverEnd, p) else coverStart
+        val coverAlpha = if (coverEnd != null) 1f else (1f - p / 0.55f).coerceIn(0f, 1f)
 
         // 卡片背景：底部固定，顶部随封面一起上升（保证封面始终在卡片内）。
         val cardTop = minOf(
@@ -115,25 +118,28 @@ fun PlayerMorphLayer(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         )
 
-        // 2) 封面：连续放大 + 移动到播放页封面位置（带播放/暂停的轻微缩放差异）
-        val coverScale = lerp(1f, if (state.isPlaying) 1f else 0.92f, p)
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(cover.left.roundToInt(), cover.top.roundToInt()) }
-                .size(
-                    width = with(density) { cover.width.coerceAtLeast(1f).toDp() },
-                    height = with(density) { cover.height.coerceAtLeast(1f).toDp() },
+        // 2) 封面：连续放大 + 移动到播放页封面位置；歌词页目标时淡出
+        val coverScale = lerp(1.0f, if (state.isPlaying) 1f else 0.92f, p) * coverAlpha
+        if (coverAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(cover.left.roundToInt(), cover.top.roundToInt()) }
+                    .size(
+                        width = with(density) { cover.width.coerceAtLeast(1f).toDp() },
+                        height = with(density) { cover.height.coerceAtLeast(1f).toDp() },
+                    )
+                    .graphicsLayer {
+                        scaleX = coverScale
+                        scaleY = coverScale
+                        alpha = coverAlpha
+                    },
+            ) {
+                CoverImage(
+                    url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
+                    modifier = Modifier.fillMaxSize(),
+                    cornerRadius = coverRadius,
                 )
-                .graphicsLayer {
-                    scaleX = coverScale
-                    scaleY = coverScale
-                },
-        ) {
-            CoverImage(
-                url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
-                modifier = Modifier.fillMaxSize(),
-                cornerRadius = coverRadius,
-            )
+            }
         }
 
         // 3) 标题/艺术家：迷你条位置 → 播放页位置。

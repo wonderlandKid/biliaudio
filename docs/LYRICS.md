@@ -86,7 +86,7 @@
 
 歌词渲染（Apple Music 手感，扁平 Material 3、无毛玻璃）：
 
-- 统一 22sp 大字号；当前行 primary 色 + 1.09 放大 + Bold，非当前行 0.95 缩放 + 分层透明度；
+- v0.35 起左对齐；统一 22sp 大字号；当前行 primary 色填充（不放大字号），非当前行分层透明度；
 - 逐字歌词按词推进颜色（`SpanStyle` 颜色 lerp，不做自绘遮罩）；翻译行小一号展示；
 - 自动滚动到当前行：**520ms Emphasized 长缓出**（`BiliMotion.LyricsScrollMs`），切行快速重定向不跳变；
   用户手动滚动后暂停 3 秒再恢复；

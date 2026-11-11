@@ -957,3 +957,28 @@
   视觉上是一次连续的展开；如后续要做完全体，可在封面飞行基础上再加自定义 Layout 插值所有子元素。
 - **影响**：新增 `ui/player/PlayerMorphLayer.kt`；AppNavHost/MiniPlayerBar/NowPlayingScreen 增加窗口位置回调；
   LyricLineRow/NowPlayingLyricsPane 对齐调整；204 单测；release v0.34.0。
+
+
+## D62 歌词页排版精简 + 播放页顶部标题 + 连续展开支持歌词页 + 音量微调棘轮（v0.35.0）
+
+- **日期**：2026-11-11
+- **背景**：用户要求：
+  1）歌词左对齐后不要放大当前行，改用主题色填充；
+  2）歌词页隐藏上一首/下一首/播放按钮及底部工具栏；
+  3）歌词来源/偏移移到右下角（高度接近播放列表入口）；
+  4）播放页不再在封面下方显示曲名/作者，改为顶部并适当放大；
+  5）连续展开适配歌词页（歌词页收起再拉起仍是歌词页）；
+  6）封面右侧增加隐形音量微调棘轮（分挡，1 系统音量步 = 5 小格）。
+- **决策**：
+  1. 歌词行移除 1.09/0.95 缩放，仅保留颜色/透明度强调；所有歌词左对齐；
+  2. 歌词页只在 `pagerState.currentPage == COVER_PAGE` 时显示底部进度/控制；歌词页把「歌词来源/偏移」
+     做成右下角 10dp 圆角矩形按钮组（非胶囊），头部标题移交给播放页共用；
+  3. 播放页顶部新增共用标题区：曲名 `headlineLarge`（30sp）+ 艺术家 `bodyMedium`（14sp）；
+     封面页不再重复；
+  4. AppNavHost `rememberSaveable` 保存 `playerPage`；`NowPlayingScreen` 增加 initialPage/onPageChanged；
+     morph 层在目标为歌词页时让封面淡出、卡片继续展开/标题飞入；
+  5. 音量微调：`PlaybackState.volume` + `PlaybackController.setVolume`；封面右侧 46dp 隐形热区，
+     每 18dp/格，格距 = 1/(系统最大音量*5)，拨动时显示半透明 5 段刻度 + 百分比、1.4s 自动隐藏、每格触觉反馈。
+- **取舍**：音量微调控制的是 ExoPlayer 音量（与系统媒体音量叠加），不修改系统音量；0/1 边界不越界。
+- **影响**：PlayerMorphLayer/NowPlayingScreen/NowPlayingLyricsPane/LyricLineRow/AppNavHost/PlaybackContracts/
+  PlaybackEngine/NowPlayingViewModel 修改；204 单测；release v0.35.0。

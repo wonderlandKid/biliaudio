@@ -1,5 +1,37 @@
 package com.wonderlandkid.biliaudio.ui.player
 
+import kotlin.math.roundToInt
+
+import kotlinx.coroutines.delay
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.ui.platform.LocalHapticFeedback
+
+import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+
+import androidx.compose.runtime.rememberUpdatedState
+
+import androidx.compose.runtime.mutableLongStateOf
+
+import androidx.compose.runtime.mutableFloatStateOf
+
+import androidx.compose.material3.Surface
+
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+
+import androidx.compose.animation.fadeOut
+
+import androidx.compose.animation.fadeIn
+
+import androidx.compose.animation.AnimatedVisibility
+
+import android.os.SystemClock
+
+import android.media.AudioManager
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,6 +52,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -56,6 +89,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -110,6 +144,9 @@ private const val PAGE_COUNT = 2
 @Composable
 fun NowPlayingScreen(
     modifier: Modifier = Modifier,
+    /** 重新打开播放页时恢复的页（0 封面 / 1 歌词）；由 AppNavHost 保存。 */
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
     /** 供 AppNavHost 做共享元素（连续展开）定位：封面/标题/艺术家在窗口中的位置。 */
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
@@ -185,12 +222,15 @@ fun NowPlayingScreen(
                 } else {
                     NowPlayingBody(
                         state = state,
+                        initialPage = initialPage,
+                        onPageChanged = onPageChanged,
                         onSeek = viewModel::seekToTrackPosition,
                         onTogglePlay = viewModel::togglePlayPause,
                         onNext = viewModel::next,
                         onPrevious = viewModel::previous,
                         onCyclePlaybackMode = viewModel::cyclePlaybackMode,
                         onOpenPlaylist = { showPlaylist = true },
+                        onVolumeChange = viewModel::setVolume,
                         onCoverBounds = onCoverBounds,
                         onTitleBounds = onTitleBounds,
                         onArtistBounds = onArtistBounds,
@@ -225,20 +265,29 @@ fun NowPlayingScreen(
 @Composable
 private fun NowPlayingBody(
     state: PlaybackState,
+    initialPage: Int,
+    onPageChanged: (Int) -> Unit,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
+    onVolumeChange: (Float) -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
-    val pagerState = rememberPagerState(pageCount = { PAGE_COUNT })
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(0, PAGE_COUNT - 1),
+        pageCount = { PAGE_COUNT },
+    )
     val scope = rememberCoroutineScope()
+
+    // 记录当前页，供 AppNavHost 在收起/重新打开时恢复（歌词页收起后再拉起来仍是歌词页）。
+    LaunchedEffect(pagerState.currentPage) { onPageChanged(pagerState.currentPage) }
 
     // 歌词页按返回键：先滑回封面页，不直接关播放页。
     BackHandler(enabled = pagerState.currentPage == LYRICS_PAGE) {
@@ -246,6 +295,33 @@ private fun NowPlayingBody(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
+        // 曲名/艺术家移到页面顶部（封面页与歌词页共用），字号放大到 headlineLarge（30sp），
+        // 与歌词页/播放页的排版统一；封面页不再在封面下方重复显示。
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        ) {
+            Text(
+                text = state.currentTrack?.title.orEmpty(),
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
+            )
+            Spacer(Modifier.height(Spacing.xxs))
+            Text(
+                text = listOfNotNull(entry?.artist, entry?.albumTitle)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
+            )
+        }
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -259,12 +335,13 @@ private fun NowPlayingBody(
                     entry = entry,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
                     onCoverBounds = onCoverBounds,
-                    onTitleBounds = onTitleBounds,
-                    onArtistBounds = onArtistBounds,
+                    onVolumeChange = onVolumeChange,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
         }
+        // 歌词页不显示进度条/时间/播放控制，把空间留给歌词本身。
+        if (pagerState.currentPage == COVER_PAGE) {
         Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
             PlaybackSeekBar(
                 positionMs = state.positionMs,
@@ -300,18 +377,18 @@ private fun NowPlayingBody(
             // 底部留白：让控制区/进度条相对原来的「贴底」布局整体上移
             Spacer(Modifier.height(Spacing.xxxl))
         }
+        }
     }
 }
 
-/** 封面页：大封面 + 曲名/艺术家；点封面进入歌词页（没有分页指示条）。 */
+/** 封面页：大封面；点封面进入歌词页。曲名/艺术家已上移到页面顶部。 */
 @Composable
 private fun NowPlayingCoverPage(
     state: PlaybackState,
     entry: QueueEntry?,
     onOpenLyrics: () -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
-    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
-    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -346,26 +423,16 @@ private fun NowPlayingCoverPage(
                     .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                 cornerRadius = 22.dp,
             )
+            // 封面右侧：平时隐形的「音量微调」棘轮（上下拨动，每格 = 系统音量一格的 1/5）。
+            VolumeFineTune(
+                volume = state.volume,
+                onVolumeChange = onVolumeChange,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = Spacing.xs),
+            )
         }
-        Text(
-            text = state.currentTrack?.title.orEmpty(),
-            style = MaterialTheme.typography.headlineMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
-        )
-        Spacer(Modifier.height(Spacing.xxs))
-        Text(
-            text = listOfNotNull(entry?.artist, entry?.albumTitle)
-                .filter { it.isNotBlank() }
-                .joinToString(" · "),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
-        )
-        Spacer(Modifier.height(Spacing.md))
+        Spacer(Modifier.height(Spacing.sm))
     }
 }
 
@@ -560,4 +627,127 @@ private fun modeLabel(mode: PlaybackMode): String = when (mode) {
     PlaybackMode.SEQUENTIAL -> "顺序播放"
     PlaybackMode.LOOP_ALL -> "列表循环"
     PlaybackMode.LOOP_ONE -> "单曲循环"
+}
+
+
+/**
+ * 封面右侧的「音量微调」棘轮（平时隐形，拨动时显示 5 格指示）。
+ *
+ * - 手势：在封面右侧的透明热区上下拨动，每跨过 18dp 走一格；
+ * - 一格 ≈ 系统音量按一次变化量的 1/5（通过 AudioManager 最大档位换算），
+ *   用于「按一下太大、按一下太小」的微调；到 0/1 边界后不再变化；
+ * - 触觉：每走一格给一次 TextHandleMove 反馈（低端机或关闭触觉时静默降级）；
+ * - 指示：拨动时浮现磨砂半透明竖条（5 段），1.4s 无操作后自动淡出。
+ */
+@Composable
+private fun VolumeFineTune(
+    volume: Float,
+    onVolumeChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val maxSteps = remember(context) {
+        (context.getSystemService(AudioManager::class.java)
+            ?.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+            ?.coerceAtLeast(1) ?: 15
+    }
+    val detent = remember(maxSteps) { 1f / (maxSteps * 5f) }
+    val stepPx = remember(density) { with(density) { 18.dp.toPx() } }
+
+    val currentVolume by rememberUpdatedState(volume)
+    val currentOnChange by rememberUpdatedState(onVolumeChange)
+
+    var visible by remember { mutableStateOf(false) }
+    var dragVolume by remember { mutableFloatStateOf(volume) }
+    var accumulated by remember { mutableFloatStateOf(0f) }
+    var interactionTick by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(interactionTick) {
+        if (!visible) return@LaunchedEffect
+        delay(1_400)
+        visible = false
+    }
+
+    Box(
+        modifier = modifier
+            .width(46.dp)
+            .height(220.dp)
+            .semantics { contentDescription = "音量微调：在封面右侧上下拨动" }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        dragVolume = currentVolume
+                        accumulated = 0f
+                        visible = true
+                        interactionTick = SystemClock.elapsedRealtime()
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        accumulated -= dragAmount
+                        val steps = (accumulated / stepPx).toInt()
+                        if (steps != 0) {
+                            accumulated -= steps * stepPx
+                            val next = (dragVolume + steps * detent).coerceIn(0f, 1f)
+                            if (next != dragVolume) {
+                                dragVolume = next
+                                currentOnChange(next)
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            interactionTick = SystemClock.elapsedRealtime()
+                        }
+                    },
+                    onDragEnd = {
+                        interactionTick = SystemClock.elapsedRealtime()
+                    },
+                    onDragCancel = {
+                        visible = false
+                    },
+                )
+            },
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(BiliMotion.Short4)),
+            exit = fadeOut(animationSpec = tween(BiliMotion.Medium2)),
+            modifier = Modifier.align(Alignment.CenterEnd),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                shadowElevation = 3.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.md),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    repeat(5) { index ->
+                        val active = dragVolume >= (index + 1) / 5f - 0.001f
+                        Box(
+                            modifier = Modifier
+                                .width(if (active) 20.dp else 12.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    if (active) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                                    },
+                                ),
+                        )
+                    }
+                    Spacer(Modifier.height(Spacing.xxs))
+                    Text(
+                        text = "${(dragVolume * 100).roundToInt()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
 }
