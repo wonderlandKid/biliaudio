@@ -1,5 +1,25 @@
 package com.wonderlandkid.biliaudio.ui.player
 
+import dev.chrisbanes.haze.rememberHazeState
+
+import dev.chrisbanes.haze.hazeSource
+
+import dev.chrisbanes.haze.blur.hazeBlur
+
+import dev.chrisbanes.haze.blur.HazeColorEffect
+
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+
+import dev.chrisbanes.haze.HazeState
+
+import dev.chrisbanes.haze.HazePerformanceMode
+
+import dev.chrisbanes.haze.HazeInput
+
+import androidx.compose.ui.graphics.BlendMode
+
+import android.os.Build
+
 import com.wonderlandkid.biliaudio.player.RealSpectrumAnalyzer
 
 import androidx.core.content.ContextCompat
@@ -212,6 +232,7 @@ fun NowPlayingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val volumeHazeState = rememberHazeState()
 
     // 真实频谱（需要麦克风权限，仅在用户确认后启用；拒绝则回退合成波形）
     var audioPermissionGranted by remember {
@@ -222,7 +243,7 @@ fun NowPlayingScreen(
             ) == PackageManager.PERMISSION_GRANTED,
         )
     }
-    var spectrumEnergy by remember { mutableFloatStateOf(0f) }
+    var spectrumBands by remember { mutableStateOf(FloatArray(0)) }
     var showSpectrumPrompt by rememberSaveable { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -237,11 +258,11 @@ fun NowPlayingScreen(
     }
     DisposableEffect(audioPermissionGranted, state.audioSessionId) {
         if (!audioPermissionGranted || state.audioSessionId == 0) {
-            spectrumEnergy = 0f
+            spectrumBands = FloatArray(0)
             onDispose { }
         } else {
             val analyzer = RealSpectrumAnalyzer(state.audioSessionId) { bands ->
-                spectrumEnergy = bands.average().toFloat().coerceIn(0f, 1f)
+                spectrumBands = bands
             }
             analyzer.start()
             onDispose { analyzer.release() }
@@ -298,7 +319,8 @@ fun NowPlayingScreen(
                         MaterialTheme.colorScheme.surface,
                     ),
                 ),
-            ),
+            )
+            .hazeSource(volumeHazeState),
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -342,7 +364,8 @@ fun NowPlayingScreen(
                 } else {
                     NowPlayingBody(
                         state = state,
-                        spectrumEnergy = spectrumEnergy,
+                        spectrumBands = spectrumBands,
+                        volumeHazeState = volumeHazeState,
                         initialPage = initialPage,
                         onPageChanged = onPageChanged,
                         onSeek = viewModel::seekToTrackPosition,
@@ -386,7 +409,8 @@ fun NowPlayingScreen(
 @Composable
 private fun NowPlayingBody(
     state: PlaybackState,
-    spectrumEnergy: Float,
+    spectrumBands: FloatArray,
+    volumeHazeState: HazeState,
     initialPage: Int,
     onPageChanged: (Int) -> Unit,
     onSeek: (Long) -> Unit,
@@ -458,6 +482,7 @@ private fun NowPlayingBody(
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
                     onCoverBounds = onCoverBounds,
                     onVolumeOffsetChange = onVolumeOffsetChange,
+                    volumeHazeState = volumeHazeState,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -469,7 +494,7 @@ private fun NowPlayingBody(
                 positionMs = state.positionMs,
                 durationMs = state.trackDurationMs,
                 isPlaying = state.isPlaying,
-                spectrumEnergy = spectrumEnergy,
+                spectrumBands = spectrumBands,
                 onSeek = onSeek,
             )
             Row(
@@ -513,17 +538,14 @@ private fun NowPlayingCoverPage(
     onOpenLyrics: () -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onVolumeOffsetChange: (Int) -> Unit,
+    volumeHazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(horizontal = Spacing.lg),
-        horizontalAlignment = Alignment.Start,
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         BoxWithConstraints(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(vertical = Spacing.sm),
+                .fillMaxSize()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
             // 比 v0.35 略小一点：给封面右侧的音量微调小球留出空间，同时保证单手可拨。
@@ -548,16 +570,16 @@ private fun NowPlayingCoverPage(
                     .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                 cornerRadius = 22.dp,
             )
-            // 封面右侧居中：7 档音量微调小球（默认居中，拨动后呈玻璃质感并显示 ±1..±3）。
-            VolumeFineTune(
-                offsetSteps = state.volumeOffsetSteps,
-                onOffsetChange = onVolumeOffsetChange,
-                coverSize = coverSize,
-                rightGap = (maxWidth - coverSize) / 2f,
-                modifier = Modifier.align(Alignment.Center),
-            )
         }
-        Spacer(Modifier.height(Spacing.sm))
+
+        // 音量微调：完美隐藏，点一下在屏幕最右侧显形，再拖动；
+        // 位置紧贴屏幕边框，不占封面空间（触控区向左延伸，视觉条贴边）。
+        VolumeFineTune(
+            offsetSteps = state.volumeOffsetSteps,
+            onOffsetChange = onVolumeOffsetChange,
+            hazeState = volumeHazeState,
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
     }
 }
 
@@ -571,7 +593,7 @@ private fun PlaybackSeekBar(
     positionMs: Long,
     durationMs: Long,
     isPlaying: Boolean,
-    spectrumEnergy: Float,
+    spectrumBands: FloatArray,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -589,49 +611,51 @@ private fun PlaybackSeekBar(
         ),
         label = "seekThumbRadius",
     )
-    // 波形进度条：播放时 active 轨道按合成频谱包络摆动，暂停时收平为直线。
-    // （真正的 FFT 频谱需要 Visualizer + RECORD_AUDIO，会引入麦克风权限；这里用与播放状态同步的
-    //   程序化节拍/频谱包络做视觉摆动，避免申请录音权限。）
-    val waveTransition = rememberInfiniteTransition(label = "seekWave")
+    // 频谱进度条（v0.38，成熟 seekbar 中常见的「实时频谱/波形」方案）：
+    // - 整条由竖条频谱组成，已播放部分用主题色「染色」，未播放部分完全透明；
+    // - 播放时优先用真实频谱（Visualizer 授权），否则用合成频谱回退；
+    // - 拖动 seek 时把振幅压缩到 30%，避免跳动影响定位手感。
+    val waveTransition = rememberInfiniteTransition(label = "seekSpectrum")
     val wavePhase by waveTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 1_800,
+                durationMillis = 2_400,
                 easing = BiliMotion.Emphasized,
             ),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "seekWavePhase",
+        label = "seekSpectrumPhase",
     )
-    // 真实频谱（Visualizer 授权后）驱动振幅；没有真实数据时回退到合成包络。
-    val liveSpectrumEnergy = spectrumEnergy.coerceIn(0f, 1f)
-    val syntheticEnergy by animateFloatAsState(
+    val spectrumActive by animateFloatAsState(
         targetValue = if (isPlaying) 1f else 0f,
         animationSpec = tween(
             durationMillis = 420,
             easing = BiliMotion.Emphasized,
         ),
-        label = "seekWaveEnergy",
+        label = "seekSpectrumActive",
     )
-    val waveEnergy = if (liveSpectrumEnergy > 0.02f) {
-        (0.40f + 0.9f * liveSpectrumEnergy).coerceIn(0f, 1.3f)
-    } else {
-        syntheticEnergy
-    }
+    val spectrumCompression by animateFloatAsState(
+        targetValue = if (dragging) 0.3f else 1f,
+        animationSpec = tween(
+            durationMillis = BiliMotion.Short4,
+            easing = BiliMotion.Emphasized,
+        ),
+        label = "seekSpectrumCompression",
+    )
 
     val density = LocalDensity.current
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
-    val waveAmplitudePx = with(density) { 3.2.dp.toPx() }
-    val waveLengthPx = with(density) { 26.dp.toPx() }
-    val activeStrokeWidthPx = with(density) { 4.5.dp.toPx() }
-    val trackHeightPx = with(density) { 8.dp.toPx() }
+    val barWidthPx = with(density) { 2.5.dp.toPx() }
+    val barGapPx = with(density) { 2.dp.toPx() }
+    val minBarHeightPx = with(density) { 2.5.dp.toPx() }
+    val maxBarHeightPx = with(density) { 19.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
 
     val activeColor = MaterialTheme.colorScheme.primary
-    val inactiveColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
     val haloColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+    val liveBands = spectrumBands
 
     Box(
         modifier = modifier
@@ -675,43 +699,43 @@ private fun PlaybackSeekBar(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val centerY = size.height / 2f
-            drawRoundRect(
-                color = inactiveColor,
-                topLeft = Offset(0f, centerY - trackHeightPx / 2f),
-                size = Size(size.width, trackHeightPx),
-                cornerRadius = CornerRadius(trackHeightPx / 2f),
-            )
             val activeWidth = size.width * progress
-            if (activeWidth > 0f) {
-                if (waveEnergy > 0.01f) {
-                    // 沿 x 方向叠加多频正弦，形成随播放律动的「频谱波浪」；
-                    // 振幅越靠滑块越大，尾部收平，避免结束点跳动。
-                    val path = Path()
-                    var x = 0f
-                    val step = 2f
-                    while (x <= activeWidth) {
-                        val envelope = (x / activeWidth).coerceIn(0f, 1f)
-                        val spectrum = 0.55f + 0.45f * sin(x / waveLengthPx * 2.2f + wavePhase * 1.7f)
-                        val y = centerY + sin(
-                            x / waveLengthPx * (2f * PI).toFloat() + wavePhase,
-                        ) * waveAmplitudePx * waveEnergy * envelope * spectrum
-                        if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
-                        x += step
-                    }
-                    drawPath(
-                        path = path,
-                        color = activeColor,
-                        style = Stroke(width = activeStrokeWidthPx, cap = StrokeCap.Round),
-                    )
+            val barCount = (((size.width + barGapPx) / (barWidthPx + barGapPx)).toInt())
+                .coerceIn(12, 96)
+            val step = if (barCount > 1) (size.width - barWidthPx) / (barCount - 1) else 0f
+            val scale = spectrumActive * spectrumCompression
+            val hasLiveSpectrum = liveBands.size >= 2
+
+            // 已播放部分：实时频谱竖条（未播放部分保持透明，不画底轨）。
+            for (index in 0 until barCount) {
+                val left = index * step
+                val barCenter = left + barWidthPx / 2f
+                if (barCenter > activeWidth + 0.5f) break
+                val fraction = index / (barCount - 1f).coerceAtLeast(1f)
+                val norm = if (hasLiveSpectrum) {
+                    val bandPosition = fraction * (liveBands.size - 1)
+                    val lower = bandPosition.toInt().coerceIn(0, liveBands.lastIndex)
+                    val upper = (lower + 1).coerceAtMost(liveBands.lastIndex)
+                    val t = (bandPosition - lower).coerceIn(0f, 1f)
+                    val energy = liveBands[lower] * (1f - t) + liveBands[upper] * t
+                    // 低频段一般能量更高，做一点视觉压缩避免前段过高。
+                    (energy * 1.15f).coerceIn(0f, 1f)
                 } else {
-                    drawRoundRect(
-                        color = activeColor,
-                        topLeft = Offset(0f, centerY - trackHeightPx / 2f),
-                        size = Size(activeWidth, trackHeightPx),
-                        cornerRadius = CornerRadius(trackHeightPx / 2f),
-                    )
+                    // 无权限时的合成频谱回退（与播放状态同步的节拍包络）。
+                    val low = sin(fraction * 13f + wavePhase) * 0.5f + 0.5f
+                    val high = sin(fraction * 37f - wavePhase * 1.6f) * 0.5f + 0.5f
+                    (0.22f + 0.58f * low + 0.20f * high).coerceIn(0f, 1f)
                 }
+                val barHeight = minBarHeightPx + (maxBarHeightPx - minBarHeightPx) * norm * scale
+                drawRoundRect(
+                    color = activeColor,
+                    topLeft = Offset(left, centerY - barHeight / 2f),
+                    size = Size(barWidthPx, barHeight),
+                    cornerRadius = CornerRadius(barWidthPx / 2f),
+                )
             }
+
+            // 小圆点：位于已播放/未播放边界，像给频谱线「染色」。
             val safeWidth = (size.width - thumbRadiusPx).coerceAtLeast(thumbRadiusPx)
             val centerX = activeWidth.coerceIn(thumbRadiusPx, safeWidth)
             drawCircle(
@@ -815,57 +839,90 @@ private fun modeLabel(mode: PlaybackMode): String = when (mode) {
 
 
 /**
- * 封面右侧缝隙里的「音量微调」细条（v0.37：更小巧、平时完全隐身、拨动显形）。
+ * 屏幕最右侧的音量微调细条（v0.38：完美隐藏 / 点按显形 / 拖拽调整 / 液态玻璃模糊）。
  *
- * - 位置：完全落在专辑封面右侧的缝隙内（不再压在封面上），默认垂直居中；
- * - 7 档（-3..+3），每档 = 系统媒体音量单次变化的 1/4；20dp 一档，单手拨动、防跳格；
- * - 平时（0 档且未触摸）完全隐身；一旦拨动或存在偏移，显示一条 26dp 宽的**液态玻璃**细条：
- *   顶部/底部渐变高光、细描边、7 个微小刻度，当前档位主题色高亮，并显示 ±数字；
- * - 每档触觉反馈，到 ±3 边界停止。
+ * - 平时完全隐身（只有透明触控区）；点一下在屏幕最右侧浮现；
+ * - 显形后上下拖动调整 7 档（-3..+3，每档=系统音量 1/4，20dp 一档）；
+ * - 视觉条紧贴屏幕右边缘（不占封面空间），材质为 Haze 背景模糊（API31+；低版本半透明兜底）；
+ * - 拖动/点按后 2s 自动隐藏，保证不打扰封面与歌词。
  */
 @Composable
 private fun VolumeFineTune(
     offsetSteps: Int,
     onOffsetChange: (Int) -> Unit,
-    coverSize: Dp,
-    rightGap: Dp,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val spacingPx = remember(density) { with(density) { 20.dp.toPx() } }
-    val coverHalfPx = remember(density, coverSize) { with(density) { coverSize.toPx() } / 2f }
-    val gapHalfPx = remember(density, rightGap) { with(density) { rightGap.toPx() } / 2f }
 
     val currentOffset by rememberUpdatedState(offsetSteps)
     val currentOnChange by rememberUpdatedState(onOffsetChange)
 
+    var revealed by remember { mutableStateOf(false) }
+    var revealedTick by remember { mutableLongStateOf(0L) }
     var dragging by remember { mutableStateOf(false) }
     var dragAccumulated by remember { mutableFloatStateOf(0f) }
     var dragBaseOffset by remember { mutableIntStateOf(offsetSteps) }
 
-    val effectiveOffset = if (dragging) dragBaseOffset else currentOffset
-    val revealed = dragging || effectiveOffset != 0
+    LaunchedEffect(revealedTick) {
+        if (!revealed) return@LaunchedEffect
+        delay(2_000)
+        revealed = false
+    }
     val revealAlpha by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
+        targetValue = if (revealed || dragging) 1f else 0f,
         animationSpec = tween(BiliMotion.Short4, easing = BiliMotion.Emphasized),
-        label = "volumeFineTuneAlpha",
+        label = "volumeFineTuneReveal",
     )
+
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val tintColor = MaterialTheme.colorScheme.surface
+    val fallbackColor = containerColor.copy(alpha = 0.94f)
+    val blurStyle = remember(containerColor, tintColor) {
+        val glassTint = HazeColorEffect.tint(
+            color = tintColor.copy(alpha = 0.22f),
+            blendMode = BlendMode.SrcOver,
+        )
+        val fallbackTint = HazeColorEffect.tint(
+            color = fallbackColor,
+            blendMode = BlendMode.SrcOver,
+        )
+        HazeBlurStyle {
+            blurRadius(28.dp)
+            backgroundColor(containerColor.copy(alpha = 0.14f))
+            colorEffects(listOf(glassTint))
+            fallbackColorEffect(fallbackTint)
+            noiseFactor(0.04f)
+        }
+    }
+    val glassModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Modifier.hazeBlur(
+            input = HazeInput.Sources(hazeState),
+            style = blurStyle,
+            performanceMode = HazePerformanceMode.Balanced,
+        )
+    } else {
+        Modifier.background(fallbackColor)
+    }
 
     Box(
         modifier = modifier
-            .offset {
-                IntOffset(
-                    x = (coverHalfPx + gapHalfPx).roundToInt(),
-                    y = 0,
-                )
-            }
             .width(48.dp)
-            .height(260.dp)
-            .semantics { contentDescription = "音量微调：在封面右侧缝隙上下拨动，共 7 档" }
+            .height(240.dp)
+            .semantics { contentDescription = "音量微调：点按后在屏幕右缘显形，上下拖动" }
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    revealed = true
+                    revealedTick = SystemClock.elapsedRealtime()
+                }
+            }
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = {
+                        revealed = true
+                        revealedTick = SystemClock.elapsedRealtime()
                         dragging = true
                         dragBaseOffset = currentOffset
                         dragAccumulated = 0f
@@ -882,39 +939,34 @@ private fun VolumeFineTune(
                                 currentOnChange(next)
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
+                            revealedTick = SystemClock.elapsedRealtime()
                         }
                     },
-                    onDragEnd = { dragging = false },
-                    onDragCancel = { dragging = false },
+                    onDragEnd = {
+                        dragging = false
+                        revealedTick = SystemClock.elapsedRealtime()
+                    },
+                    onDragCancel = {
+                        dragging = false
+                        revealedTick = SystemClock.elapsedRealtime()
+                    },
                 )
             },
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterEnd,
     ) {
-        val capsuleHeight = 150.dp
         Box(
             modifier = Modifier
                 .graphicsLayer { alpha = revealAlpha }
-                .width(26.dp)
-                .height(capsuleHeight)
-                .shadow(4.dp, RoundedCornerShape(13.dp), clip = false)
-                .clip(RoundedCornerShape(13.dp))
-                .background(
-                    // 液态玻璃：上层高光 + 半透明底色 + 下缘反光。
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.42f),
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                        ),
-                    ),
-                )
+                .width(24.dp)
+                .height(128.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .then(glassModifier)
                 .border(
                     width = 1.dp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.20f),
-                    shape = RoundedCornerShape(13.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(12.dp),
                 )
-                .padding(horizontal = 4.dp, vertical = 10.dp),
+                .padding(horizontal = 3.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -923,7 +975,7 @@ private fun VolumeFineTune(
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 repeat(7) { index ->
-                    val dotActive = index == effectiveOffset + 3
+                    val dotActive = index == dragBaseOffset + 3
                     Box(
                         modifier = Modifier
                             .width(if (dotActive) 12.dp else 6.dp)
@@ -933,15 +985,15 @@ private fun VolumeFineTune(
                                 if (dotActive) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                                 },
                             ),
                     )
                 }
             }
-            if (effectiveOffset != 0) {
+            if (dragBaseOffset != 0) {
                 Text(
-                    text = if (effectiveOffset > 0) "+$effectiveOffset" else "$effectiveOffset",
+                    text = if (dragBaseOffset > 0) "+$dragBaseOffset" else "$dragBaseOffset",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -950,12 +1002,13 @@ private fun VolumeFineTune(
         }
     }
 }
+
 /** 真实频谱权限提示是否已问过（只问一次，之后可在系统设置修改）。 */
-private fun isSpectrumPrompted(context: Context): Boolean =
-    context.getSharedPreferences("ui_prefs", Context.MODE_PRIVATE)
+private fun isSpectrumPrompted(context: android.content.Context): Boolean =
+    context.getSharedPreferences("ui_prefs", android.content.Context.MODE_PRIVATE)
         .getBoolean("spectrum_prompted", false)
 
-private fun spectrumPrompted(context: Context) {
-    context.getSharedPreferences("ui_prefs", Context.MODE_PRIVATE)
+private fun spectrumPrompted(context: android.content.Context) {
+    context.getSharedPreferences("ui_prefs", android.content.Context.MODE_PRIVATE)
         .edit().putBoolean("spectrum_prompted", true).apply()
 }

@@ -1025,3 +1025,26 @@
   退出播放页/暂停后不会后台采集；用户拒绝则功能降级但不影响播放。
 - **影响**：AndroidManifest 增加 RECORD_AUDIO；新增 player/RealSpectrumAnalyzer.kt；
   PlaybackContracts/PlaybackEngine 增加 audioSessionId；NowPlayingScreen 权限/频谱/音量 UI；文档；204 单测；release v0.37.0。
+
+
+## D65 实时频谱 seekbar + 完美隐藏的贴边音量条（v0.38.0）
+
+- **日期**：2026-11-11
+- **背景**：用户觉得 v0.37 的波浪进度条不好看，希望用成熟方案；预想是「播放条本身是频谱，
+  未播放部分透明，播放到的地方由小圆点染色；拖动时振幅压缩到 30%」。音量条则希望完美隐藏、
+  点一下显形再拖动、用正常模糊、尽量贴屏幕边框少影响封面。
+- **调研**：成熟 App 主要是两类进度条：
+  1）纯线性进度（Spotify/Apple Music/YouTube Music）；
+  2）整曲静态波形 + 已播放染色（SoundCloud、CamelPlayer 等）。
+  实时频谱 seekbar 较少见，常见做法是竖条频谱铺满、进度独立渲染（如 Flutter spectrum_seekbar 的 live 模式）。
+- **决策**：
+  1. 采用 live-spectrum seekbar：整条由竖条频谱组成；已播放竖条用 primary 染色，未播放完全透明；
+     小圆点位于边界；播放时优先用真实频谱（v0.37 的 Visualizer 8 频段），否则合成回退；
+     拖动 seek 时振幅压缩到 30%，不影响定位手感；不新增第三方依赖。
+  2. 音量条：平时 alpha=0（仅 48dp 透明触控区）；点按后在屏幕最右缘显形 24dp×128dp 竖条，
+     Haze 背景模糊（API31+，低版本半透明兜底），2s 后自动隐藏；拖动期间保持显形；
+     7 档 ±3、20dp/档、触觉反馈不变。
+- **取舍**：没有做整曲静态波形（需要解码整段音频/缓存峰值，B 站流式播放不划算）；
+  实时频谱只反映当前瞬间，历史位置用已播放染色表达；如需 SoundCloud 式整曲波形，可后续增加
+  「缓存音频 → 预先计算 peaks」的离线分析任务。
+- **影响**：NowPlayingScreen（频谱 seekbar、贴边 Haze 音量条、Haze source）修改；文档；204 单测；release v0.38.0。
