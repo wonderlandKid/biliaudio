@@ -34,7 +34,7 @@
 | 歌词行高亮（颜色/透明度） | `BiliMotion.LyricsActiveMs`（380ms） | Emphasized | v0.35 起不再缩放字号：当前行主题色填充，非当前行分层透明度 |
 | 歌词自动滚动 | `BiliMotion.LyricsScrollMs`（520ms） | Emphasized | 当前行平滑滚动到视口中心（长缓出，Apple Music 手感）；用户手动滚动后暂停 3s 再恢复 |
 | 歌词上下边缘渐隐 | - | 渐变遮罩（DstIn） | 歌词在面板上下边缘淡出，避免生硬截断 |
-| 播放进度波浪（v0.36） | 1800ms 循环；暂停收平 420ms | Emphasized（循环）/ Emphasized（收平） | active 轨道按合成频谱包络摆动；无 LinearEasing，符合全局动效规范 |
+| 播放进度波浪（v0.36/0.37） | 1800ms 循环；暂停收平 420ms | Emphasized（循环）/ Emphasized（收平） | active 轨道摆动；v0.37 起优先用真实频谱（Visualizer，8 频段）驱动振幅，未授权/失败回退合成包络；无 LinearEasing |
 | 迷你条→播放页连续展开（v0.34） | 跟手（无固定 duration） | 跟手插值；松手 spring(0.90/320) | `PlayerMorphLayer`：封面 Rect 连续插值 + 卡片长到全屏；播放页 alpha 55%→85%、morph alpha 88%→99.5% 交叉 |
 | Ripple / 底部导航指示器 / ModalBottomSheet | Material 3 默认 | M3 默认曲线/弹簧 | 系统组件自带非线性动效，不覆盖 |
 

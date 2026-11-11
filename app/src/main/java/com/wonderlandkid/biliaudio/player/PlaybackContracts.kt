@@ -67,6 +67,8 @@ data class PlaybackState(
     val shuffle: Boolean = false,
     /** 播放器实际音量（0..1，包含音量微调偏移）。 */
     val volume: Float = 1f,
+    /** ExoPlayer 的 audioSessionId；用于 Visualizer 取真实频谱（0 表示尚未分配）。 */
+    val audioSessionId: Int = 0,
     /** 音量微调档位：-3..+3（0 = 居中，不偏移）；每档 ≈ 系统音量单次变化的 1/4。 */
     val volumeOffsetSteps: Int = 0,
     val error: String? = null,

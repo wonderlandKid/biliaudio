@@ -1004,3 +1004,24 @@
 - **取舍**：当前频谱是「与播放状态同步的合成包络」，不是真实 FFT；如需要真实频谱，可加「真实频谱」开关，
   在用户授权麦克风后启用 Visualizer。
 - **影响**：PlaybackContracts/PlaybackEngine/NowPlayingViewModel/NowPlayingScreen（音量球、进度条）、文档；204 单测；release v0.36.0。
+
+
+## D64 缝隙内隐身音量细条 + 真实频谱（Visualizer / RECORD_AUDIO）（v0.37.0）
+
+- **日期**：2026-11-11
+- **背景**：用户反馈音量微调控件太大，希望做成很小巧、完全位于专辑封面右侧缝隙内、平时居中隐身、
+  拨动才显形并带液态玻璃质感；同时确认「真实频谱需要麦克风权限也可以做」。
+- **决策**：
+  1. 音量控件改为 26dp 宽、150dp 高的液态玻璃细条，中心落在封面右缘与屏幕右缘的缝隙中点；
+     0 档且未触摸时 alpha=0 完全隐身，拖动或非 0 档时显示 7 个刻度与 ±数字；
+     每档 20dp（低于 v0.36 的 34dp，更紧凑但仍防跳格）；档位仍是 -3..+3，每档=系统音量单步/4。
+  2. 真实频谱：新增 `RealSpectrumAnalyzer`，`Visualizer(audioSessionId)` 读取波形，
+     Goertzel 估算 8 频段并做 attack/decay 平滑；UI 首次打开播放页弹一次说明对话，
+     同意后申请 `RECORD_AUDIO` 并启用；拒绝/失败/无 audioSession 时回退合成包络；
+     Analyzer 仅播放页可见时存在，销毁即 release；不保存/上传任何音频数据。
+  3. 未额外引入第三方依赖：M3 1.5-alpha 的实验性 `LinearWavyProgressIndicator` 不可拖动，
+     因此保留自绘可交互波浪轨道，仅用真实频谱能量驱动其振幅。
+- **取舍**：`RECORD_AUDIO` 属于敏感权限，首次需明确说明；本应用只在播放页用于实时频谱，
+  退出播放页/暂停后不会后台采集；用户拒绝则功能降级但不影响播放。
+- **影响**：AndroidManifest 增加 RECORD_AUDIO；新增 player/RealSpectrumAnalyzer.kt；
+  PlaybackContracts/PlaybackEngine 增加 audioSessionId；NowPlayingScreen 权限/频谱/音量 UI；文档；204 单测；release v0.37.0。

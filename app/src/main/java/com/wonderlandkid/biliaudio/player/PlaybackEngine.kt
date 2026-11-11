@@ -714,6 +714,7 @@ class PlaybackEngine private constructor(
             shuffle = player.shuffleModeEnabled,
             volume = player.volume,
             volumeOffsetSteps = volumeOffsetSteps,
+            audioSessionId = player.audioSessionId,
         )
         Diag.log(
             TAG,
@@ -783,6 +784,7 @@ class PlaybackEngine private constructor(
                 trackDurationMs = entry.durationMs,
                 albumPositionMs = PlaybackMapping.trackPositionToAlbumPosition(entry.track, position),
                 albumDurationMs = entry.albumDurationMs,
+                audioSessionId = player.audioSessionId,
             )
         }
     }
