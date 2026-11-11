@@ -6,8 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,44 +124,49 @@ internal fun VolumeFineTune(
             .height(240.dp)
             .semantics { contentDescription = "音量微调：点按后在屏幕右缘显形，上下拖动" }
             .pointerInput(Unit) {
-                detectTapGestures {
+                // 单一手势循环：点按=显形；上下拖=调档。不要拆成两个 detect*，否则 tap 会吃掉 down
+                // 事件、拖动在部分机型上完全不触发（v0.40 用户反馈「音量微调没用」）。
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
                     revealed = true
                     revealedTick = SystemClock.elapsedRealtime()
-                }
-            }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = {
-                        revealed = true
-                        revealedTick = SystemClock.elapsedRealtime()
-                        dragging = true
-                        dragBaseOffset = currentOffset
-                        dragAccumulated = 0f
-                    },
-                    onVerticalDrag = { change, dragAmount ->
-                        change.consume()
-                        dragAccumulated -= dragAmount
-                        val steps = (dragAccumulated / spacingPx).toInt()
-                        if (steps != 0) {
-                            dragAccumulated -= steps * spacingPx
-                            val next = (dragBaseOffset + steps).coerceIn(-3, 3)
-                            if (next != dragBaseOffset) {
-                                dragBaseOffset = next
-                                currentOnChange(next)
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
+                    dragBaseOffset = currentOffset
+                    dragAccumulated = 0f
+                    var lastY = down.position.y
+                    var moved = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            dragging = false
                             revealedTick = SystemClock.elapsedRealtime()
+                            break
                         }
-                    },
-                    onDragEnd = {
-                        dragging = false
-                        revealedTick = SystemClock.elapsedRealtime()
-                    },
-                    onDragCancel = {
-                        dragging = false
-                        revealedTick = SystemClock.elapsedRealtime()
-                    },
-                )
+                        val dy = change.position.y - lastY
+                        lastY = change.position.y
+                        if (!moved && kotlin.math.abs(change.position.y - down.position.y) >
+                            viewConfiguration.touchSlop
+                        ) {
+                            moved = true
+                            dragging = true
+                        }
+                        if (dragging) {
+                            change.consume()
+                            dragAccumulated -= dy
+                            val steps = (dragAccumulated / spacingPx).toInt()
+                            if (steps != 0) {
+                                dragAccumulated -= steps * spacingPx
+                                val next = (dragBaseOffset + steps).coerceIn(-3, 3)
+                                if (next != dragBaseOffset) {
+                                    dragBaseOffset = next
+                                    currentOnChange(next)
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                                revealedTick = SystemClock.elapsedRealtime()
+                            }
+                        }
+                    }
+                }
             },
         contentAlignment = Alignment.CenterEnd,
     ) {

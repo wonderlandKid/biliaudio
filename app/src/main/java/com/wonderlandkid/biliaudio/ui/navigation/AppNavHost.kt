@@ -55,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +78,7 @@ import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
 import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
 import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
+import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
 import com.wonderlandkid.biliaudio.ui.home.RecentAlbumsScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
@@ -86,6 +88,7 @@ import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.player.PlayerMorphLayer
+import com.wonderlandkid.biliaudio.ui.player.rememberCoverAccentColor
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
@@ -93,6 +96,7 @@ import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.stats.StatsScreen
+import com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
@@ -145,6 +149,11 @@ fun AppNavHost() {
     var homeScrollSnapshot by remember { mutableStateOf<ScrollSnapshot?>(null) }
     var libraryScrollSnapshot by remember { mutableStateOf<LibraryScrollSnapshot?>(null) }
     var settingsScrollSnapshot by remember { mutableStateOf<ScrollSnapshot?>(null) }
+
+    // 封面主题：morph 层与播放页共用同一份种子色，避免展开末尾出现粉/黄配色跳变。
+    val morphCover = playbackState.queue.getOrNull(playbackState.currentIndex)?.coverModel()
+    val morphSeedColor = rememberCoverAccentColor(morphCover, MaterialTheme.colorScheme.primary)
+    val morphIsDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
@@ -228,11 +237,13 @@ fun AppNavHost() {
             Animatable(playerProgress).animateTo(
                 targetValue = if (open) 1f else 0f,
                 animationSpec = spring(
-                    dampingRatio = 0.90f,
-                    stiffness = 320f,
+                    // 临界阻尼：不回弹/不过冲，避免松手后「闪一下」；
+                    // 配合较小初始速度，让惯性自然收敛而不是瞬间到顶。
+                    dampingRatio = 1f,
+                    stiffness = 380f,
                     visibilityThreshold = 0.001f,
                 ),
-                initialVelocity = velocity.coerceIn(-6f, 6f),
+                initialVelocity = velocity.coerceIn(-2.5f, 2.5f),
             ) { playerProgress = value.coerceIn(0f, 1f) }
             playerProgress = if (open) 1f else 0f
         }
@@ -246,13 +257,16 @@ fun AppNavHost() {
         state = playerDragState,
         orientation = Orientation.Vertical,
         onDragStopped = { velocity ->
-            // 方向 + 速度 + 进度共同决定：向下快滑关闭、向上快滑展开，否则看是否过半
+            // 方向 + 速度 + 预测最终位置共同决定，保留松手瞬间的惯性：
+            // 用 220ms 的位移预测，避免「慢慢拖到一半松手」时被硬阈值瞬间甩到顶/底。
+            val progressVelocity = -velocity / screenHeightPx.coerceAtLeast(1).toFloat()
+            val projected = (playerProgress + progressVelocity * 0.22f).coerceIn(0f, 1f)
             val open = when {
-                velocity < -800f -> true
-                velocity > 800f -> false
-                else -> playerProgress > 0.5f
+                velocity < -600f -> true
+                velocity > 600f -> false
+                else -> projected >= 0.5f
             }
-            animatePlayerTo(open, (-velocity / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(-6f, 6f))
+            animatePlayerTo(open, progressVelocity)
         },
     )
 
@@ -588,7 +602,7 @@ fun AppNavHost() {
                 val miniAlpha = if (!morphReady) {
                     1f
                 } else {
-                    (1f - playerProgress / 0.06f).coerceIn(0f, 1f)
+                    1f - smoothStep(0.04f, 0.20f, playerProgress)
                 }
                 MiniPlayerHost(
                     playbackController = container.playbackController,
@@ -609,13 +623,17 @@ fun AppNavHost() {
             // 正在播放页：始终铺满全屏（不再上下位移），alpha 在展开后半段淡入；
             // 低进度时的视觉由 PlayerMorphLayer 的连续卡片/封面/标题负责。
             if (playerProgress > 0.001f) {
-                val playerAlpha = smoothStep(0.55f, 0.85f, playerProgress)
+                // 播放页内容随展开进度从底部轻微上浮：控件不再在原地淡入，而是像被页面一起拖上来。
+                val playerReveal = smoothStep(0.62f, 0.96f, playerProgress)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         // 必须先 graphicsLayer 再 background：alpha 才会作用于背景，
                         // 否则展开前半段会出现「不透明的播放页底色盖掉下面页面」。
-                        .graphicsLayer { alpha = playerAlpha }
+                        .graphicsLayer {
+                            alpha = playerReveal
+                            translationY = (1f - playerReveal) * 56.dp.toPx()
+                        }
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
                     // 先于 NowPlayingScreen 注册：播放页内的弹层（播放列表 ModalBottomSheet）
@@ -644,22 +662,24 @@ fun AppNavHost() {
             }
 
             // 连续展开层：迷你条封面/标题/艺术家 → 播放页对应位置，卡片背景同步长到全屏
-            val morphAlpha = 1f - smoothStep(0.88f, 0.995f, playerProgress)
+            val morphAlpha = 1f - smoothStep(0.90f, 0.995f, playerProgress)
             if (playerProgress > 0.001f && playerProgress < 0.999f && morphAlpha > 0.001f) {
-                PlayerMorphLayer(
-                    progress = playerProgress,
-                    state = playbackState,
-                    miniBarRect = miniBarRect,
-                    miniCoverRect = miniCoverRect,
-                    miniTitleRect = miniTitleRect,
-                    miniArtistRect = miniArtistRect,
-                    playerCoverRect = playerCoverRect,
-                    playerTitleRect = playerTitleRect,
-                    playerArtistRect = playerArtistRect,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = morphAlpha },
-                )
+                BiliAudioTheme(darkTheme = morphIsDark, seedColor = morphSeedColor) {
+                    PlayerMorphLayer(
+                        progress = playerProgress,
+                        state = playbackState,
+                        miniBarRect = miniBarRect,
+                        miniCoverRect = miniCoverRect,
+                        miniTitleRect = miniTitleRect,
+                        miniArtistRect = miniArtistRect,
+                        playerCoverRect = playerCoverRect,
+                        playerTitleRect = playerTitleRect,
+                        playerArtistRect = playerArtistRect,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = morphAlpha },
+                    )
+                }
             }
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。

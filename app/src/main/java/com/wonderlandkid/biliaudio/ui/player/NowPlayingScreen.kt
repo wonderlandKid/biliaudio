@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +68,7 @@ import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.player.lyrics.NowPlayingLyricsPane
+import com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
@@ -189,6 +191,11 @@ fun NowPlayingScreen(
         )
     }
 
+    // 播放页局部主题：种子色来自当前封面；仅影响播放页，不改变 App 品牌主题。
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val coverModel = state.queue.getOrNull(state.currentIndex)?.coverModel()
+    val coverSeed = rememberCoverAccentColor(coverModel, MaterialTheme.colorScheme.primary)
+    BiliAudioTheme(darkTheme = isDarkTheme, seedColor = coverSeed) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -265,6 +272,7 @@ fun NowPlayingScreen(
             }
         }
     }
+    } // BiliAudioTheme（播放页局部封面主题）
 
     if (showPlaylist) {
         ModalBottomSheet(
@@ -376,6 +384,7 @@ private fun NowPlayingBody(
                 durationMs = state.trackDurationMs,
                 isPlaying = state.isPlaying,
                 spectrumBands = spectrumBands,
+                waveSeed = state.currentTrack?.uid?.hashCode() ?: 0,
                 onSeek = onSeek,
             )
             Row(

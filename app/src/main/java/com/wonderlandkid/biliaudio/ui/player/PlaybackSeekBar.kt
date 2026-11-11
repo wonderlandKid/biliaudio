@@ -51,6 +51,8 @@ internal fun PlaybackSeekBar(
     durationMs: Long,
     isPlaying: Boolean,
     spectrumBands: FloatArray,
+    /** 当前曲目稳定种子：用于生成「整首波形」的不规则包络（不同歌曲形状不同）。 */
+    waveSeed: Int,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -104,8 +106,8 @@ internal fun PlaybackSeekBar(
 
     val density = LocalDensity.current
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
-    val barWidthPx = with(density) { 2.dp.toPx() }
-    val barGapPx = with(density) { 2.dp.toPx() }
+    val barWidthPx = with(density) { 4.dp.toPx() }
+    val barGapPx = with(density) { 3.dp.toPx() }
     val minBarHeightPx = with(density) { 2.dp.toPx() }
     val maxBarHeightPx = with(density) { 28.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
@@ -159,7 +161,7 @@ internal fun PlaybackSeekBar(
             val centerY = size.height / 2f
             val activeWidth = size.width * progress
             val barCount = (((size.width + barGapPx) / (barWidthPx + barGapPx)).toInt())
-                .coerceIn(12, 96)
+                .coerceIn(12, 64)
             val step = if (barCount > 1) (size.width - barWidthPx) / (barCount - 1) else 0f
             val scale = spectrumActive * spectrumCompression
             val hasLiveSpectrum = liveBands.size >= 2
@@ -170,22 +172,25 @@ internal fun PlaybackSeekBar(
                 val left = index * step
                 val barCenter = left + barWidthPx / 2f
                 val fraction = index / (barCount - 1f).coerceAtLeast(1f)
-                val baseNorm = if (hasLiveSpectrum) {
-                    val bandPosition = fraction * (liveBands.size - 1)
-                    val lower = bandPosition.toInt().coerceIn(0, liveBands.lastIndex)
-                    val upper = (lower + 1).coerceAtMost(liveBands.lastIndex)
-                    val t = (bandPosition - lower).coerceIn(0f, 1f)
-                    val energy = liveBands[lower] * (1f - t) + liveBands[upper] * t
-                    (energy * 1.35f).coerceIn(0f, 1f)
+                // 整首「波形」的不规则包络：由曲目种子生成平滑噪声，避免 8 段频谱插值导致的
+                // 规则条纹；两端低、中间高，像 SoundCloud/CamelPlayer 的整曲 waveform。
+                val noise = (
+                    hashNoise(index, waveSeed) * 0.60f +
+                        hashNoise(index - 1, waveSeed) * 0.20f +
+                        hashNoise(index + 1, waveSeed) * 0.20f
+                    )
+                val envelope = 0.52f + 0.48f * sin(fraction * PI.toFloat())
+                val energy = if (hasLiveSpectrum) {
+                    liveBands.average().toFloat().coerceIn(0f, 1f)
                 } else {
-                    // 无权限时的合成频谱回退（与播放状态同步的节拍包络）。
-                    val low = sin(fraction * 13f + wavePhase) * 0.5f + 0.5f
-                    val high = sin(fraction * 37f - wavePhase * 1.6f) * 0.5f + 0.5f
-                    (0.22f + 0.58f * low + 0.20f * high).coerceIn(0f, 1f)
+                    (0.5f + 0.5f * sin(wavePhase * 1.3f)).coerceIn(0f, 1f)
                 }
-                // 逐条相位微动（每帧变化）让频谱有持续的「呼吸/跳动」，弥补真实回调帧率。
-                val shimmer = 0.78f + 0.22f * sin(index * 0.55f + wavePhase * 3f)
-                val norm = (baseNorm * shimmer * (0.45f + 0.55f * spectrumActive)).coerceIn(0f, 1f)
+                // 整体能量让波形随歌曲律动；单条相位微动保持 60fps 的细腻起伏。
+                val shimmer = 0.90f + 0.10f * sin(index * 0.9f + wavePhase * 2.2f)
+                val norm = (
+                    (0.10f + 0.90f * noise) * envelope *
+                        (0.55f + 0.75f * energy) * shimmer
+                    ).coerceIn(0f, 1f)
                 val barHeight = minBarHeightPx + (maxBarHeightPx - minBarHeightPx) * norm * scale
                 val played = barCenter <= activeWidth + 0.5f
                 drawRoundRect(
@@ -213,3 +218,10 @@ internal fun PlaybackSeekBar(
     }
 }
 
+/** 稳定、平滑的伪随机噪声：同一曲目的同一位置永远相同，用来画不规则整曲波形。 */
+private fun hashNoise(index: Int, seed: Int): Float {
+    var h = index * 374761393 + seed * 668265263
+    h = (h xor (h ushr 13)) * 1274126177
+    h = h xor (h ushr 16)
+    return (h and 0x7fffffff) / 2147483647f
+}

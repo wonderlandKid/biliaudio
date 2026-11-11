@@ -1,7 +1,6 @@
 package com.wonderlandkid.biliaudio.player
 
 import android.content.Context
-import android.media.AudioManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -180,12 +179,11 @@ class PlaybackEngine private constructor(
     /** 供 [PlaybackService] 构建 MediaSession 使用（同一个 ExoPlayer 实例）。 */
     internal val exoPlayer: ExoPlayer get() = player
 
-    // ---- 音量微调（7 档：-3..+3；每档 = 系统媒体音量单次变化的 1/4） ----
-    private val audioManager: AudioManager? =
-        appContext.getSystemService(AudioManager::class.java)
-    private val volumeMaxSteps: Int =
-        (audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1)
-    private val volumeDetent: Float = 1f / (volumeMaxSteps * 4f)
+    // ---- 音量微调（7 档：-3..+3） ----
+    // 注意：不能直接用 AudioManager 的 maxStreamVolume 换算——很多 ROM 把档位报成 100+，
+    // 除以 4 后每档不到 1%，用户会感觉「没反应」。这里用固定的听感步长（2.5%），
+    // 7 档总跨度约 ±7.5%，既细腻又能听出变化。
+    private val volumeDetent: Float = 0.025f
     /** 居中档的基础音量：留出 +3 档的上行空间（约 -5% 幅度，听感几乎无差）。 */
     private val volumeBase: Float = (1f - 3f * volumeDetent).coerceIn(0.5f, 1f)
     private var volumeOffsetSteps: Int = 0
