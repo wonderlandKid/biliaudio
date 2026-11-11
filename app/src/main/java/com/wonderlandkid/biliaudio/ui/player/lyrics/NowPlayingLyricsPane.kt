@@ -471,7 +471,7 @@ private fun SyncedLyricsContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .lyricsEdgeFade(),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 contentPadding = PaddingValues(
                     start = Spacing.lg,
@@ -509,7 +509,7 @@ private fun PlainLyricsContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
         contentPadding = PaddingValues(
             horizontal = Spacing.xl,
@@ -529,7 +529,7 @@ private fun PlainLyricsContent(
                 text = text.ifBlank { EMPTY_LINE_PLACEHOLDER },
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

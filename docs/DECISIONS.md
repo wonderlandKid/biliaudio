@@ -937,3 +937,23 @@
 - **影响**：`PlaybackContracts`/`PlaybackEngine`/`NowPlayingViewModel`/`NowPlayingScreen`/`MiniPlayerBar`/
   `AppNavHost`/`HomeScreen`/`LibraryScreen`/`SettingsScreen`/`LetterIndex` 修改；
   新增 `PlaybackModeTest`；204 单测；release v0.33.0。
+
+
+## D61 迷你条→播放页单一表面连续展开 + 歌词左对齐（v0.34.0）
+
+- **日期**：2026-11-11
+- **背景**：用户要求按「单一 surfaces 连续变形（迷你条封面直接放大并移动到播放页封面位置、标题/控制跟着重排）」
+  继续优化迷你条展开；同时要求歌词页歌词靠左。
+- **决策**：
+  1. v0.33 的两段式（先拉伸迷你条、再滑动播放页卡片）改为 **shared-element 式连续展开**：
+     - NowPlayingScreen 从进度 >0 起以透明形式组合，上报封面/标题/艺术家在窗口中的 Rect；
+     - 新增 PlayerMorphLayer：封面连续插值（位置/大小/圆角/暂停缩放），卡片背景从迷你条尺寸连续长到全屏；
+     - 迷你标题在封面右侧、播放页标题在封面下方，路径交叉 → 标题/艺术家在前 12% 快速淡出，
+       交给后半段淡入的播放页内容承接，避免叠字；
+     - 播放页内容 55%→85% 淡入、morph 层 88%→99.5% 淡出；两端位置对齐；
+     - morph 层就绪前迷你条保持完全不透明，避免「迷你条已淡出但 morph 未绘制」的空白帧。
+  2. 歌词页（同步/逐字/纯文本/翻译）全部左对齐；顶部信息与来源/偏移布局不变。
+- **取舍**：标题/控制没有做全程连续重排（geometry 交叉不可避免），采用「封面连续 + 卡片连续 + 内容交叉淡入」，
+  视觉上是一次连续的展开；如后续要做完全体，可在封面飞行基础上再加自定义 Layout 插值所有子元素。
+- **影响**：新增 `ui/player/PlayerMorphLayer.kt`；AppNavHost/MiniPlayerBar/NowPlayingScreen 增加窗口位置回调；
+  LyricLineRow/NowPlayingLyricsPane 对齐调整；204 单测；release v0.34.0。

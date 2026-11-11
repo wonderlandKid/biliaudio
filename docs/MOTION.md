@@ -34,6 +34,7 @@
 | 歌词行高亮（当前行缩放/透明度/颜色） | `BiliMotion.LyricsActiveMs`（380ms） | Emphasized | 当前行 1.09 放大 + primary 色；非当前行 0.95 缩放 + 分层透明度 |
 | 歌词自动滚动 | `BiliMotion.LyricsScrollMs`（520ms） | Emphasized | 当前行平滑滚动到视口中心（长缓出，Apple Music 手感）；用户手动滚动后暂停 3s 再恢复 |
 | 歌词上下边缘渐隐 | - | 渐变遮罩（DstIn） | 歌词在面板上下边缘淡出，避免生硬截断 |
+| 迷你条→播放页连续展开（v0.34） | 跟手（无固定 duration） | 跟手插值；松手 spring(0.90/320) | `PlayerMorphLayer`：封面 Rect 连续插值 + 卡片长到全屏；播放页 alpha 55%→85%、morph alpha 88%→99.5% 交叉 |
 | Ripple / 底部导航指示器 / ModalBottomSheet | Material 3 默认 | M3 默认曲线/弹簧 | 系统组件自带非线性动效，不覆盖 |
 
 ## 3. 为什么返回“看起来和滑动快慢有关”

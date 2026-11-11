@@ -114,7 +114,7 @@ internal fun LyricLineRow(
             }
             .clickable(enabled = isSynced, onClick = onClick)
             .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
     ) {
         when (line) {
             is LyricItem.NormalLyric -> {
@@ -122,7 +122,7 @@ internal fun LyricLineRow(
                     text = line.content.ifBlank { EMPTY_LINE_PLACEHOLDER },
                     style = mainStyle,
                     color = mainColor,
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.Start,
                     overflow = TextOverflow.Ellipsis,
                 )
                 line.translation?.takeIf { it.isNotBlank() }?.let { translation ->
@@ -146,7 +146,7 @@ internal fun LyricLineRow(
                             unsungColor = colorScheme.onSurfaceVariant,
                         ),
                         style = mainStyle,
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Start,
                     )
                 } else {
                     Text(
@@ -184,7 +184,7 @@ private fun TranslationLine(
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
             alpha = if (isActive) 0.85f else 0.55f,
         ),
-        textAlign = TextAlign.Center,
+        textAlign = TextAlign.Start,
         overflow = TextOverflow.Ellipsis,
     )
 }

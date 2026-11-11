@@ -63,6 +63,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -108,6 +110,10 @@ private const val PAGE_COUNT = 2
 @Composable
 fun NowPlayingScreen(
     modifier: Modifier = Modifier,
+    /** 供 AppNavHost 做共享元素（连续展开）定位：封面/标题/艺术家在窗口中的位置。 */
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
     },
@@ -185,6 +191,9 @@ fun NowPlayingScreen(
                         onPrevious = viewModel::previous,
                         onCyclePlaybackMode = viewModel::cyclePlaybackMode,
                         onOpenPlaylist = { showPlaylist = true },
+                        onCoverBounds = onCoverBounds,
+                        onTitleBounds = onTitleBounds,
+                        onArtistBounds = onArtistBounds,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -222,6 +231,9 @@ private fun NowPlayingBody(
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
@@ -246,6 +258,9 @@ private fun NowPlayingBody(
                     state = state,
                     entry = entry,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
+                    onCoverBounds = onCoverBounds,
+                    onTitleBounds = onTitleBounds,
+                    onArtistBounds = onArtistBounds,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -294,6 +309,9 @@ private fun NowPlayingCoverPage(
     state: PlaybackState,
     entry: QueueEntry?,
     onOpenLyrics: () -> Unit,
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -324,7 +342,8 @@ private fun NowPlayingCoverPage(
                         scaleX = coverScale
                         scaleY = coverScale
                     }
-                    .clickable(onClick = onOpenLyrics),
+                    .clickable(onClick = onOpenLyrics)
+                    .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                 cornerRadius = 22.dp,
             )
         }
@@ -333,6 +352,7 @@ private fun NowPlayingCoverPage(
             style = MaterialTheme.typography.headlineMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
         )
         Spacer(Modifier.height(Spacing.xxs))
         Text(
@@ -343,6 +363,7 @@ private fun NowPlayingCoverPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
         )
         Spacer(Modifier.height(Spacing.md))
     }

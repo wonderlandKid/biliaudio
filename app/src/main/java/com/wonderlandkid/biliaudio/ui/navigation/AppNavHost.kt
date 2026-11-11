@@ -53,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -84,6 +85,7 @@ import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
+import com.wonderlandkid.biliaudio.ui.player.PlayerMorphLayer
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
 import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
@@ -193,10 +195,17 @@ fun AppNavHost() {
         },
     )
 
-    // 迷你条自由拉伸：把 0→0.14 的展开进度映射成迷你条自身的「拉伸」（封面变大、
-    // 信息变多），0.14 之后播放页卡片接管并从底部连续展开。
-    val miniStretch = (playerProgress / 0.14f).coerceIn(0f, 1f)
-    val openProgress = ((playerProgress - 0.14f) / 0.86f).coerceIn(0f, 1f)
+    // 连续展开（v0.34.0）：迷你条与播放页不再分两层硬切。
+    // - 播放页 NowPlayingScreen 从 p>0 就组合（alpha 从 0 逐渐出现），上报封面/标题/艺术家位置；
+    // - PlayerMorphLayer 把迷你条的封面/标题/艺术家连续插值到播放页位置，卡片背景同步长到全屏；
+    // - p→1 时 morph 层淡出，交给真正的播放页（两端位置已对齐，无跳变）。
+    var miniBarRect by remember { mutableStateOf<Rect?>(null) }
+    var miniCoverRect by remember { mutableStateOf<Rect?>(null) }
+    var miniTitleRect by remember { mutableStateOf<Rect?>(null) }
+    var miniArtistRect by remember { mutableStateOf<Rect?>(null) }
+    var playerCoverRect by remember { mutableStateOf<Rect?>(null) }
+    var playerTitleRect by remember { mutableStateOf<Rect?>(null) }
+    var playerArtistRect by remember { mutableStateOf<Rect?>(null) }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -502,19 +511,26 @@ fun AppNavHost() {
 
             }
 
-            // 悬浮迷你播放条（播放页展开时淡出并让位给播放页卡片）
+            // 悬浮迷你播放条：只负责上报自身/封面/标题/艺术家在窗口中的位置（供 morph 层插值）。
+            // 开启播放页时快速淡出，交给 morph 层做连续展开。
             if (showMiniPlayer) {
-                // 拉伸阶段保持完全不透明；播放页卡片从 0.14 起接管时再淡出，避免拉伸过程被提前遮住。
-                val miniAlpha = if (playerProgress <= 0.14f) {
+                // morph 层就绪（拿到播放页封面/标题位置）前保持迷你条完全可见，
+                // 避免「迷你条先淡出、morph 还没画出来」的空白帧。
+                val morphReady = playerCoverRect != null && miniCoverRect != null
+                val miniAlpha = if (!morphReady) {
                     1f
                 } else {
-                    (1f - ((playerProgress - 0.14f) / 0.10f)).coerceIn(0f, 1f)
+                    (1f - playerProgress / 0.06f).coerceIn(0f, 1f)
                 }
                 MiniPlayerHost(
                     playbackController = container.playbackController,
                     onClick = { animatePlayerTo(true) },
                     dragModifier = playerDragModifier,
-                    stretchProgress = miniStretch,
+                    stretchProgress = 0f,
+                    onBarBounds = { miniBarRect = it },
+                    onCoverBounds = { miniCoverRect = it },
+                    onTitleBounds = { miniTitleRect = it },
+                    onArtistBounds = { miniArtistRect = it },
                     hazeState = hazeState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -523,25 +539,16 @@ fun AppNavHost() {
                 )
             }
 
-            // 正在播放页：迷你条先自由拉伸（0→0.14），随后播放页卡片从底部连续展开（0.14→1）
-            if (playerProgress > 0.14f) {
-                val horizontalInset = (18.dp * (1f - openProgress))
-                    .coerceAtLeast(0.dp)
-                val topRadius = (28.dp * (1f - openProgress))
-                    .coerceAtLeast(0.dp)
+            // 正在播放页：始终铺满全屏（不再上下位移），alpha 在展开后半段淡入；
+            // 低进度时的视觉由 PlayerMorphLayer 的连续卡片/封面/标题负责。
+            if (playerProgress > 0.001f) {
+                val playerAlpha = smoothStep(0.55f, 0.85f, playerProgress)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            translationY = (1f - openProgress) * size.height
-                        }
-                        .padding(horizontal = horizontalInset)
-                        .clip(
-                            RoundedCornerShape(
-                                topStart = topRadius,
-                                topEnd = topRadius,
-                            ),
-                        )
+                        // 必须先 graphicsLayer 再 background：alpha 才会作用于背景，
+                        // 否则展开前半段会出现「不透明的播放页底色盖掉下面页面」。
+                        .graphicsLayer { alpha = playerAlpha }
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
                     // 先于 NowPlayingScreen 注册：播放页内的弹层（播放列表 ModalBottomSheet）
@@ -549,7 +556,11 @@ fun AppNavHost() {
                     BackHandler(enabled = playerProgress > 0.01f) {
                         animatePlayerTo(false)
                     }
-                    NowPlayingScreen()
+                    NowPlayingScreen(
+                        onCoverBounds = { playerCoverRect = it },
+                        onTitleBounds = { playerTitleRect = it },
+                        onArtistBounds = { playerArtistRect = it },
+                    )
                     // 播放页顶部下拉关闭区域（48dp 高、上滑展开后手指可在顶部向下拖回迷你条）
                     Box(
                         modifier = Modifier
@@ -559,6 +570,25 @@ fun AppNavHost() {
                             .then(playerDragModifier),
                     )
                 }
+            }
+
+            // 连续展开层：迷你条封面/标题/艺术家 → 播放页对应位置，卡片背景同步长到全屏
+            val morphAlpha = 1f - smoothStep(0.88f, 0.995f, playerProgress)
+            if (playerProgress > 0.001f && playerProgress < 0.999f && morphAlpha > 0.001f) {
+                PlayerMorphLayer(
+                    progress = playerProgress,
+                    state = playbackState,
+                    miniBarRect = miniBarRect,
+                    miniCoverRect = miniCoverRect,
+                    miniTitleRect = miniTitleRect,
+                    miniArtistRect = miniArtistRect,
+                    playerCoverRect = playerCoverRect,
+                    playerTitleRect = playerTitleRect,
+                    playerArtistRect = playerArtistRect,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = morphAlpha },
+                )
             }
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。
@@ -648,6 +678,10 @@ private fun MiniPlayerHost(
     onClick: () -> Unit,
     dragModifier: Modifier,
     stretchProgress: Float,
+    onBarBounds: (Rect) -> Unit,
+    onCoverBounds: (Rect) -> Unit,
+    onTitleBounds: (Rect) -> Unit,
+    onArtistBounds: (Rect) -> Unit,
     hazeState: dev.chrisbanes.haze.HazeState?,
     modifier: Modifier = Modifier,
 ) {
@@ -661,6 +695,21 @@ private fun MiniPlayerHost(
         hazeState = hazeState,
         dragModifier = dragModifier,
         stretchProgress = stretchProgress,
+        onBarBounds = onBarBounds,
+        onCoverBounds = onCoverBounds,
+        onTitleBounds = onTitleBounds,
+        onArtistBounds = onArtistBounds,
         modifier = modifier,
     )
+}
+
+// ---------------------------------------------------------------------------
+// 连续展开插值
+// ---------------------------------------------------------------------------
+
+/** 平滑阶跃：progress 在 [start, end] 内从 0 平滑过渡到 1。 */
+private fun smoothStep(start: Float, end: Float, progress: Float): Float {
+    if (end <= start) return if (progress >= end) 1f else 0f
+    val t = ((progress - start) / (end - start)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }

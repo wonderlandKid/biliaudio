@@ -38,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.player.PlaybackState
@@ -73,6 +75,11 @@ fun MiniPlayerBar(
     dragModifier: Modifier = Modifier,
     /** 0 = 普通迷你条；0→1 = 上滑过程中的「自由拉伸」（封面变大、显示进度线）。 */
     stretchProgress: Float = 0f,
+    /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
+    onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val track = state.currentTrack
     AnimatedVisibility(
@@ -148,7 +155,8 @@ fun MiniPlayerBar(
                 .then(glassModifier)
                 .border(1.dp, onContainer.copy(alpha = 0.06f), shape)
                 .then(dragModifier)
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .onGloballyPositioned { onBarBounds(it.boundsInWindow()) },
             shape = shape,
             color = Color.Transparent,
             tonalElevation = 0.dp,
@@ -161,7 +169,9 @@ fun MiniPlayerBar(
                 ) {
                     CoverImage(
                         url = cover,
-                        modifier = Modifier.size(coverSize),
+                        modifier = Modifier
+                            .size(coverSize)
+                            .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                         cornerRadius = androidx.compose.ui.unit.lerp(14.dp, 18.dp, stretch),
                     )
                     Column(
@@ -175,6 +185,7 @@ fun MiniPlayerBar(
                             color = onContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
                         )
                         Text(
                             text = state.queue.getOrNull(state.currentIndex)?.artist.orEmpty(),
@@ -182,6 +193,7 @@ fun MiniPlayerBar(
                             color = onContainer.copy(alpha = 0.66f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
                         )
                         if (stretch > 0.05f) {
                             val fraction = if (state.trackDurationMs > 0L) {
