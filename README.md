@@ -30,9 +30,9 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 ## 界面截图
 
-| 发现（Material 3） | 播放页（封面页） | 播放页（歌词页，右滑） |
+| 发现（v0.31.0 杂志式版式，Light） | 播放页（封面页） | 播放页（歌词页，右滑） |
 | --- | --- | --- |
-| ![home](docs/screenshots/v030_home_light.png) | ![player](docs/screenshots/v030_player_cover.png) | ![lyrics](docs/screenshots/v030_player_lyrics.png) |
+| ![home](docs/screenshots/v031_home_light.png) | ![player](docs/screenshots/v030_player_cover.png) | ![lyrics](docs/screenshots/v030_player_lyrics.png) |
 
 | 分曲编辑 | 搜索导入 | 深色主题 |
 | --- | --- | --- |
@@ -193,7 +193,8 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.28.0 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.31.0 版本记录
+- [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)：页面清单/分类/默认壳/例外登记（新增页面前必读）
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记
 - [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md)：音乐库归档格式 / [docs/IMPORT_FORMATS.md](docs/IMPORT_FORMATS.md)：导入与分割点文本格式

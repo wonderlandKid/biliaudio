@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.30.1**（tag `v0.30.1`，2026-11-11；release commit 以 `git rev-parse v0.30.1` 为准）
+- **版本：v0.31.0**（tag `v0.31.0`，2026-11-11；release commit 以 `git rev-parse v0.31.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**200 个**（v0.30.1；含 5 个 UI 架构守卫）
+- 单元测试：**202 个**（v0.31.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.30.1: 200 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.31.0: 202 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -48,7 +48,7 @@ scripts/screenshot.sh home 8
    **v0.29.0 曾尝试 Editorial/Spatial/Modern Skeuomorphism 重设计，用户认为过于大胆冒险，v0.30.0 已直接重置回
    v0.28.0 基线（Material 3 扁平 UI）。以后不要主动引入新的视觉语言/设计系统；视觉方向改动必须先获得用户明确批准。**
    单曲不设独立实体，直接继承专辑艺术家；播放列表=当前播放专辑的分曲；追求「点一下就能听」的轻量体验。
-4. **信息架构（v0.30.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
+4. **信息架构（v0.31.0）**：音乐库只做搜索；发现页不放搜索栏，四个 4 条预览区块按
    最近播放 → 听歌统计 → 我的歌单 → 随机专辑排列（详情从右上角进入；最近播放详情 10 张）；
    听歌统计预览可切专辑时长/歌曲次数，选择持久化到 `AppSettings.homeStatsMode`；
    设置卡片首行用 `BiliGroupHeader` 统一图标/标题/副标题；缓存管理属于设备维护，放设置。歌单用 Room v4 的 playlists/playlist_entries
@@ -74,18 +74,19 @@ scripts/screenshot.sh home 8
    详见 [docs/LYRICS.md](docs/LYRICS.md)。
 7. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
-8. **UI 规范（v0.12.0 页面模板化）**：
-   - 页面分四类：T1 一级 Tab（`BiliPageHeader`，不自己套 Scaffold）、T2 层级详情页（必须用
-     `ui/template/BiliPageTemplates.kt` 的 `BiliDetailScaffold`/`BiliTopBar`）、T3 沉浸页（播放/歌词，页面自管）、
-     T4 弹层/对话框；禁止再手写“Row + 返回 + 标题”式顶栏；
-   - 搜索框统一用 `SearchField`（可编辑）/`SearchBarEntry`（入口）；
-   - **先查 [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) 选页面类型/组件**：
-     区块用 `BiliSection`，卡片用 `BiliGroup`，卡片首行用 `BiliGroupHeader`，组内行用
-     `BiliGroupItem`/`BiliAlbumRow`，专辑/歌曲行用 `BiliAlbumRow`/`TrackRow`；
-   - 禁止页面内手写大圆角 Surface 卡片、私有 SectionCard/Header、空 `onClick={}`；
-     音乐内容行点击必须真正播放并高亮；
-   - 页面级留白/迷你条底部留白用 `BiliLayout` token；新增规则要同步 `UiArchitectureConsistencyTest`；
-   - 详见 [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) / [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
+8. **UI 规范（v0.31.0：页面登记制 + 自由度分级）**：
+   - **新页面先登记到 [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)**（类型 T1-T4、路由、入口、默认壳、例外），再写代码；
+   - **L0 全局强制**：导航/转场只在 AppNavHost 定义；insets 由外层统一；迷你条留白用 `BiliLayout`；
+     loading/empty/error 三态齐全；内容行可播放可高亮；禁止空 `onClick={}`；颜色只用 `MaterialTheme` 语义色；
+     动效只用 `BiliMotion` token；触控 ≥48dp、Light/Dark 对比度达标；
+   - **L1 默认页面壳**：T1 默认 `BiliPageHeader`；T2 默认 `BiliDetailScaffold`（复杂页至少 `BiliTopBar`）；
+     T3 沉浸页自管；T4 复用现有弹层。**例外必须在 PAGE_INVENTORY §5 登记**（如发现页自定义刊头/封面故事）；
+   - **L2 页面内部自由**：页面可用专属 Composable（hero/封面墙/网格/榜单卡等），但不得复制已有共享组件；
+   - 共享组件是工具箱：`CoverImage`/`AlbumCard`/`TrackRow`/`BiliGroup`/`BiliSection`/`SearchField`/`EmptyState` 等按需使用；
+     设置卡片首行仍用 `BiliGroupHeader`；
+   - 发现页保持「大胆、非列表」版式（横向封面墙/双列网格 + 共享封面组件），由守卫保证；
+   - 新增规则要同步 `UiArchitectureConsistencyTest` 与 PAGE_INVENTORY；详见
+     [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) / [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
 9. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
@@ -123,13 +124,14 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.30.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.31.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
 | [docs/ARCHIVE_SCHEMA_V2.md](docs/ARCHIVE_SCHEMA_V2.md) | 归档 v2 历史设计（已被 v3 分域布局取代） |
 | [docs/ARCHIVE_LAYOUT_V3.md](docs/ARCHIVE_LAYOUT_V3.md) | 归档/配置布局 v3（已实施：library/playlists/settings/covers + manifest bundle） |
-| [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) | **页面分四类 + 模板/状态/导航/动画规范（新增页面前必读）** |
+| [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md) | **页面清单/分类/默认壳/例外登记/新页面 checklist（新增页面前必读）** |
+| [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) | **页面骨架 + 转场/状态/insets 规范（新增页面前必读）** |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | **页面种类 / 组件目录 / token / 选型流程 / 豁免清单（新页面唯一入口）** |
 | [docs/MOTION.md](docs/MOTION.md) | **动效时长/曲线总表、跟手例外、调参入口（新增动效前必读）** |
 | [docs/PLAYLISTS_STATS.md](docs/PLAYLISTS_STATS.md) | **歌单与听歌统计：信息架构、Room v4、记录规则、边界** |

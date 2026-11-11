@@ -2,13 +2,15 @@
 
 > 目标：先选“页面种类”，再选“组件种类”，最后只填内容；不再每个页面自己决定卡片/留白/字号。
 > 本文是 UI 的**唯一组件目录**；新增页面先查这里，找不到合适组件再新增，不能页面内手写同类实现。
-> 一致性由 `app/src/test/java/com/wonderlandkid/biliaudio/ui/UiArchitectureConsistencyTest.kt` 做源码级守卫。
+> 一致性由 `app/src/test/java/com/wonderlandkid/biliaudio/ui/UiArchitectureConsistencyTest.kt` 做源码级守卫
+> （v0.31.0 起 7 条：空点击 / T2 默认壳 / 发现页非列表版式 / 设置组头 / 迷你条留白 / 页面转场唯一来源 / 禁止硬编码颜色）。
+> 页面清单、分类与例外登记见 [PAGE_INVENTORY.md](PAGE_INVENTORY.md)。
 
 ## 1. 页面种类（先选类型）
 
 | 类型 | 规则 | 适用页面 | 页面壳 |
 | --- | --- | --- | --- |
-| **T1 一级 Tab** | 无自己的 Scaffold；有底部导航；有 `BiliPageHeader`；内容按区块/列表组织 | 发现 / 音乐库 / 设置 | `BiliPageHeader` + `BiliSection` / 业务列表 |
+| **T1 一级 Tab** | 无自己的 Scaffold；有底部导航；默认用 `BiliPageHeader`；内容按区块/列表组织（**发现页已登记例外：自定义刊头 + 封面墙/网格**） | 发现 / 音乐库 / 设置 | 默认 `BiliPageHeader` + `BiliSection` / 业务列表；例外见 PAGE_INVENTORY §5 |
 | **T2 层级详情页** | 有返回、无底部导航；统一 push/pop；页面内系统 inset 由外层管 | 专辑详情、分曲编辑、艺术家、导入、搜索、归档导入、登录、诊断、缓存管理、我的歌单、歌单详情、听歌统计、最近播放 | `BiliDetailScaffold` |
 | **T3 沉浸页** | 页面自管 inset/手势；不套 T2 模板 | 正在播放卡片（页内左右分页：封面/歌词） | `NowPlayingScreen` / `NowPlayingLyricsPane` |
 | **T4 弹层/对话框** | 盖在当前页上，不参与导航转场 | 播放列表、封面选择、封面大图、确认框、新建/重命名歌单 | `ModalBottomSheet` / `AlertDialog` / `Dialog` |
