@@ -19,7 +19,7 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
   **粘贴文本自动识别分割点**（兼容「编号+歌名+时间」「时间+歌名」「歌名+时间」三种格式，可混用）
 - 🎵 **按歌曲播放**：专辑音频流连续播放，播放列表 = 当前专辑的分割点，点哪首播哪首；
   从音乐库点歌默认**只播放该曲所属专辑**（不是整个音乐库）；后台播放 + 媒体通知 + 锁屏控制；
-  底部迷你播放条支持**上滑/点击打开播放页、下滑收起为细条**（v0.34 起为单一表面连续展开）
+  底部迷你播放条支持**上滑/点击打开播放页、下滑收起**（v0.45 整块 sheet 跟手上滑，封面/控件一起移动）
 - 🎤 **在线歌词（SPICaMusic 方案）**：歌词与播放页合一——**左右滑动**或点封面在封面页 / 歌词页之间切换；
   在线多来源自动匹配、逐行/逐字高亮、Apple Music 式平滑滚动；歌词**左对齐**，
   当前行用主题色填充（不放大字号）；歌词页隐藏底部进度/控制，来源与时间偏移在右下角；
@@ -38,7 +38,7 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 | 发现（Light） | 播放页（v0.43：全局封面主题 + 真实 FFT 频谱） | 歌词页（v0.41：跟随封面主题 / 左对齐 / 右下角来源偏移） |
 | --- | --- | --- |
-| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v043_player_real_spectrum.png) | ![lyrics](docs/screenshots/v041_lyrics_light.png) |
+| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v045_player_light.png) | ![lyrics](docs/screenshots/v041_lyrics_light.png) |
 
 | 播放页（Dark） | 音乐库（无字母分隔头） | 设置（无「关于」分区） |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ export JAVA_HOME=/opt/android-studio/jbr
 
 ./gradlew :app:assembleRelease    # release（日常安装/性能测试）
 ./gradlew :app:assembleDebug      # debug（仅开发调试）
-./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.44.0: 204 个）
+./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.45.0: 204 个）
 
 # 产物：
 # app/build/outputs/apk/release/app-release.apk（debug 签名，可直接安装）
@@ -196,7 +196,7 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.44.0 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.45.0 版本记录
 - [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)：页面清单/分类/默认壳/例外登记（新增页面前必读）
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记
@@ -236,6 +236,6 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 命令行验证（不经过 IDE，最直接）：
 
 ```bash
-adb install -r dist/biliaudio-v0.44.0-release.apk
+adb install -r dist/biliaudio-v0.45.0-release.apk
 adb shell am start -n com.wonderlandkid.biliaudio/.MainActivity
 ```

@@ -1130,3 +1130,22 @@
   3. mini 播放条底部内容 inset 不再按 16% 移除，保持到播放页铺满；
   4. 收起/展开与切换 Tab 逻辑不变。
 - **影响**：AppNavHost Scaffold bottomBar；204 单测；release v0.44.0。
+
+
+## D72 播放页展开改为整块滑动裁剪 sheet（v0.45.0）
+
+- **日期**：2026-11-12
+- **背景**：用户指出慢速拖动会卡在中间、播放按钮不跟随封面、快速展开/收起闪色；
+  要求参考椒盐音乐（全程丝滑、非 SPICa 式先画后加载），并允许参考邻项目代码。
+- **根因**：
+  1. v0.43 为降 Haze 开销把迷你条在 progress>20% 移出组合，拖拽 pointerInput 随之销毁 → 慢拖中断；
+  2. 播放页内容为全屏固定 + alpha 交叉淡入，morph 层单独飞封面/标题，底部控件不在同一表面 → 不同步；
+     两层 alpha 交叉导致展开/收起闪色；
+  3. 底栏绘制在内容之上，展开中覆盖 sheet。
+- **决策**：
+  1. 参考 SPICa/椒盐的 sheet 思路：整块播放页 sheet 以 `miniBarTop*(1-progress)` 向上滑动，
+     底层锚定 + 顶部圆角裁剪；封面/标题/频谱/进度/播放按钮都在同一 sheet 内，天然一起上移；
+  2. sheet 垫不透明 surface + 页面 scrim，移除展开期的 morph 渲染（旧 PlayerMorphLayer 暂留待清理）；
+  3. 迷你条始终组合，只淡出 alpha；底栏不再收缩高度，0→18% 淡出/下移；mini 内容 inset 保持稳定；
+  4. 对照 SPICaMusic 的 SubcomposeLayout/分级 reveal 思路；椒盐闭源，按其「整块 sheet 全程跟手」原则实现。
+- **影响**：AppNavHost（sheet/底栏/迷你条组合）；204 单测；release v0.45.0。

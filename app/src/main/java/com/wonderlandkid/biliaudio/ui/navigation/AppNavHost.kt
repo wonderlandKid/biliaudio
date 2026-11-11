@@ -1,5 +1,9 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import androidx.compose.ui.zIndex
+
 import android.app.Activity
 import android.os.SystemClock
 import android.widget.Toast
@@ -327,9 +331,13 @@ fun AppNavHost() {
             // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
             // 播放页展开时不再在 2% 处立刻收缩（会让根页面视口突然变大、出现方角/圆角闪烁）；
             // 改为先跟随展开进度淡出/下移，等播放页几乎铺满（92%）再收起高度。
-            val bottomBarHide = smoothStep(0.02f, 0.45f, playerProgress)
+            // 底栏必须在 sheet 盖到它之前完全退场（Scaffold 的 bottomBar 绘制在内容之上），
+            // 用 0→18% 的进度做 alpha/下移，而不是突然 shrink 高度。
+            val bottomBarHide = smoothStep(0.0f, 0.18f, playerProgress)
             AnimatedVisibility(
-                visible = showChrome && playerProgress < 0.92f,
+                // 底栏高度在播放页展开期间保持不变（避免根页面视口重排）；
+                // 只通过 alpha/translation 优雅退场，播放页完全覆盖后仍透明存在。
+                visible = showChrome,
                 enter = expandVertically(
                     animationSpec = tween(
                         durationMillis = BiliMotion.BottomBarEnterMs,
@@ -360,7 +368,7 @@ fun AppNavHost() {
                         .onSizeChanged { bottomBarHeightPx = it.height }
                         .graphicsLayer {
                             alpha = 1f - bottomBarHide
-                            translationY = bottomBarHide * 32.dp.toPx()
+                            translationY = bottomBarHide * size.height
                         },
                 ) {
                     BiliBottomBar(
@@ -598,18 +606,11 @@ fun AppNavHost() {
 
             // 悬浮迷你播放条：只负责上报自身/封面/标题/艺术家在窗口中的位置（供 morph 层插值）。
             // 开启播放页时快速淡出，交给 morph 层做连续展开。
-            // 展开超过 20% 后 morph 已接管视觉，继续组合 Haze 迷你条只会增加每帧成本（满屏时卡顿/闪烁）。
-            if (showMiniPlayer && playerProgress < 0.20f) {
-                // morph 层就绪（拿到播放页封面/标题位置）前保持迷你条完全可见，
-                // 避免「迷你条先淡出、morph 还没画出来」的空白帧。
-                // 标题/艺术家在封面页与歌词页共用的顶部区域，始终存在；
-                // 用它们判断 morph 就绪，这样从歌词页收起/拉起也能连续展开。
-                val morphReady = playerTitleRect != null && miniCoverRect != null
-                val miniAlpha = if (!morphReady) {
-                    1f
-                } else {
-                    1f - smoothStep(0.04f, 0.20f, playerProgress)
-                }
+            // 迷你条必须始终组合：它承载跟手拖拽的 pointerInput。
+            // 之前因为 playerProgress > 20% 把它移出组合，导致慢速拖动时手势节点被销毁，进度卡在中间。
+            if (showMiniPlayer) {
+                // 迷你条固定在底部，只做淡出；拖拽 pointerInput 始终存在。
+                val miniAlpha = 1f - smoothStep(0.02f, 0.18f, playerProgress)
                 MiniPlayerHost(
                     playbackController = container.playbackController,
                     onClick = { animatePlayerTo(true) },
@@ -621,25 +622,38 @@ fun AppNavHost() {
                     hazeState = hazeState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .zIndex(1f) // 低展开进度时迷你条覆盖在播放页卡片顶部，避免卡片文字先露出来
                         .graphicsLayer { alpha = miniAlpha }
                         .padding(bottom = miniBottomPadding),
                 )
             }
 
-            // 正在播放页：始终铺满全屏（不再上下位移），alpha 在展开后半段淡入；
-            // 低进度时的视觉由 PlayerMorphLayer 的连续卡片/封面/标题负责。
+            // 正在播放页：整块 sheet 跟随展开进度从迷你条位置向上滑出，并被裁剪成底部锚定的圆角卡片。
+            // 播放控制、频谱、封面都在同一个 sheet 里，所以控件会跟封面一起被拖上来，而不是原地淡入。
             if (playerProgress > 0.001f) {
-                // 播放页内容随展开进度从底部轻微上浮：控件不再在原地淡入，而是像被页面一起拖上来。
-                val playerReveal = smoothStep(0.62f, 0.96f, playerProgress)
+                val travelPx = (miniBarRect?.top ?: (screenHeightPx * 0.72f))
+                    .coerceAtLeast(0f)
+                val offsetY = travelPx * (1f - playerProgress)
+                // 轻微压暗底层页面，让上滑中的卡片像「从页面上升起」而不是透明叠字。
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        // 必须先 graphicsLayer 再 background：alpha 才会作用于背景，
-                        // 否则展开前半段会出现「不透明的播放页底色盖掉下面页面」。
+                        .graphicsLayer { alpha = playerProgress * 0.18f }
+                        .background(MaterialTheme.colorScheme.scrim),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
                         .graphicsLayer {
-                            alpha = playerReveal
-                            translationY = (1f - playerReveal) * 56.dp.toPx()
+                            translationY = offsetY
+                            val radius = 24.dp * (1f - playerProgress)
+                            shape = RoundedCornerShape(
+                                topStart = radius,
+                                topEnd = radius,
+                            )
+                            clip = true
                         }
+                        // 播放页自己的渐变顶部是半透明的，必须垫不透明 surface，否则会透出下面的列表。
                         .background(MaterialTheme.colorScheme.surface),
                 ) {
                     // 先于 NowPlayingScreen 注册：播放页内的弹层（播放列表 ModalBottomSheet）
@@ -665,25 +679,6 @@ fun AppNavHost() {
                             .then(playerDragModifier),
                     )
                 }
-            }
-
-            // 连续展开层：迷你条封面/标题/艺术家 → 播放页对应位置，卡片背景同步长到全屏
-            val morphAlpha = 1f - smoothStep(0.90f, 0.995f, playerProgress)
-            if (playerProgress > 0.001f && playerProgress < 0.96f && morphAlpha > 0.001f) {
-                PlayerMorphLayer(
-                    progress = playerProgress,
-                    state = playbackState,
-                    miniBarRect = miniBarRect,
-                    miniCoverRect = miniCoverRect,
-                    miniTitleRect = miniTitleRect,
-                    miniArtistRect = miniArtistRect,
-                    playerCoverRect = playerCoverRect,
-                    playerTitleRect = playerTitleRect,
-                    playerArtistRect = playerArtistRect,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = morphAlpha },
-                )
             }
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。
