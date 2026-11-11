@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.42.0**（tag `v0.42.0`，2026-11-12；release commit 以 `git rev-parse v0.42.0` 为准）
+- **版本：v0.43.0**（tag `v0.43.0`，2026-11-12；release commit 以 `git rev-parse v0.43.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.42.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.43.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.42.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.43.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -111,10 +111,10 @@ scripts/screenshot.sh home 8
      播放模式为单按钮四态（随机/顺序/列表循环/单曲循环），底部第五个按钮为播放列表；
      曲名/艺术家在页面顶部（headlineLarge 30sp）共用；**全局主题从当前播放封面取种子色**（AppTheme 级别，
      发现/音乐库/设置/详情/播放页/歌词页/底栏统一；无播放时回退品牌粉）；音量微调完美隐藏，点按后在屏幕最右缘显形（24dp ×128dp、Haze 模糊、7 档 ±3、
-     固定 2.5% 听感步长、±数字、2s 自动隐藏）；进度条为**整曲波形 + 实时能量**：
-     全宽竖条（4dp 宽、上限 64 根，进度条高 56dp/最大竖条 40dp）：已播放染色、未播放灰色、
-     圆点位于边界，拖动 seek 时振幅压缩到 30%；
-     真实频谱需要 `RECORD_AUDIO`：首次打开播放页弹一次说明，拒绝则回退合成包络
+     5% 听感步长、±数字、2s 自动隐藏）；进度条为**真实 FFT 频谱**：
+     Visualizer（milliHz 采样率）→ Hann → 基 2 FFT → 48 个对数频段，60fps 平滑；
+     已播放染色、未播放灰色、圆点位于边界，拖动 seek 时振幅压缩到 30%；
+     真实频谱需要 `RECORD_AUDIO`：首次打开播放页弹一次说明，拒绝则显示低电平占位（不再造假波形）
    - 一级 Tab 入场规则：**固定页头/搜索/登录卡等静态元素不动；只有列表/内容区播放「淡入 + 上浮」**
      （320ms 起、50ms/项、封顶 650ms、交错 45ms；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）；
    - 底部导航出现/消失做高度展开/收缩 + 淡入淡出（300/250ms），Scaffold 高度和迷你条避让同步；
@@ -143,7 +143,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.42.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.43.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

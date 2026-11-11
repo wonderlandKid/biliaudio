@@ -4,31 +4,41 @@ import android.media.audiofx.Visualizer
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.log10
-import kotlin.math.max
+import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * 真实音频频谱（用于播放进度条的波浪）。
+ * 真实音频频谱（用于播放进度条）。
  *
- * 通过 Android `Visualizer` 绑定 ExoPlayer 的 audioSessionId，周期性读取波形（PCM），
- * 用 Goertzel 算法估算 8 个频段的能量；需要 `RECORD_AUDIO` 权限（由 UI 在用户确认后申请）。
+ * 通过 Android `Visualizer` 绑定 ExoPlayer 的 audioSessionId，周期读取 512~1024 点 PCM 波形，
+ * 自己做 Hann 窗 + 基 2 FFT，得到 48 个对数频段（约 32Hz~16kHz）的能量；需要 `RECORD_AUDIO` 权限
+ * （由 UI 首次打开播放页时说明并申请）。
  *
  * - 只在播放页可见时创建，销毁时立即 release；
- * - 任何异常（权限被拒、模拟器不支持音频会话等）都静默失败，UI 自动回退到合成波形；
- * - 回调在 Visualizer 的内部线程，回调里只做纯计算，不持有 Activity/Compose 上下文。
+ * - 回调在 Visualizer 内部线程，只做纯计算，不持有 Activity/Compose 上下文；
+ * - 任何异常（权限被拒、模拟器不支持音频会话等）都静默失败，UI 会显示低电平占位（不再用假波形）。
  */
 class RealSpectrumAnalyzer(
     private val audioSessionId: Int,
     private val onBands: (FloatArray) -> Unit,
 ) {
     companion object {
-        const val BAND_COUNT = 8
-        private val BAND_FREQUENCIES = floatArrayOf(60f, 120f, 250f, 500f, 1_000f, 2_000f, 4_000f, 8_000f)
-        private const val CAPTURE_SIZE = 512
-        private const val SMOOTH_DECAY = 0.90f
+        const val BAND_COUNT = 48
+        private const val MIN_FREQ_HZ = 32f
+        private const val MAX_FREQ_HZ = 16_000f
+        private const val TARGET_CAPTURE = 1024
+        private const val SMOOTH_UP = 0.55f
+        private const val SMOOTH_DOWN = 0.18f
     }
 
     private var visualizer: Visualizer? = null
+
+    private var fftSize = 0
+    private var real = FloatArray(0)
+    private var imag = FloatArray(0)
+    private var window = FloatArray(0)
+    private val bands = FloatArray(BAND_COUNT)
     private val smoothed = FloatArray(BAND_COUNT)
 
     /** @return true = 成功启动（权限/设备支持都 OK）。 */
@@ -37,10 +47,9 @@ class RealSpectrumAnalyzer(
         if (visualizer != null) return true
         return runCatching {
             val v = Visualizer(audioSessionId)
-            v.captureSize = CAPTURE_SIZE.coerceIn(
-                Visualizer.getCaptureSizeRange()[0],
-                Visualizer.getCaptureSizeRange()[1],
-            )
+            val range = Visualizer.getCaptureSizeRange()
+            val captureSize = largestPowerOfTwoWithin(TARGET_CAPTURE, range[0], range[1])
+            v.captureSize = captureSize
             v.setDataCaptureListener(
                 object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(
@@ -49,11 +58,8 @@ class RealSpectrumAnalyzer(
                         samplingRate: Int,
                     ) {
                         val data = waveform ?: return
-                        val bands = computeBands(data, samplingRate)
-                        for (i in 0 until BAND_COUNT) {
-                            smoothed[i] = max(bands[i], smoothed[i] * SMOOTH_DECAY)
-                        }
-                        onBands(smoothed.copyOf())
+                        val result = computeBands(data, samplingRate)
+                        onBands(result)
                     }
 
                     override fun onFftDataCapture(
@@ -80,34 +86,123 @@ class RealSpectrumAnalyzer(
         visualizer = null
     }
 
-    /** Goertzel：对 8 个目标频段计算能量，转成 0..1 的对数刻度。 */
-    private fun computeBands(waveform: ByteArray, sampleRate: Int): FloatArray {
-        val n = waveform.size
-        if (n <= 1 || sampleRate <= 0) return FloatArray(BAND_COUNT)
-        val samples = FloatArray(n) { index ->
-            val pcm = (waveform[index].toInt() and 0xFF) - 128
-            val window = 0.5f * (1f - cos((2.0 * PI * index / (n - 1)).toFloat()))
-            pcm / 128f * window
+    private fun computeBands(waveform: ByteArray, visualizerSampleRate: Int): FloatArray {
+        val sampleCount = waveform.size
+        if (sampleCount < 32 || visualizerSampleRate <= 0) return FloatArray(BAND_COUNT)
+        // Visualizer 的 samplingRate 单位是 milliHz（例如 48000000 = 48kHz）。
+        val sampleRate = if (visualizerSampleRate > 100_000) visualizerSampleRate / 1000 else visualizerSampleRate
+        val size = powerOfTwoAtMost(sampleCount)
+        ensureBuffers(size)
+        // PCM 8-bit unsigned → Hann 窗
+        for (i in 0 until size) {
+            val pcm = ((waveform[i].toInt() and 0xFF) - 128) / 128f
+            real[i] = pcm * window[i]
+            imag[i] = 0f
         }
-        val result = FloatArray(BAND_COUNT)
+        fft(real, imag)
+
+        val nyquist = sampleRate / 2f
+        // 第一遍：算各频段真实能量（含高频等响度补偿）
         for (band in 0 until BAND_COUNT) {
-            val frequency = BAND_FREQUENCIES[band]
-            if (frequency >= sampleRate / 2f) continue
-            val coeff = 2f * cos((2.0 * PI * frequency / sampleRate).toFloat())
-            var s0 = 0f
-            var s1 = 0f
-            var s2 = 0f
-            for (sample in samples) {
-                s0 = sample + coeff * s1 - s2
-                s2 = s1
-                s1 = s0
+            val low = MIN_FREQ_HZ * (MAX_FREQ_HZ / MIN_FREQ_HZ).pow(band / BAND_COUNT.toFloat())
+            val high = MIN_FREQ_HZ * (MAX_FREQ_HZ / MIN_FREQ_HZ).pow((band + 1) / BAND_COUNT.toFloat())
+            val lowHz = low.coerceAtMost(nyquist)
+            val highHz = high.coerceAtMost(nyquist)
+            val startBin = ((lowHz / sampleRate) * size).toInt().coerceIn(1, size / 2 - 1)
+            val endBin = ((highHz / sampleRate) * size).toInt().coerceIn(startBin + 1, size / 2)
+            var power = 0.0
+            for (bin in startBin until endBin) {
+                val r = real[bin]
+                val im = imag[bin]
+                power += (r * r + im * im).toDouble()
             }
-            val power = s1 * s1 + s2 * s2 - coeff * s1 * s2
-            val magnitude = sqrt(max(power, 0f)) / n
-            // 对数压缩，让低电平也可见；再按频段轻微加权（低频通常能量更高）。
-            val db = 20f * log10(magnitude + 1e-6f)
-            result[band] = ((db + 60f) / 60f).coerceIn(0f, 1f)
+            val magnitude = sqrt(power / (endBin - startBin).coerceAtLeast(1)) / size
+            val db = 20.0 * log10(magnitude + 1e-7)
+            val raw = ((db + 80.0) / 80.0).toFloat().coerceIn(0f, 1f)
+            val tilt = 1f + 0.55f * (band / BAND_COUNT.toFloat())
+            bands[band] = (raw * tilt).coerceIn(0f, 1f)
         }
-        return result
+        // 第二遍：当前帧做相对归一化（保留真实频谱形状，但让小信号也有明显高度差）。
+        var frameMax = 0.05f
+        for (value in bands) if (value > frameMax) frameMax = value
+        val scale = 1f / frameMax
+        for (band in 0 until BAND_COUNT) {
+            val normalized = (bands[band] * scale).coerceIn(0f, 1f)
+            val previous = smoothed[band]
+            smoothed[band] = if (normalized > previous) {
+                previous + (normalized - previous) * SMOOTH_UP
+            } else {
+                previous + (normalized - previous) * SMOOTH_DOWN
+            }
+            bands[band] = smoothed[band]
+        }
+        return bands.copyOf()
     }
+
+    private fun ensureBuffers(size: Int) {
+        if (size == fftSize) return
+        fftSize = size
+        real = FloatArray(size)
+        imag = FloatArray(size)
+        window = FloatArray(size) { index ->
+            (0.5 * (1.0 - cos(2.0 * PI * index / (size - 1)))).toFloat()
+        }
+        // 重置平滑值，避免切歌/尺寸变化时残留旧频谱。
+        smoothed.fill(0f)
+        bands.fill(0f)
+    }
+
+    private fun fft(re: FloatArray, im: FloatArray) {
+        val n = re.size
+        var j = 0
+        for (i in 1 until n) {
+            var bit = n shr 1
+            while (j and bit != 0) {
+                j = j xor bit
+                bit = bit shr 1
+            }
+            j = j or bit
+            if (i < j) {
+                val tr = re[i]; re[i] = re[j]; re[j] = tr
+                val ti = im[i]; im[i] = im[j]; im[j] = ti
+            }
+        }
+        var length = 2
+        while (length <= n) {
+            val angle = -2.0 * PI / length
+            val wLenCos = cos(angle).toFloat()
+            val wLenSin = sin(angle).toFloat()
+            var start = 0
+            while (start < n) {
+                var wReal = 1f
+                var wImag = 0f
+                for (k in 0 until length / 2) {
+                    val evenIndex = start + k
+                    val oddIndex = evenIndex + length / 2
+                    val oddReal = re[oddIndex] * wReal - im[oddIndex] * wImag
+                    val oddImag = re[oddIndex] * wImag + im[oddIndex] * wReal
+                    re[oddIndex] = re[evenIndex] - oddReal
+                    im[oddIndex] = im[evenIndex] - oddImag
+                    re[evenIndex] += oddReal
+                    im[evenIndex] += oddImag
+                    val nextReal = wReal * wLenCos - wImag * wLenSin
+                    wImag = wReal * wLenSin + wImag * wLenCos
+                    wReal = nextReal
+                }
+                start += length
+            }
+            length = length shl 1
+        }
+    }
+}
+
+private fun powerOfTwoAtMost(value: Int): Int {
+    var result = 1
+    while (result * 2 <= value) result *= 2
+    return result
+}
+
+private fun largestPowerOfTwoWithin(target: Int, min: Int, max: Int): Int {
+    // 取目标 1024 与设备上限的较小值（必须是 2 的幂），不能一路缩到 min（否则频率分辨率太差）。
+    return powerOfTwoAtMost(target).coerceIn(min, max)
 }

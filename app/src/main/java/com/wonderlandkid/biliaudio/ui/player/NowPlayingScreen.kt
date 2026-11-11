@@ -376,7 +376,6 @@ private fun NowPlayingBody(
                 durationMs = state.trackDurationMs,
                 isPlaying = state.isPlaying,
                 spectrumBands = spectrumBands,
-                waveSeed = state.currentTrack?.uid?.hashCode() ?: 0,
                 onSeek = onSeek,
             )
             Spacer(Modifier.height(Spacing.xs))

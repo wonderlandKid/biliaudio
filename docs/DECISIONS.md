@@ -1099,3 +1099,19 @@
 - **取舍**：全局主题变化是 App 级视觉变化，但用户明确要求；仍保留品牌粉作为无封面回退。
 - **影响**：AppCompositionLocals.kt（AppTheme）、CoverAccent.kt 移动、NowPlayingScreen/PlaybackSeekBar/
   AppNavHost；204 单测；release v0.42.0。
+
+
+## D70 真实 FFT 频谱 + 音量档位加强 + 交互流畅度（v0.43.0）
+
+- **日期**：2026-11-12
+- **背景**：用户指出 v0.42 的「整曲波形」是假的，要求真实频谱；-3→+3 音量不够，期望接近 2 个系统音量步；
+  设置滚动恢复仍有「补一下上滑」的延迟感；满屏展开仍有卡顿/闪烁。
+- **决策**：
+  1. 频谱改为真实数据：Visualizer 1024 点 PCM → Hann → 基 2 FFT → 48 个对数频段；
+     修正 Visualizer samplingRate 单位 milliHz、captureSize 选择（之前错误缩到 128）；
+     高频等响度补偿；UI `withFrameNanos` 60fps 平滑；暂停衰减；未授权低电平占位，不再造假数据。
+  2. 音量：每档 5%，居中 0.85，-3→+3 覆盖 0.70..1.00（约 43% 幅度差）。
+  3. 滚动恢复：去掉 450ms 延迟，路由回到根 Tab 时立即恢复。
+  4. 展开流畅度：p>20% 不再组合 Haze 迷你条；morph 层 p>96% 移除；切 Tab 时收起播放页。
+- **取舍**：真实频谱是「实时频率内容」而非整曲 waveform；真正的整曲 waveform 仍需离线解码 peaks。
+- **影响**：RealSpectrumAnalyzer.kt、PlaybackSeekBar.kt、PlaybackEngine.kt、AppNavHost.kt；204 单测；release v0.43.0。

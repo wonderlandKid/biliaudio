@@ -97,7 +97,6 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -179,7 +178,8 @@ fun AppNavHost() {
             if (route in tabRoutes) {
                 lastRootRoute = route
                 scope.launch {
-                    delay(450)
+                    // 不再延迟 450ms：延迟恢复会表现为「页面先到错位，再手动滑一下」。
+                    // 立即恢复，后续底栏 inset 动画不会再次改变 firstVisibleItem。
                     when (route) {
                         Routes.HOME -> homeScrollSnapshot?.let {
                             homeListState.scrollToItem(it.index, it.offset)
@@ -281,6 +281,8 @@ fun AppNavHost() {
     }
 
     fun switchTab(tab: MainTab) {
+        // 播放页正在展开/收起时切 Tab：先收起，避免留下半展开的 morph 覆盖层。
+        if (playerProgress > 0.001f) animatePlayerTo(false)
         val route = when (tab) {
             MainTab.HOME -> Routes.HOME
             MainTab.LIBRARY -> Routes.LIBRARY
@@ -585,7 +587,8 @@ fun AppNavHost() {
 
             // 悬浮迷你播放条：只负责上报自身/封面/标题/艺术家在窗口中的位置（供 morph 层插值）。
             // 开启播放页时快速淡出，交给 morph 层做连续展开。
-            if (showMiniPlayer) {
+            // 展开超过 20% 后 morph 已接管视觉，继续组合 Haze 迷你条只会增加每帧成本（满屏时卡顿/闪烁）。
+            if (showMiniPlayer && playerProgress < 0.20f) {
                 // morph 层就绪（拿到播放页封面/标题位置）前保持迷你条完全可见，
                 // 避免「迷你条先淡出、morph 还没画出来」的空白帧。
                 // 标题/艺术家在封面页与歌词页共用的顶部区域，始终存在；
@@ -655,7 +658,7 @@ fun AppNavHost() {
 
             // 连续展开层：迷你条封面/标题/艺术家 → 播放页对应位置，卡片背景同步长到全屏
             val morphAlpha = 1f - smoothStep(0.90f, 0.995f, playerProgress)
-            if (playerProgress > 0.001f && playerProgress < 0.999f && morphAlpha > 0.001f) {
+            if (playerProgress > 0.001f && playerProgress < 0.96f && morphAlpha > 0.001f) {
                 PlayerMorphLayer(
                     progress = playerProgress,
                     state = playbackState,

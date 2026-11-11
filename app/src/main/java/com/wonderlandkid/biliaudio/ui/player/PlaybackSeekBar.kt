@@ -1,11 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.player
 
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -14,15 +10,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -35,15 +32,19 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
-import kotlin.math.PI
-import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlinx.coroutines.isActive
+
+/** 与 [com.wonderlandkid.biliaudio.player.RealSpectrumAnalyzer.BAND_COUNT] 对齐。 */
+private const val SPECTRUM_BANDS = 48
 
 /**
- * 自绘播放进度条：全宽实时频谱 + 进度圆点。
+ * 播放进度条：实时 FFT 频谱（48 个对数频段）+ 进度圆点。
  *
- * - 未播放部分灰色、已播放部分主题色，整条从歌曲开始就可见/跳动；
- * - 真实频谱（Visualizer）优先，未授权回退合成包络；
- * - 支持点击/拖动定位、拖动时振幅压缩到 30%、无障碍进度语义。
+ * - 竖条高度来自真实音频频谱（Visualizer → Hann → FFT），未授权时为低电平占位，不再使用假波形；
+ * - 已播放部分主题色、未播放灰色，圆点位于边界；
+ * - 真实回调约 20Hz，这里用 `withFrameNanos` 每帧把显示值平滑逼近目标，视觉 60fps；
+ * - 拖动 seek 时振幅压缩到 30%，避免跳动影响定位手感。
  */
 @Composable
 internal fun PlaybackSeekBar(
@@ -51,8 +52,6 @@ internal fun PlaybackSeekBar(
     durationMs: Long,
     isPlaying: Boolean,
     spectrumBands: FloatArray,
-    /** 当前曲目稳定种子：用于生成「整首波形」的不规则包络（不同歌曲形状不同）。 */
-    waveSeed: Int,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -70,31 +69,6 @@ internal fun PlaybackSeekBar(
         ),
         label = "seekThumbRadius",
     )
-    // 频谱进度条（v0.38，成熟 seekbar 中常见的「实时频谱/波形」方案）：
-    // - 整条由竖条频谱组成，已播放部分用主题色「染色」，未播放部分完全透明；
-    // - 播放时优先用真实频谱（Visualizer 授权），否则用合成频谱回退；
-    // - 拖动 seek 时把振幅压缩到 30%，避免跳动影响定位手感。
-    val waveTransition = rememberInfiniteTransition(label = "seekSpectrum")
-    val wavePhase by waveTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 2_400,
-                easing = BiliMotion.Emphasized,
-            ),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "seekSpectrumPhase",
-    )
-    val spectrumActive by animateFloatAsState(
-        targetValue = if (isPlaying) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = 420,
-            easing = BiliMotion.Emphasized,
-        ),
-        label = "seekSpectrumActive",
-    )
     val spectrumCompression by animateFloatAsState(
         targetValue = if (dragging) 0.3f else 1f,
         animationSpec = tween(
@@ -104,10 +78,27 @@ internal fun PlaybackSeekBar(
         label = "seekSpectrumCompression",
     )
 
+    // 真实频谱回调频率约 20Hz；用逐帧缓动补到 60fps，避免「一卡一卡」。
+    val latestBands by rememberUpdatedState(spectrumBands)
+    val latestPlaying by rememberUpdatedState(isPlaying)
+    val displayedBands = remember { FloatArray(SPECTRUM_BANDS) }
+    val frameTick = remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            withFrameNanos {
+                for (index in 0 until SPECTRUM_BANDS) {
+                    val target = if (latestPlaying) latestBands.getOrElse(index) { 0f } else 0f
+                    val current = displayedBands[index]
+                    val factor = if (target > current) 0.42f else 0.16f
+                    displayedBands[index] = current + (target - current) * factor
+                }
+                frameTick.intValue++
+            }
+        }
+    }
+
     val density = LocalDensity.current
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
-    val barWidthPx = with(density) { 4.dp.toPx() }
-    val barGapPx = with(density) { 3.dp.toPx() }
     val minBarHeightPx = with(density) { 2.5.dp.toPx() }
     val maxBarHeightPx = with(density) { 40.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
@@ -115,7 +106,6 @@ internal fun PlaybackSeekBar(
     val activeColor = MaterialTheme.colorScheme.primary
     val futureColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
     val haloColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-    val liveBands = spectrumBands
 
     Box(
         modifier = modifier
@@ -158,50 +148,30 @@ internal fun PlaybackSeekBar(
             },
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            // 读取一帧计数器：displayedBands 是普通数组，需要靠这个 state 在每帧触发 draw 失效。
+            val tick = frameTick.intValue
+            if (tick < 0) return@Canvas
             val centerY = size.height / 2f
             val activeWidth = size.width * progress
-            val barCount = (((size.width + barGapPx) / (barWidthPx + barGapPx)).toInt())
-                .coerceIn(12, 64)
-            val step = if (barCount > 1) (size.width - barWidthPx) / (barCount - 1) else 0f
-            val scale = spectrumActive * spectrumCompression
-            val hasLiveSpectrum = liveBands.size >= 2
-
-            // 全宽频谱：未播放部分用灰色，已播放部分用主题色；这样歌曲一开始就能看到整条频谱在跳动。
-            // 60fps 的 wavePhase 让竖条持续轻微起伏，真实频段（~20Hz 回调）负责整体能量包络。
-            for (index in 0 until barCount) {
-                val left = index * step
-                val barCenter = left + barWidthPx / 2f
-                val fraction = index / (barCount - 1f).coerceAtLeast(1f)
-                // 整首「波形」的不规则包络：由曲目种子生成平滑噪声，避免 8 段频谱插值导致的
-                // 规则条纹；两端低、中间高，像 SoundCloud/CamelPlayer 的整曲 waveform。
-                val noise = (
-                    hashNoise(index, waveSeed) * 0.60f +
-                        hashNoise(index - 1, waveSeed) * 0.20f +
-                        hashNoise(index + 1, waveSeed) * 0.20f
-                    )
-                val envelope = 0.52f + 0.48f * sin(fraction * PI.toFloat())
-                val energy = if (hasLiveSpectrum) {
-                    liveBands.average().toFloat().coerceIn(0f, 1f)
-                } else {
-                    (0.5f + 0.5f * sin(wavePhase * 1.3f)).coerceIn(0f, 1f)
-                }
-                // 整体能量让波形随歌曲律动；单条相位微动保持 60fps 的细腻起伏。
-                val shimmer = 0.90f + 0.10f * sin(index * 0.9f + wavePhase * 2.2f)
-                val norm = (
-                    (0.10f + 0.90f * noise) * envelope *
-                        (0.55f + 0.75f * energy) * shimmer
-                    ).coerceIn(0f, 1f)
-                val barHeight = minBarHeightPx + (maxBarHeightPx - minBarHeightPx) * norm * scale
+            val step = size.width / SPECTRUM_BANDS
+            val barWidth = step * 0.52f
+            for (index in 0 until SPECTRUM_BANDS) {
+                val left = index * step + (step - barWidth) / 2f
+                val barCenter = left + barWidth / 2f
+                // 平方根映射提高小信号的视觉高度，避免频谱看起来「一排小点」。
+                val norm = sqrt(displayedBands[index].coerceIn(0f, 1f))
+                val barHeight = minBarHeightPx +
+                    (maxBarHeightPx - minBarHeightPx) * norm * spectrumCompression
                 val played = barCenter <= activeWidth + 0.5f
                 drawRoundRect(
                     color = if (played) activeColor else futureColor,
                     topLeft = Offset(left, centerY - barHeight / 2f),
-                    size = Size(barWidthPx, barHeight),
-                    cornerRadius = CornerRadius(barWidthPx / 2f),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(barWidth / 2f),
                 )
             }
 
-            // 小圆点：位于已播放/未播放边界，像给频谱线「染色」。
+            // 小圆点：位于已播放/未播放边界，给频谱线「染色」。
             val safeWidth = (size.width - thumbRadiusPx).coerceAtLeast(thumbRadiusPx)
             val centerX = activeWidth.coerceIn(thumbRadiusPx, safeWidth)
             drawCircle(
@@ -216,12 +186,4 @@ internal fun PlaybackSeekBar(
             )
         }
     }
-}
-
-/** 稳定、平滑的伪随机噪声：同一曲目的同一位置永远相同，用来画不规则整曲波形。 */
-private fun hashNoise(index: Int, seed: Int): Float {
-    var h = index * 374761393 + seed * 668265263
-    h = (h xor (h ushr 13)) * 1274126177
-    h = h xor (h ushr 16)
-    return (h and 0x7fffffff) / 2147483647f
 }

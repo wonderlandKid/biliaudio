@@ -180,12 +180,13 @@ class PlaybackEngine private constructor(
     internal val exoPlayer: ExoPlayer get() = player
 
     // ---- 音量微调（7 档：-3..+3） ----
-    // 注意：不能直接用 AudioManager 的 maxStreamVolume 换算——很多 ROM 把档位报成 100+，
-    // 除以 4 后每档不到 1%，用户会感觉「没反应」。这里用固定的听感步长（2.5%），
-    // 7 档总跨度约 ±7.5%，既细腻又能听出变化。
-    private val volumeDetent: Float = 0.025f
+    // 不能直接用 AudioManager 的 maxStreamVolume 换算——很多 ROM 把档位报成 100+，
+    // 除以 4 后每档不到 1%，用户会感觉「没反应」。这里用固定听感步长：
+    // 每档 5%，-3→+3 总计 30%（0.70→1.00），听感约等于 2 个系统音量步；
+    // 居中档 0.85 留出上行空间。
+    private val volumeDetent: Float = 0.05f
     /** 居中档的基础音量：留出 +3 档的上行空间（约 -5% 幅度，听感几乎无差）。 */
-    private val volumeBase: Float = (1f - 3f * volumeDetent).coerceIn(0.5f, 1f)
+    private val volumeBase: Float = (1f - 3f * volumeDetent).coerceIn(0.5f, 1f) // 0.85
     private var volumeOffsetSteps: Int = 0
 
     private val _state = MutableStateFlow(PlaybackState())
