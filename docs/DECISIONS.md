@@ -1115,3 +1115,18 @@
   4. 展开流畅度：p>20% 不再组合 Haze 迷你条；morph 层 p>96% 移除；切 Tab 时收起播放页。
 - **取舍**：真实频谱是「实时频率内容」而非整曲 waveform；真正的整曲 waveform 仍需离线解码 peaks。
 - **影响**：RealSpectrumAnalyzer.kt、PlaybackSeekBar.kt、PlaybackEngine.kt、AppNavHost.kt；204 单测；release v0.43.0。
+
+
+## D71 底栏优雅消失（v0.44.0）
+
+- **日期**：2026-11-12
+- **背景**：用户反馈 miniplayer 缓慢上滑时底部导航突然消失，设置页出现方角/圆角切换、
+  「按钮消失但遮罩还在」的中间态。
+- **根因**：底栏 `AnimatedVisibility` 在 playerProgress 2% 就开始高度收缩；拖动刚开始，
+  底栏快速 shrink/fade，同时 NavHost 视口高度变化，裁切/inset 中间态暴露。
+- **决策**：
+  1. 拖动手势期间底栏不收缩高度：alpha 随 progress（0.02→0.45）淡出，并向下位移 0→32dp；
+  2. 高度保留到 playerProgress ≥ 0.92（播放页已几乎完全覆盖）才收起，避免看到裁切/方角；
+  3. mini 播放条底部内容 inset 不再按 16% 移除，保持到播放页铺满；
+  4. 收起/展开与切换 Tab 逻辑不变。
+- **影响**：AppNavHost Scaffold bottomBar；204 单测；release v0.44.0。

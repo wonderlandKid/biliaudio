@@ -309,10 +309,12 @@ fun AppNavHost() {
     // - 迷你条可见时，所有页面内容整体抬到毛玻璃上方，避免最后一项被盖住；
     // - 键盘弹出时改用 IME inset，不再叠加迷你条高度（此时迷你条本身被键盘遮住）。
     val imeVisible = WindowInsets.isImeVisible
+    // 不要跟随展开进度移除 mini 内容 inset：如果拖到 16% 突然少一块底部 padding，
+    // 正在拖动的设置/音乐库会重新布局，正是底栏区域「按钮没了/遮罩还在」抖动的来源。
+    // inset 在播放页完全铺满前保持不变（被 player 覆盖时不可见），关闭时也不会跳。
     val miniPlayerContentInset = if (
         showMiniPlayer &&
         playbackState.currentTrack != null &&
-        playerProgress < 0.16f &&
         !imeVisible
     ) {
         BiliLayout.miniPlayerContentInset
@@ -323,9 +325,11 @@ fun AppNavHost() {
     Scaffold(
         bottomBar = {
             // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
-            // Scaffold 会跟着测量高度，Tab 内容与迷你条避让同步过渡。
+            // 播放页展开时不再在 2% 处立刻收缩（会让根页面视口突然变大、出现方角/圆角闪烁）；
+            // 改为先跟随展开进度淡出/下移，等播放页几乎铺满（92%）再收起高度。
+            val bottomBarHide = smoothStep(0.02f, 0.45f, playerProgress)
             AnimatedVisibility(
-                visible = showChrome && playerProgress < 0.02f,
+                visible = showChrome && playerProgress < 0.92f,
                 enter = expandVertically(
                     animationSpec = tween(
                         durationMillis = BiliMotion.BottomBarEnterMs,
@@ -351,7 +355,14 @@ fun AppNavHost() {
                     ),
                 ),
             ) {
-                Box(modifier = Modifier.onSizeChanged { bottomBarHeightPx = it.height }) {
+                Box(
+                    modifier = Modifier
+                        .onSizeChanged { bottomBarHeightPx = it.height }
+                        .graphicsLayer {
+                            alpha = 1f - bottomBarHide
+                            translationY = bottomBarHide * 32.dp.toPx()
+                        },
+                ) {
                     BiliBottomBar(
                         current = currentTab,
                         onSelect = { switchTab(it) },
