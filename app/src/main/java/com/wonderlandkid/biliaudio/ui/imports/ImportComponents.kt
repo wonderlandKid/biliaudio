@@ -225,6 +225,8 @@ fun VideoPreviewCard(
     onAlbumTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onSplitTextChange: (String) -> Unit,
+    splitTimeFormat: com.wonderlandkid.biliaudio.data.impl.SplitTextParser.TimeFormat,
+    onSplitTimeFormatChange: (com.wonderlandkid.biliaudio.data.impl.SplitTextParser.TimeFormat) -> Unit,
     onImportModeChange: (ImportMode) -> Unit,
     onChangeCover: () -> Unit,
     onImport: () -> Unit,
@@ -417,6 +419,10 @@ fun VideoPreviewCard(
                     focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
                 ),
+            )
+            com.wonderlandkid.biliaudio.ui.components.ImportTimeFormatSelector(
+                selected = splitTimeFormat,
+                onSelect = onSplitTimeFormatChange,
             )
             if (state.splitText.isNotBlank()) {
                 val parsed = state.splitParse

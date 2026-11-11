@@ -47,6 +47,8 @@ data class SplitEditorUiState(
     val textImportText: String = "",
     /** 文本实时识别结果（null = 尚未输入或已清空） */
     val textImportResult: SplitTextParser.Result? = null,
+    /** 文本导入的时间格式（手动指定可消除 1:03 这类歧义） */
+    val textImportTimeFormat: SplitTextParser.TimeFormat = SplitTextParser.TimeFormat.AUTO,
 ) {
     val canSave: Boolean get() = !isSaving && album != null && segments.isNotEmpty()
 
@@ -225,7 +227,12 @@ class SplitEditorViewModel(
     /** 打开「文本导入分割点」弹窗（清空上次输入与识别结果）。 */
     fun openTextImport() {
         _uiState.update {
-            it.copy(textImportVisible = true, textImportText = "", textImportResult = null)
+            it.copy(
+                textImportVisible = true,
+                textImportText = "",
+                textImportResult = null,
+                textImportTimeFormat = SplitTextParser.TimeFormat.AUTO,
+            )
         }
     }
 
@@ -236,13 +243,29 @@ class SplitEditorViewModel(
 
     /** 输入变化时实时识别（解析纯文本很轻，直接同步执行）。 */
     fun onTextImportInputChange(text: String) {
-        _uiState.update {
-            it.copy(
+        _uiState.update { state ->
+            state.copy(
                 textImportText = text,
-                textImportResult = if (text.isBlank()) null else SplitTextParser.parse(text),
+                textImportResult = parseTextImport(text, state.textImportTimeFormat),
             )
         }
     }
+
+    /** 切换时间格式（自动 / 分:秒 / 时:分:秒），并用当前文本重新识别。 */
+    fun onTextImportTimeFormatChange(format: SplitTextParser.TimeFormat) {
+        _uiState.update { state ->
+            state.copy(
+                textImportTimeFormat = format,
+                textImportResult = parseTextImport(state.textImportText, format),
+            )
+        }
+    }
+
+    private fun parseTextImport(
+        text: String,
+        format: SplitTextParser.TimeFormat,
+    ): SplitTextParser.Result? =
+        if (text.isBlank()) null else SplitTextParser.parse(text, format)
 
     /**
      * 应用文本导入结果。
@@ -253,7 +276,7 @@ class SplitEditorViewModel(
     fun importSegmentsFromText(text: String, replace: Boolean) {
         val state = _uiState.value
         val album = state.album ?: return
-        val result = SplitTextParser.parse(text)
+        val result = SplitTextParser.parse(text, state.textImportTimeFormat)
         if (result.segments.isEmpty()) {
             _uiState.update { it.copy(message = "未识别到分割点，请检查文本格式") }
             return

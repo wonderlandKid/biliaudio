@@ -66,6 +66,7 @@ import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.components.LoadingBox
+import com.wonderlandkid.biliaudio.ui.components.ImportTimeFormatSelector
 import com.wonderlandkid.biliaudio.ui.components.SectionHeader
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
@@ -177,6 +178,8 @@ fun SplitEditorScreen(
             result = state.textImportResult,
             existingSegmentCount = state.segments.size,
             albumDurationMs = state.album?.durationMs ?: 0L,
+            timeFormat = state.textImportTimeFormat,
+            onTimeFormatChange = viewModel::onTextImportTimeFormatChange,
             onTextChange = viewModel::onTextImportInputChange,
             onDismiss = viewModel::dismissTextImport,
             onImport = { replace ->
@@ -607,8 +610,10 @@ private fun formatSplitTime(ms: Long): String =
 private fun TextImportDialog(
     text: String,
     result: SplitTextParser.Result?,
+    timeFormat: SplitTextParser.TimeFormat,
     existingSegmentCount: Int,
     albumDurationMs: Long,
+    onTimeFormatChange: (SplitTextParser.TimeFormat) -> Unit,
     onTextChange: (String) -> Unit,
     onDismiss: () -> Unit,
     onImport: (replace: Boolean) -> Unit,
@@ -660,6 +665,10 @@ private fun TextImportDialog(
                     minLines = 8,
                     maxLines = 10,
                     shape = RoundedCornerShape(16.dp),
+                )
+                ImportTimeFormatSelector(
+                    selected = timeFormat,
+                    onSelect = onTimeFormatChange,
                 )
                 TextImportSummary(result = result, albumDurationMs = albumDurationMs)
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {

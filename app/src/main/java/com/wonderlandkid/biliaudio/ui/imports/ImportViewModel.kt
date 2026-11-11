@@ -73,6 +73,8 @@ data class VideoImportState(
     val splitText: String = "",
     /** [SplitTextParser] 的解析结果；文本为空时为 null */
     val splitParse: SplitTextParser.Result? = null,
+    /** 分曲文本的时间格式（手动指定可消除 1:03 这类歧义） */
+    val splitTimeFormat: SplitTextParser.TimeFormat = SplitTextParser.TimeFormat.AUTO,
     /** 预览里选中、待导入成功后应用到专辑的封面（null = 用 B 站原始封面） */
     val pendingCover: CoverPick? = null,
 ) {
@@ -230,6 +232,14 @@ class ImportViewModel(
     }
 
     /** 更新 BV 预览里的分曲文本，并实时解析成分割点。 */
+    fun updateBvSplitTimeFormat(format: SplitTextParser.TimeFormat) {
+        _uiState.update { it.copy(bv = it.bv.withSplitTimeFormat(format)) }
+    }
+
+    fun updateSearchPreviewSplitTimeFormat(format: SplitTextParser.TimeFormat) {
+        updateSearchPreview { it.withSplitTimeFormat(format) }
+    }
+
     fun updateBvSplitText(text: String) {
         _uiState.update { it.copy(bv = it.bv.withSplitText(text)) }
     }
@@ -725,7 +735,12 @@ class ImportViewModel(
     /** 更新分曲文本并重新解析（解析是纯文本操作，很快，直接主线程）。 */
     private fun VideoImportState.withSplitText(text: String): VideoImportState = copy(
         splitText = text,
-        splitParse = if (text.isBlank()) null else SplitTextParser.parse(text),
+        splitParse = if (text.isBlank()) null else SplitTextParser.parse(text, splitTimeFormat),
+    )
+
+    private fun VideoImportState.withSplitTimeFormat(format: SplitTextParser.TimeFormat): VideoImportState = copy(
+        splitTimeFormat = format,
+        splitParse = if (splitText.isBlank()) null else SplitTextParser.parse(splitText, format),
     )
 
     /**

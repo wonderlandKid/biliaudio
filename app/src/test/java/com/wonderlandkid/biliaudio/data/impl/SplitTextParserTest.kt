@@ -213,4 +213,120 @@ class SplitTextParserTest {
         assertEquals(0L, specs.first().startMs)
         assertEquals(2_190_000L, specs.last().startMs)
     }
+
+    // ------------------------------------------------------------------
+    // 现场演唱会专辑：总时长超过 99 分钟，分钟位会出现 3 位数（103:48 / 118:36）
+    // ------------------------------------------------------------------
+    private val formatLiveConcertOver99Minutes = """
+        1. Neon 0:00
+        2. Stop This Train 5:45
+        3. In Your Atmosphere 10:45
+        4. Daughters 16:31
+        5. Free Fallin 21:35
+        6. Everyday I Have the Blues 25:59
+        7. Wait Until Tomorrow 31:13
+        8. Who Did You Think I Was 34:32
+        9. Come When I Call 38:56
+        10. Good Love Is On the Way 42:19
+        11. Out of My Mind 46:38
+        12. Vultures 56:49
+        13. Bold As Love 62:09
+        14. Waiting On the World to Change 70:46
+        15. Slow Dancing In a Burning Room 74:37
+        16. Why Georgia 79:57
+        17. The Heart of Life 84:24
+        18. I Don't Need No Doctor 88:04
+        19. Gravity 94:05
+        20. I Don't Trust Myself (With Loving You) 103:48
+        21. Belief 112:33
+        22. I'm Gonna Find Another You 118:36
+    """.trimIndent()
+
+    @Test
+    fun `支持超过 99 分钟的演唱会专辑（3 位分钟数）`() {
+        val result = SplitTextParser.parse(formatLiveConcertOver99Minutes)
+
+        assertEquals(22, result.segments.size)
+        assertTrue("不应有跳过的行：${result.skippedLines}", result.skippedLines.isEmpty())
+        assertEquals(0L, result.segments.first().startMs)
+        assertEquals("Neon", result.segments.first().title)
+        assertEquals(5 * 60_000L + 45_000L, result.segments[1].startMs)
+        assertEquals("Stop This Train", result.segments[1].title)
+        // 62:09 已经超过 1 小时，但仍按「分钟:秒」解析
+        assertEquals((62 * 60 + 9) * 1000L, result.segments[12].startMs)
+        assertEquals("Bold As Love", result.segments[12].title)
+        // 3 位分钟数：103:48 / 112:33 / 118:36
+        assertEquals((103 * 60 + 48) * 1000L, result.segments[19].startMs)
+        assertEquals("I Don't Trust Myself (With Loving You)", result.segments[19].title)
+        assertEquals((112 * 60 + 33) * 1000L, result.segments[20].startMs)
+        assertEquals("Belief", result.segments[20].title)
+        assertEquals((118 * 60 + 36) * 1000L, result.segments.last().startMs)
+        assertEquals("I'm Gonna Find Another You", result.segments.last().title)
+        assertEquals("识别为「歌名 + 时间」格式（可带序号）", result.styleHint)
+    }
+
+    @Test
+    fun `3 位分钟数不会与 hh mm ss 混淆`() {
+        val result = SplitTextParser.parse(
+            """
+            01:02:03 Long Song
+            103:48 Very Long Song
+            """.trimIndent(),
+        )
+        assertEquals(2, result.segments.size)
+        assertEquals(3_723_000L, result.segments[0].startMs)
+        assertEquals("Long Song", result.segments[0].title)
+        assertEquals((103 * 60 + 48) * 1000L, result.segments[1].startMs)
+        assertEquals("Very Long Song", result.segments[1].title)
+    }
+
+    // ------------------------------------------------------------------
+    // 用户手动指定时间格式（导入弹窗里的「自动 / 分:秒 / 时:分:秒」）
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `手动指定分秒格式可解析整份演唱会文本`() {
+        val result = SplitTextParser.parse(
+            formatLiveConcertOver99Minutes,
+            SplitTextParser.TimeFormat.MINUTES_SECONDS,
+        )
+        assertEquals(22, result.segments.size)
+        assertTrue("不应有跳过的行：${result.skippedLines}", result.skippedLines.isEmpty())
+        assertEquals(SplitTextParser.TimeFormat.MINUTES_SECONDS, result.timeFormat)
+        assertEquals((103 * 60 + 48) * 1000L, result.segments[19].startMs)
+        assertEquals((118 * 60 + 36) * 1000L, result.segments.last().startMs)
+        assertTrue(result.styleHint.contains("分:秒"))
+    }
+
+    @Test
+    fun `自动模式下两段式时间按分秒解析`() {
+        val result = SplitTextParser.parse("1:03 Song A\n103:48 Song B")
+        assertEquals(63_000L, result.segments[0].startMs)
+        assertEquals((103 * 60 + 48) * 1000L, result.segments[1].startMs)
+    }
+
+    @Test
+    fun `手动指定有小时格式时两段式按小时分钟解析`() {
+        val result = SplitTextParser.parse(
+            "1:03 Song A\n1:02:03 Song B",
+            SplitTextParser.TimeFormat.HOURS_MINUTES_SECONDS,
+        )
+        assertEquals(2, result.segments.size)
+        // 排序后：1:02:03（1 小时 2 分 3 秒）在前，1:03（1 小时 3 分）在后
+        assertEquals("Song B", result.segments[0].title)
+        assertEquals(3_723_000L, result.segments[0].startMs)
+        assertEquals("Song A", result.segments[1].title)
+        assertEquals(3_780_000L, result.segments[1].startMs)
+        assertTrue(result.styleHint.contains("时:分:秒"))
+    }
+
+    @Test
+    fun `时间格式不会影响三段式显式写法`() {
+        val result = SplitTextParser.parse(
+            "1:02:03 Long Song",
+            SplitTextParser.TimeFormat.MINUTES_SECONDS,
+        )
+        assertEquals(1, result.segments.size)
+        assertEquals(3_723_000L, result.segments.first().startMs)
+    }
 }
