@@ -60,19 +60,14 @@ class UiArchitectureConsistencyTest {
     }
 
     @Test
-    fun `home keeps bold non-list layout`() {
-        // v0.31.0：发现页允许页面专属的「杂志式」版式（封面故事 + 横向封面墙 + 双列网格），
-        // 不再强制 BiliSection/BiliAlbumRow；但仍要求用共享封面组件，且保持“非纯列表”。
+    fun `home sections use shared templates`() {
+        // v0.31.1：回退发现页大胆版式，恢复严格 Material 3 标准页头 + 区块/行模板
         val home = source("home/HomeScreen.kt")
-        assertTrue(
-            "发现页必须有封面墙/网格等非列表版式（LazyRow 或双列网格）",
-            home.contains("LazyRow(") || home.contains("chunked("),
-        )
-        assertTrue(
-            "发现页封面必须使用共享 CoverImage/AlbumCard",
-            home.contains("CoverImage(") || home.contains("AlbumCard("),
-        )
+        assertTrue("发现页页头必须使用 BiliPageHeader", home.contains("BiliPageHeader("))
+        assertTrue("发现页区块必须使用 BiliSection", home.contains("BiliSection("))
+        assertTrue("发现页专辑行必须使用 BiliAlbumRow", home.contains("BiliAlbumRow("))
         assertFalse("发现页不能私有实现 HomeSectionCard", home.contains("private fun HomeSectionCard"))
+        assertFalse("发现页不能私有实现 HomeAlbumRow", home.contains("private fun HomeAlbumRow"))
     }
 
     @Test

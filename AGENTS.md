@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.31.0**（tag `v0.31.0`，2026-11-11；release commit 以 `git rev-parse v0.31.0` 为准）
+- **版本：v0.31.1**（tag `v0.31.1`，2026-11-11；release commit 以 `git rev-parse v0.31.1` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**202 个**（v0.31.0；含 7 个 UI 架构守卫）
+- 单元测试：**202 个**（v0.31.1；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.31.0: 202 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.31.1: 202 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -74,17 +74,19 @@ scripts/screenshot.sh home 8
    详见 [docs/LYRICS.md](docs/LYRICS.md)。
 7. **问题排查**：先看 `Diag` 诊断日志（设置 → 诊断与维护 → 诊断日志；Logcat tag `BiliDiag`），
    再按 docs/DEBUGGING.md 的流程判断。
-8. **UI 规范（v0.31.0：页面登记制 + 自由度分级）**：
+8. **UI 规范（v0.31.1：严格 Material 3 实用风格 + 页面登记制）**：
    - **新页面先登记到 [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)**（类型 T1-T4、路由、入口、默认壳、例外），再写代码；
    - **L0 全局强制**：导航/转场只在 AppNavHost 定义；insets 由外层统一；迷你条留白用 `BiliLayout`；
      loading/empty/error 三态齐全；内容行可播放可高亮；禁止空 `onClick={}`；颜色只用 `MaterialTheme` 语义色；
      动效只用 `BiliMotion` token；触控 ≥48dp、Light/Dark 对比度达标；
-   - **L1 默认页面壳**：T1 默认 `BiliPageHeader`；T2 默认 `BiliDetailScaffold`（复杂页至少 `BiliTopBar`）；
-     T3 沉浸页自管；T4 复用现有弹层。**例外必须在 PAGE_INVENTORY §5 登记**（如发现页自定义刊头/封面故事）；
-   - **L2 页面内部自由**：页面可用专属 Composable（hero/封面墙/网格/榜单卡等），但不得复制已有共享组件；
+   - **L1 页面壳（严格）**：T1 一律 `BiliPageHeader`（发现页 v0.31.1 起恢复标准模板）；T2 一律 `BiliDetailScaffold`
+     （复杂页至少 `BiliTopBar`）；T3 沉浸页自管；T4 复用现有弹层。当前无 T1/T2 例外；
+     确需例外必须先登记 PAGE_INVENTORY §5，经用户确认后再做；
+   - **L2 页面内部实现自由，但版式保持实用克制**：不得私自改字体/页头/版式风格；视觉例外需登记并先经用户确认；
+     页面私有 Composable 只用于业务结构（不是视觉实验），且不得复制已有共享组件；
    - 共享组件是工具箱：`CoverImage`/`AlbumCard`/`TrackRow`/`BiliGroup`/`BiliSection`/`SearchField`/`EmptyState` 等按需使用；
      设置卡片首行仍用 `BiliGroupHeader`；
-   - 发现页保持「大胆、非列表」版式（横向封面墙/双列网格 + 共享封面组件），由守卫保证；
+   - 发现页保持标准 M3 模板（`BiliPageHeader` + `BiliSection` + `BiliAlbumRow`），由守卫保证；不要擅自改字体/版式；
    - 新增规则要同步 `UiArchitectureConsistencyTest` 与 PAGE_INVENTORY；详见
      [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) / [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)。
 9. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
@@ -124,7 +126,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.31.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.31.1 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

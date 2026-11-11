@@ -1,15 +1,15 @@
-# UI 架构与页面模板（v0.31.0：页面登记制 + 自由度分级）
+# UI 架构与页面模板（v0.31.1：严格 Material 3 实用风格）
 
-> 目的：页面有统一骨架，但页面内部不被模板绑死。
+> 目的：页面有统一骨架，页面内部保持实用、克制。
 > **页面清单/分类/例外登记/新页面 checklist 见 [PAGE_INVENTORY.md](PAGE_INVENTORY.md)（新页面先在那里登记）。**
-> 本文只讲 L0 骨架与 L1 默认壳；L2 页面内部布局自由。
 >
-> v0.31.0 要点：
-> - T1 允许页面自定义刊头（发现页已登记例外），T2 默认仍用 `BiliDetailScaffold`（例外需登记）；
-> - 页面级转场只在 AppNavHost 定义、页面禁止硬编码颜色（两条新守卫）；
-> - 发现页允许封面故事/横向封面墙/双列网格等页面专属版式，不再强制 `BiliSection`/`BiliAlbumRow`。
+> v0.31.1 要点（用户确认「严谨实用 + 严格 Material 3」）：
+> - T1 严格使用 `BiliPageHeader`（发现页大胆版式已回退）；
+> - T2 默认/当前一律使用 `BiliDetailScaffold`；T3 沉浸页自管；T4 复用现有弹层；
+> - 页面级转场只在 AppNavHost 定义、页面禁止硬编码颜色（两条守卫保留）；
+> - 页面内部允许页面专属 Composable，但仅限确需并在 PAGE_INVENTORY 登记；当前无 T1/T2 例外。
 >
-> 非 Android 开发者也能按“页面类型 → 默认壳 → 状态约定”来理解；页面内部怎么排由页面决定。
+> 非 Android 开发者也能按“页面类型 → 默认壳 → 状态约定”来理解。
 
 ## 1. 页面分四类
 
@@ -23,8 +23,8 @@
 规则：
 
 - **T1 不再自己套 Scaffold**（底部导航/inset 由 `AppNavHost` 的 Scaffold 统一处理）；
-  默认内容用 `BiliPageHeader` + 业务列表；**页面可登记例外使用自定义刊头/版式**（发现页 v0.31.0 已登记）；
-  入场默认只有列表/内容区用 `Modifier.entrance`，例外页面可用 `BiliMotion` token 自定义内容入场；
+  内容用 `BiliPageHeader` + `BiliSection` + 业务列表（发现页 v0.31.1 起恢复标准模板）；
+  **固定页头/搜索/登录卡等静态元素不做入场**，只有列表/内容区用 `Modifier.entrance`；
 - **发现页结构（v0.24.0）**：不重复放搜索栏（搜索统一在音乐库）；四个预览区块按
   「最近播放 → 听歌统计 → 我的歌单 → 随机专辑」排列，只露前 4 条，统一用 `HomeSectionCard`
   （`BiliGroup` + 左右 `Spacing.lg` 外边距 + 右上角操作）；详情：
@@ -33,8 +33,8 @@
   - 听歌统计：预览可切换「专辑时长 / 歌曲次数」（持久化 `AppSettings.homeStatsMode`），
     查看全部 → Stats；
   - 最近播放：查看全部 → RecentAlbums（详情最多 10 张）；
-- **T2 默认为 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`），**例外需在 [PAGE_INVENTORY.md](PAGE_INVENTORY.md) §5 登记**。
-  未经登记不得在页面里手写 `Row { IconButton(back); Text(title) }` 式顶栏；
+- **T2 一律用 `BiliDetailScaffold`**（或复杂页面至少用 `BiliTopBar`）；当前无例外。
+  禁止在页面里手写 `Row { IconButton(back); Text(title) }` 式顶栏；
 - **T3 不使用 T1/T2 模板**：全屏、insets、关闭手势都由页面自己管；
   歌词是「正在播放」页内部左右滑动的第二页（v0.28.0 起），不是独立路由/覆盖层，底部进度与控制不跟页；
 - **T4 不要再复制一套 `ModalBottomSheet` 的配置**，优先复用现有组件。
