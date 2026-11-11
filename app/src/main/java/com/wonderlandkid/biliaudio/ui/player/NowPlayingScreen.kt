@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -68,7 +67,6 @@ import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.player.lyrics.NowPlayingLyricsPane
-import com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
@@ -191,11 +189,6 @@ fun NowPlayingScreen(
         )
     }
 
-    // 播放页局部主题：种子色来自当前封面；仅影响播放页，不改变 App 品牌主题。
-    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val coverModel = state.queue.getOrNull(state.currentIndex)?.coverModel()
-    val coverSeed = rememberCoverAccentColor(coverModel, MaterialTheme.colorScheme.primary)
-    BiliAudioTheme(darkTheme = isDarkTheme, seedColor = coverSeed) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -272,7 +265,6 @@ fun NowPlayingScreen(
             }
         }
     }
-    } // BiliAudioTheme（播放页局部封面主题）
 
     if (showPlaylist) {
         ModalBottomSheet(
@@ -387,6 +379,7 @@ private fun NowPlayingBody(
                 waveSeed = state.currentTrack?.uid?.hashCode() ?: 0,
                 onSeek = onSeek,
             )
+            Spacer(Modifier.height(Spacing.xs))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -413,8 +406,8 @@ private fun NowPlayingBody(
                 onCyclePlaybackMode = onCyclePlaybackMode,
                 onOpenPlaylist = onOpenPlaylist,
             )
-            // 底部留白：让控制区/进度条相对原来的「贴底」布局整体上移
-            Spacer(Modifier.height(Spacing.xxxl))
+            // 底部留白：频谱变高、时间行下移后，适当压缩留白，避免控制行被挤出屏幕
+            Spacer(Modifier.height(Spacing.xxl))
         }
         }
     }

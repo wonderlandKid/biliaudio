@@ -108,8 +108,8 @@ internal fun PlaybackSeekBar(
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
     val barWidthPx = with(density) { 4.dp.toPx() }
     val barGapPx = with(density) { 3.dp.toPx() }
-    val minBarHeightPx = with(density) { 2.dp.toPx() }
-    val maxBarHeightPx = with(density) { 28.dp.toPx() }
+    val minBarHeightPx = with(density) { 2.5.dp.toPx() }
+    val maxBarHeightPx = with(density) { 40.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
 
     val activeColor = MaterialTheme.colorScheme.primary
@@ -120,7 +120,7 @@ internal fun PlaybackSeekBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .height(56.dp)
             .semantics {
                 contentDescription = "播放进度"
                 progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f)

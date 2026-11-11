@@ -55,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -78,7 +77,6 @@ import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
 import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
 import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
-import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
 import com.wonderlandkid.biliaudio.ui.home.RecentAlbumsScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
@@ -88,7 +86,6 @@ import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.player.PlayerMorphLayer
-import com.wonderlandkid.biliaudio.ui.player.rememberCoverAccentColor
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
@@ -96,7 +93,6 @@ import com.wonderlandkid.biliaudio.ui.settings.CacheManagementScreen
 import com.wonderlandkid.biliaudio.ui.settings.DiagnosticsScreen
 import com.wonderlandkid.biliaudio.ui.settings.SettingsScreen
 import com.wonderlandkid.biliaudio.ui.stats.StatsScreen
-import com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
@@ -150,10 +146,6 @@ fun AppNavHost() {
     var libraryScrollSnapshot by remember { mutableStateOf<LibraryScrollSnapshot?>(null) }
     var settingsScrollSnapshot by remember { mutableStateOf<ScrollSnapshot?>(null) }
 
-    // 封面主题：morph 层与播放页共用同一份种子色，避免展开末尾出现粉/黄配色跳变。
-    val morphCover = playbackState.queue.getOrNull(playbackState.currentIndex)?.coverModel()
-    val morphSeedColor = rememberCoverAccentColor(morphCover, MaterialTheme.colorScheme.primary)
-    val morphIsDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
@@ -664,22 +656,20 @@ fun AppNavHost() {
             // 连续展开层：迷你条封面/标题/艺术家 → 播放页对应位置，卡片背景同步长到全屏
             val morphAlpha = 1f - smoothStep(0.90f, 0.995f, playerProgress)
             if (playerProgress > 0.001f && playerProgress < 0.999f && morphAlpha > 0.001f) {
-                BiliAudioTheme(darkTheme = morphIsDark, seedColor = morphSeedColor) {
-                    PlayerMorphLayer(
-                        progress = playerProgress,
-                        state = playbackState,
-                        miniBarRect = miniBarRect,
-                        miniCoverRect = miniCoverRect,
-                        miniTitleRect = miniTitleRect,
-                        miniArtistRect = miniArtistRect,
-                        playerCoverRect = playerCoverRect,
-                        playerTitleRect = playerTitleRect,
-                        playerArtistRect = playerArtistRect,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = morphAlpha },
-                    )
-                }
+                PlayerMorphLayer(
+                    progress = playerProgress,
+                    state = playbackState,
+                    miniBarRect = miniBarRect,
+                    miniCoverRect = miniCoverRect,
+                    miniTitleRect = miniTitleRect,
+                    miniArtistRect = miniArtistRect,
+                    playerCoverRect = playerCoverRect,
+                    playerTitleRect = playerTitleRect,
+                    playerArtistRect = playerArtistRect,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = morphAlpha },
+                )
             }
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。

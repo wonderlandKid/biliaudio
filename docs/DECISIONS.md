@@ -1083,3 +1083,19 @@
      spring 改为临界阻尼、初始速度限幅，降低「突然到顶/闪烁」。
 - **影响**：CoverAccent.kt（新增）、NowPlayingScreen/PlaybackSeekBar/VolumeFineTune/PlaybackEngine/
   AppNavHost；204 单测；release v0.41.0。
+
+
+## D69 全局封面取色主题 + 频谱高度/时间行调整（v0.42.0）
+
+- **日期**：2026-11-12
+- **背景**：用户确认需要全局颜色主题、封面取色；同时希望频谱跳动再大一点，两端时间下移不要挡频谱。
+- **决策**：
+  1. 主题种子提升到 `AppTheme` 全局：播放状态只订阅「当前封面变化」
+     （`produceState` + `map` + `distinctUntilChanged`），避免 250ms 进度 tick 重组整个 App；
+     无播放/取色失败回退品牌粉 BiliPink；切歌时保留旧封面色直到新色计算完成，避免闪回；
+     CoverAccent 从 player 包移到 `ui/theme`，播放页不再单独套主题。
+  2. 频谱：进度条高度 40dp→56dp，最大竖条 28dp→40dp；时间行下移 4dp 并与频谱拉开距离；
+     底部留白 48dp→32dp 补偿，控制行位置基本不变。
+- **取舍**：全局主题变化是 App 级视觉变化，但用户明确要求；仍保留品牌粉作为无封面回退。
+- **影响**：AppCompositionLocals.kt（AppTheme）、CoverAccent.kt 移动、NowPlayingScreen/PlaybackSeekBar/
+  AppNavHost；204 单测；release v0.42.0。

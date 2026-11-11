@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -19,7 +20,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wonderlandkid.biliaudio.BiliAudioApp
 import com.wonderlandkid.biliaudio.di.AppContainer
+import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.theme.BiliPink
 import com.wonderlandkid.biliaudio.ui.theme.rememberBiliPressIndication
+import com.wonderlandkid.biliaudio.ui.theme.rememberCoverAccentColor
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** 从任意 Composable 获取应用级依赖容器。 */
 @Composable
@@ -66,6 +72,14 @@ fun AppTheme(content: @Composable () -> Unit) {
     val container = rememberAppContainer()
     val settings by container.settingsRepository.settings.collectAsState()
     val dark = settings.darkTheme ?: isSystemInDarkTheme()
+    // 全局主题种子跟随当前播放封面：只订阅「封面变化」，不会随 250ms 进度 tick 重组整个 App。
+    val currentCover by produceState<Any?>(initialValue = null) {
+        container.playbackController.state
+            .map { state -> state.queue.getOrNull(state.currentIndex)?.coverModel() }
+            .distinctUntilChanged()
+            .collect { cover -> value = cover }
+    }
+    val coverSeed = rememberCoverAccentColor(currentCover, BiliPink)
     val view = LocalView.current
     // 系统栏图标明暗必须跟随 App 自己的深色设置，而不是只跟随系统深色模式：
     // 深色主题下状态栏时钟/图标用浅色，浅色主题下用深色。
@@ -77,7 +91,7 @@ fun AppTheme(content: @Composable () -> Unit) {
             }
         }
     }
-    com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme(darkTheme = dark) {
+    com.wonderlandkid.biliaudio.ui.theme.BiliAudioTheme(darkTheme = dark, seedColor = coverSeed) {
         ProvidePressIndication(content = content)
     }
 }

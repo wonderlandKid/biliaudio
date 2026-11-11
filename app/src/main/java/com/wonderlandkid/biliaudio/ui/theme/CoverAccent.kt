@@ -1,4 +1,4 @@
-package com.wonderlandkid.biliaudio.ui.player
+package com.wonderlandkid.biliaudio.ui.theme
 
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
@@ -31,7 +31,8 @@ import coil3.request.allowHardware
 @Composable
 internal fun rememberCoverAccentColor(cover: Any?, fallback: Color): Color {
     val context = LocalContext.current
-    var accent by remember(cover) { mutableStateOf(fallback) }
+    // 保留上一首的封面色，直到新封面色算出来——避免切歌瞬间闪回品牌粉。
+    var accent by remember { mutableStateOf(fallback) }
     LaunchedEffect(cover) {
         if (cover == null) {
             accent = fallback
@@ -40,7 +41,7 @@ internal fun rememberCoverAccentColor(cover: Any?, fallback: Color): Color {
         val extracted = withContext(Dispatchers.IO) {
             runCatching { extractAccent(context, cover) }.getOrNull()
         }
-        accent = extracted ?: fallback
+        accent = extracted ?: accent
     }
     return accent
 }
