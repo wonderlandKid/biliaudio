@@ -172,7 +172,8 @@ fun PlayerMorphLayer(
                     text = state.currentTrack?.title.orEmpty(),
                     style = titleStyle,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    // 慢速拖动时宽度还在插值中：必须单行省略，否则长标题会先折成两行再变一行。
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

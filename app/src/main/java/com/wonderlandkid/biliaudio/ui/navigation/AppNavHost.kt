@@ -32,11 +32,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -92,6 +97,7 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -130,6 +136,15 @@ fun AppNavHost() {
     val showMiniPlayer = showChrome || showMiniPlayerOnly
 
     val hazeState = rememberHazeState()
+    // 根部 Tab 的滚动位置由 NavHost 外层持有：push 详情页再返回时不会因重组/inset 动画而跳位。
+    val settingsListState = rememberLazyListState()
+    val homeListState = rememberLazyListState()
+    val librarySongsListState = rememberLazyListState()
+    val libraryAlbumsGridState = rememberLazyGridState()
+    val libraryArtistsListState = rememberLazyListState()
+    var homeScrollSnapshot by remember { mutableStateOf<ScrollSnapshot?>(null) }
+    var libraryScrollSnapshot by remember { mutableStateOf<LibraryScrollSnapshot?>(null) }
+    var settingsScrollSnapshot by remember { mutableStateOf<ScrollSnapshot?>(null) }
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
@@ -138,6 +153,10 @@ fun AppNavHost() {
     val systemBottomInset = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
+    // 下拉关闭热区从状态栏下方开始：贴顶的 48dp 会被系统通知栏手势吃掉，这就是之前「下拉没反应」的根因。
+    val statusBarInset = WindowInsets.statusBars
+        .asPaddingValues()
+        .calculateTopPadding()
     val animatedMiniBottomPadding: Dp by animateDpAsState(
         targetValue = if (showChrome) with(density) { bottomBarHeightPx.toDp() } else systemBottomInset,
         animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
@@ -148,6 +167,53 @@ fun AppNavHost() {
 
     // ---------------- 播放页连续展开状态 ----------------
     val scope = rememberCoroutineScope()
+
+    // 根 Tab 的滚动位置跨详情页保持：
+    // 进入详情时底栏收起、NavHost 视口变高，LazyList 会把「到底」状态向上 clamp；
+    // 因此离开根 Tab 时快照位置，返回根 Tab 且底栏动画结束后再恢复。
+    DisposableEffect(navController) {
+        var lastRootRoute = if (currentRoute in tabRoutes) currentRoute else null
+        val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, destination, _ ->
+            val route = destination.route ?: return@OnDestinationChangedListener
+            if (route in tabRoutes) {
+                lastRootRoute = route
+                scope.launch {
+                    delay(450)
+                    when (route) {
+                        Routes.HOME -> homeScrollSnapshot?.let {
+                            homeListState.scrollToItem(it.index, it.offset)
+                            homeScrollSnapshot = null
+                        }
+                        Routes.LIBRARY -> libraryScrollSnapshot?.let {
+                            librarySongsListState.scrollToItem(it.songsIndex, it.songsOffset)
+                            libraryAlbumsGridState.scrollToItem(it.albumsIndex, it.albumsOffset)
+                            libraryArtistsListState.scrollToItem(it.artistsIndex, it.artistsOffset)
+                            libraryScrollSnapshot = null
+                        }
+                        Routes.SETTINGS -> settingsScrollSnapshot?.let {
+                            settingsListState.scrollToItem(it.index, it.offset)
+                            settingsScrollSnapshot = null
+                        }
+                    }
+                }
+            } else {
+                when (lastRootRoute) {
+                    Routes.HOME -> homeScrollSnapshot = homeListState.snapshot()
+                    Routes.LIBRARY -> libraryScrollSnapshot = LibraryScrollSnapshot(
+                        songsIndex = librarySongsListState.firstVisibleItemIndex,
+                        songsOffset = librarySongsListState.firstVisibleItemScrollOffset,
+                        albumsIndex = libraryAlbumsGridState.firstVisibleItemIndex,
+                        albumsOffset = libraryAlbumsGridState.firstVisibleItemScrollOffset,
+                        artistsIndex = libraryArtistsListState.firstVisibleItemIndex,
+                        artistsOffset = libraryArtistsListState.firstVisibleItemScrollOffset,
+                    )
+                    Routes.SETTINGS -> settingsScrollSnapshot = settingsListState.snapshot()
+                }
+            }
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
     // 0f = 迷你条，1f = 全屏播放页；拖拽期间实时变化
     var playerProgress by remember { mutableFloatStateOf(0f) }
     var playerOpenTarget by rememberSaveable { mutableStateOf(false) }
@@ -317,6 +383,7 @@ fun AppNavHost() {
                 ) {
                     Page {
                         HomeScreen(
+                            listState = homeListState,
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
                             onOpenImport = { navController.navigate(Routes.IMPORT) },
@@ -338,6 +405,9 @@ fun AppNavHost() {
                 ) {
                     Page {
                         LibraryScreen(
+                            songsListState = librarySongsListState,
+                            albumsGridState = libraryAlbumsGridState,
+                            artistsListState = libraryArtistsListState,
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                             onOpenArtist = { artistName -> navController.navigate(Routes.artist(artistName)) },
                         )
@@ -356,6 +426,7 @@ fun AppNavHost() {
                             onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
                             onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                             onOpenCacheManagement = { navController.navigate(Routes.CACHE_MANAGEMENT) },
+                            listState = settingsListState,
                         )
                     }
                 }
@@ -559,12 +630,14 @@ fun AppNavHost() {
                         onTitleBounds = { playerTitleRect = it },
                         onArtistBounds = { playerArtistRect = it },
                     )
-                    // 播放页顶部下拉关闭区域（48dp 高、上滑展开后手指可在顶部向下拖回迷你条）
+                    // 播放页顶部下拉关闭区域：从状态栏下方开始，覆盖标题/艺术家区（112dp）。
+                    // 放在状态栏下面，避免向下滑时被系统通知栏/快捷设置抢走手势。
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .offset(y = statusBarInset)
+                            .height(112.dp)
                             .then(playerDragModifier),
                     )
                 }
@@ -709,3 +782,21 @@ private fun smoothStep(start: Float, end: Float, progress: Float): Float {
     val t = ((progress - start) / (end - start)).coerceIn(0f, 1f)
     return t * t * (3f - 2f * t)
 }
+
+// ---------------------------------------------------------------------------
+// 根 Tab 滚动位置快照（详见 AppNavHost 中 OnDestinationChangedListener 的注释）
+// ---------------------------------------------------------------------------
+
+private data class ScrollSnapshot(val index: Int, val offset: Int)
+
+private data class LibraryScrollSnapshot(
+    val songsIndex: Int,
+    val songsOffset: Int,
+    val albumsIndex: Int,
+    val albumsOffset: Int,
+    val artistsIndex: Int,
+    val artistsOffset: Int,
+)
+
+private fun androidx.compose.foundation.lazy.LazyListState.snapshot() =
+    ScrollSnapshot(firstVisibleItemIndex, firstVisibleItemScrollOffset)

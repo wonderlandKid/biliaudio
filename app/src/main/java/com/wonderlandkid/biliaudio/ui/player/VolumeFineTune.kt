@@ -186,7 +186,8 @@ internal fun VolumeFineTune(
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 repeat(7) { index ->
-                    val dotActive = index == dragBaseOffset + 3
+                    // 上拨 = +档：高亮刻度向上移动，和手指/音量方向一致。
+                    val dotActive = index == 3 - dragBaseOffset
                     Box(
                         modifier = Modifier
                             .width(if (dotActive) 12.dp else 6.dp)

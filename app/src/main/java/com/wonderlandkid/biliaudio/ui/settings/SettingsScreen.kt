@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -101,6 +103,8 @@ fun SettingsScreen(
     onOpenDiagnostics: () -> Unit = {},
     onOpenCacheManagement: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** 由 AppNavHost 持有的滚动位置：跨「设置 → 诊断/缓存」返回时保持原位。 */
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val viewModel: SettingsViewModel = appViewModel { container ->
         SettingsViewModel(
@@ -164,6 +168,7 @@ fun SettingsScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 // 与发现/音乐库一致：页头由 BiliPageHeader 自带水平 Spacing.lg

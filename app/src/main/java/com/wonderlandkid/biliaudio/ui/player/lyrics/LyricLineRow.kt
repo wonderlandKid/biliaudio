@@ -135,7 +135,7 @@ internal fun LyricLineRow(
                         text = line.getSentenceContent().ifBlank { EMPTY_LINE_PLACEHOLDER },
                         style = mainStyle,
                         color = mainColor,
-                        textAlign = TextAlign.Center,
+                        textAlign = TextAlign.Start,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

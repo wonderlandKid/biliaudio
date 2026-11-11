@@ -25,7 +25,7 @@ class RealSpectrumAnalyzer(
         const val BAND_COUNT = 8
         private val BAND_FREQUENCIES = floatArrayOf(60f, 120f, 250f, 500f, 1_000f, 2_000f, 4_000f, 8_000f)
         private const val CAPTURE_SIZE = 512
-        private const val SMOOTH_DECAY = 0.82f
+        private const val SMOOTH_DECAY = 0.90f
     }
 
     private var visualizer: Visualizer? = null
@@ -62,7 +62,7 @@ class RealSpectrumAnalyzer(
                         samplingRate: Int,
                     ) = Unit
                 },
-                Visualizer.getMaxCaptureRate() / 2,
+                Visualizer.getMaxCaptureRate(),
                 true,
                 false,
             )

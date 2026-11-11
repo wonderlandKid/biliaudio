@@ -39,9 +39,11 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * 自绘播放进度条（Material 3 Expressive 风格：厚轨道 + 大滑块 + 拖动时滑块放大）。
+ * 自绘播放进度条：全宽实时频谱 + 进度圆点。
  *
- * 支持点击/拖动定位、无障碍进度语义；不显示专辑进度等额外文字。
+ * - 未播放部分灰色、已播放部分主题色，整条从歌曲开始就可见/跳动；
+ * - 真实频谱（Visualizer）优先，未授权回退合成包络；
+ * - 支持点击/拖动定位、拖动时振幅压缩到 30%、无障碍进度语义。
  */
 @Composable
 internal fun PlaybackSeekBar(
@@ -102,13 +104,14 @@ internal fun PlaybackSeekBar(
 
     val density = LocalDensity.current
     val thumbRadiusPx = with(density) { thumbRadius.toPx() }
-    val barWidthPx = with(density) { 2.5.dp.toPx() }
+    val barWidthPx = with(density) { 2.dp.toPx() }
     val barGapPx = with(density) { 2.dp.toPx() }
-    val minBarHeightPx = with(density) { 2.5.dp.toPx() }
-    val maxBarHeightPx = with(density) { 19.dp.toPx() }
+    val minBarHeightPx = with(density) { 2.dp.toPx() }
+    val maxBarHeightPx = with(density) { 28.dp.toPx() }
     val haloRadiusPx = with(density) { 2.dp.toPx() }
 
     val activeColor = MaterialTheme.colorScheme.primary
+    val futureColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
     val haloColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
     val liveBands = spectrumBands
 
@@ -161,29 +164,32 @@ internal fun PlaybackSeekBar(
             val scale = spectrumActive * spectrumCompression
             val hasLiveSpectrum = liveBands.size >= 2
 
-            // 已播放部分：实时频谱竖条（未播放部分保持透明，不画底轨）。
+            // 全宽频谱：未播放部分用灰色，已播放部分用主题色；这样歌曲一开始就能看到整条频谱在跳动。
+            // 60fps 的 wavePhase 让竖条持续轻微起伏，真实频段（~20Hz 回调）负责整体能量包络。
             for (index in 0 until barCount) {
                 val left = index * step
                 val barCenter = left + barWidthPx / 2f
-                if (barCenter > activeWidth + 0.5f) break
                 val fraction = index / (barCount - 1f).coerceAtLeast(1f)
-                val norm = if (hasLiveSpectrum) {
+                val baseNorm = if (hasLiveSpectrum) {
                     val bandPosition = fraction * (liveBands.size - 1)
                     val lower = bandPosition.toInt().coerceIn(0, liveBands.lastIndex)
                     val upper = (lower + 1).coerceAtMost(liveBands.lastIndex)
                     val t = (bandPosition - lower).coerceIn(0f, 1f)
                     val energy = liveBands[lower] * (1f - t) + liveBands[upper] * t
-                    // 低频段一般能量更高，做一点视觉压缩避免前段过高。
-                    (energy * 1.15f).coerceIn(0f, 1f)
+                    (energy * 1.35f).coerceIn(0f, 1f)
                 } else {
                     // 无权限时的合成频谱回退（与播放状态同步的节拍包络）。
                     val low = sin(fraction * 13f + wavePhase) * 0.5f + 0.5f
                     val high = sin(fraction * 37f - wavePhase * 1.6f) * 0.5f + 0.5f
                     (0.22f + 0.58f * low + 0.20f * high).coerceIn(0f, 1f)
                 }
+                // 逐条相位微动（每帧变化）让频谱有持续的「呼吸/跳动」，弥补真实回调帧率。
+                val shimmer = 0.78f + 0.22f * sin(index * 0.55f + wavePhase * 3f)
+                val norm = (baseNorm * shimmer * (0.45f + 0.55f * spectrumActive)).coerceIn(0f, 1f)
                 val barHeight = minBarHeightPx + (maxBarHeightPx - minBarHeightPx) * norm * scale
+                val played = barCenter <= activeWidth + 0.5f
                 drawRoundRect(
-                    color = activeColor,
+                    color = if (played) activeColor else futureColor,
                     topLeft = Offset(left, centerY - barHeight / 2f),
                     size = Size(barWidthPx, barHeight),
                     cornerRadius = CornerRadius(barWidthPx / 2f),

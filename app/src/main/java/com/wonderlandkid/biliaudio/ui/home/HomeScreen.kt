@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Login
@@ -66,6 +68,8 @@ fun HomeScreen(
     onOpenStats: () -> Unit,
     onOpenRecentAlbums: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 由 AppNavHost 持有：从发现页进入详情再返回时保持滚动位置。 */
+    listState: LazyListState = rememberLazyListState(),
     viewModel: HomeViewModel = appViewModel { container ->
         HomeViewModel(
             albumRepository = container.albumRepository,
@@ -88,6 +92,7 @@ fun HomeScreen(
         onOpenRecentAlbums = onOpenRecentAlbums,
         onShuffleAlbums = viewModel::shuffleRandomAlbums,
         onStatsModeChange = viewModel::setHomeStatsMode,
+        listState = listState,
         modifier = modifier,
     )
 }
@@ -104,9 +109,11 @@ private fun HomeContent(
     onOpenRecentAlbums: () -> Unit,
     onShuffleAlbums: () -> Unit,
     onStatsModeChange: (HomeStatsMode) -> Unit,
+    listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),

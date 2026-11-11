@@ -430,7 +430,7 @@ private fun NowPlayingCoverPage(
             contentAlignment = Alignment.Center,
         ) {
             // 比 v0.35 略小一点：给封面右侧的音量微调小球留出空间，同时保证单手可拨。
-            val coverSize = minOf(maxWidth * 0.84f, maxHeight * 0.88f)
+            val coverSize = minOf(maxWidth * 0.90f, maxHeight * 0.94f)
             val coverScale by animateFloatAsState(
                 targetValue = if (state.isPlaying) 1f else 0.92f,
                 animationSpec = tween(

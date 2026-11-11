@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -74,6 +76,10 @@ fun LibraryScreen(
     /** 点击艺术家（跳转艺术家详情，由 Lead 接路由） */
     onOpenArtist: (String) -> Unit = {},
     modifier: Modifier = Modifier,
+    /** 由 AppNavHost 持有的三个 Tab 滚动位置，跨详情页返回时保持。 */
+    songsListState: LazyListState = rememberLazyListState(),
+    albumsGridState: LazyGridState = rememberLazyGridState(),
+    artistsListState: LazyListState = rememberLazyListState(),
     viewModel: LibraryViewModel = appViewModel { container ->
         LibraryViewModel(container.albumRepository, container.playbackController)
     },
@@ -88,6 +94,9 @@ fun LibraryScreen(
         onPlayAll = viewModel::playAllSongs,
         onOpenAlbum = onOpenAlbum,
         onOpenArtist = onOpenArtist,
+        songsListState = songsListState,
+        albumsGridState = albumsGridState,
+        artistsListState = artistsListState,
         modifier = modifier,
     )
 }
@@ -102,6 +111,9 @@ private fun LibraryContent(
     onPlayAll: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenArtist: (String) -> Unit,
+    songsListState: LazyListState,
+    albumsGridState: LazyGridState,
+    artistsListState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -169,6 +181,7 @@ private fun LibraryContent(
                     onPlaySong = onPlaySong,
                     onPlayAll = onPlayAll,
                     onClearSearch = onClearQuery,
+                    listState = songsListState,
                 )
 
                 state.tab == LibraryTab.ALBUMS -> AlbumsTab(
@@ -177,6 +190,7 @@ private fun LibraryContent(
                     query = state.query,
                     onOpenAlbum = onOpenAlbum,
                     onClearSearch = onClearQuery,
+                    gridState = albumsGridState,
                 )
 
                 else -> ArtistsTab(
@@ -185,6 +199,7 @@ private fun LibraryContent(
                     query = state.query,
                     onOpenArtist = onOpenArtist,
                     onClearSearch = onClearQuery,
+                    listState = artistsListState,
                 )
             }
         }
@@ -205,6 +220,7 @@ private fun SongsTab(
     onPlaySong: (Int) -> Unit,
     onPlayAll: () -> Unit,
     onClearSearch: () -> Unit,
+    listState: LazyListState,
 ) {
     if (songs.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -230,7 +246,6 @@ private fun SongsTab(
         songs.withIndex().associate { (index, song) -> song.track.id to index }
     }
     val sections = remember(songs) { LetterIndex.sections(songs) { song -> song.track.title } }
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
     val prefixItems = 1 // 顶部「全部歌曲 / 播放全部歌曲」行（列表无字母分隔标题，每组只占条目数）
@@ -316,6 +331,7 @@ private fun AlbumsTab(
     query: String,
     onOpenAlbum: (Long) -> Unit,
     onClearSearch: () -> Unit,
+    gridState: LazyGridState,
 ) {
     if (albums.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -337,7 +353,6 @@ private fun AlbumsTab(
     }
 
     val sections = remember(albums) { LetterIndex.sections(albums) { album -> album.title } }
-    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
     val onSelectLetter = remember(sections, gridState) {
@@ -400,6 +415,7 @@ private fun ArtistsTab(
     query: String,
     onOpenArtist: (String) -> Unit,
     onClearSearch: () -> Unit,
+    listState: LazyListState,
 ) {
     if (artists.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -421,7 +437,6 @@ private fun ArtistsTab(
     }
 
     val sections = remember(artists) { LetterIndex.sections(artists) { artist -> artist.name } }
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val showIndexBar = !isSearchActive
     val onSelectLetter = remember(sections, listState) {

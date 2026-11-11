@@ -24,8 +24,8 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
   在线多来源自动匹配、逐行/逐字高亮、Apple Music 式平滑滚动；歌词**左对齐**，
   当前行用主题色填充（不放大字号）；歌词页隐藏底部进度/控制，来源与时间偏移在右下角；
   支持本地 LRC/YRC/TTML/TXT 导入；歌词本机缓存、离线可显示
-- ▶️ **正在播放页**：曲名/艺术家在顶部（30sp）+ 大封面 + 实时频谱进度条（已播放竖条染色、
-  未播放透明、拖动 seek 时振幅压缩 30%）+ 合并播放模式/播放列表控制；
+- ▶️ **正在播放页**：曲名/艺术家在顶部（30sp）+ 大封面 + 全宽实时频谱进度条（已播放染色、
+  未播放灰色、拖动 seek 时振幅压缩 30%）+ 合并播放模式/播放列表控制；
   右侧贴边音量微调（平时隐身，点按显形，7 档 ±3、每档=系统音量 1/4）
 - 💾 **专辑音频离线缓存**：专辑详情可缓存整张专辑音频（多 P 专辑按分 P 全部缓存、支持补缓存）；
   设置 → 缓存管理可查看/删除；v0.27.0 起只缓存音频，不再缓存/播放视频
@@ -36,9 +36,9 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 
 ## 界面截图
 
-| 发现（Light） | 播放页（v0.38：实时频谱 seekbar + 贴边隐声音量条） | 歌词页（v0.35：左对齐 / 无底部工具栏 / 右下角来源偏移） |
+| 发现（Light） | 播放页（v0.40：全宽频谱 seekbar + 贴边隐声音量条） | 歌词页（v0.40：左对齐 / 无底部工具栏 / 右下角来源偏移） |
 | --- | --- | --- |
-| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v038_player_light.png) | ![lyrics](docs/screenshots/v035_lyrics_light.png) |
+| ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v040_player_light.png) | ![lyrics](docs/screenshots/v040_lyrics_light.png) |
 
 | 播放页（Dark） | 音乐库（无字母分隔头） | 设置（无「关于」分区） |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ export JAVA_HOME=/opt/android-studio/jbr
 
 ./gradlew :app:assembleRelease    # release（日常安装/性能测试）
 ./gradlew :app:assembleDebug      # debug（仅开发调试）
-./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.39.0: 204 个）
+./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.40.0: 204 个）
 
 # 产物：
 # app/build/outputs/apk/release/app-release.apk（debug 签名，可直接安装）
@@ -196,7 +196,7 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.39.0 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.40.0 版本记录
 - [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)：页面清单/分类/默认壳/例外登记（新增页面前必读）
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记
@@ -236,6 +236,6 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 命令行验证（不经过 IDE，最直接）：
 
 ```bash
-adb install -r dist/biliaudio-v0.39.0-release.apk
+adb install -r dist/biliaudio-v0.40.0-release.apk
 adb shell am start -n com.wonderlandkid.biliaudio/.MainActivity
 ```
