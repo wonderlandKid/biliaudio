@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.runtime.LaunchedEffect
+
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 import androidx.compose.ui.zIndex
@@ -153,6 +155,9 @@ fun AppNavHost() {
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    // 首次出现才做高度展开动画；从详情页返回根 Tab 时底栏直接以最终高度出现，
+    // 这样 LazyColumn 第一帧就能按正确视口恢复滚动位置，不会先错位再补。
+    var bottomBarShownOnce by remember { mutableStateOf(false) }
     // 非 Tab 页面没有底部导航时，迷你条平滑下移到系统手势区上方，而不是瞬间掉落
     val systemBottomInset = WindowInsets.navigationBars
         .asPaddingValues()
@@ -181,22 +186,24 @@ fun AppNavHost() {
             val route = destination.route ?: return@OnDestinationChangedListener
             if (route in tabRoutes) {
                 lastRootRoute = route
+                // 等两帧：第一帧 Scaffold 才完成底栏/inset 测量，此时再 requestScrollToItem，
+                // 位置不会先被 clamp；两帧内的闪动基本不可见。
                 scope.launch {
-                    // 不再延迟 450ms：延迟恢复会表现为「页面先到错位，再手动滑一下」。
-                    // 立即恢复，后续底栏 inset 动画不会再次改变 firstVisibleItem。
+                    androidx.compose.runtime.withFrameNanos { }
+                    androidx.compose.runtime.withFrameNanos { }
                     when (route) {
                         Routes.HOME -> homeScrollSnapshot?.let {
-                            homeListState.scrollToItem(it.index, it.offset)
+                            homeListState.requestScrollToItem(it.index, it.offset)
                             homeScrollSnapshot = null
                         }
                         Routes.LIBRARY -> libraryScrollSnapshot?.let {
-                            librarySongsListState.scrollToItem(it.songsIndex, it.songsOffset)
-                            libraryAlbumsGridState.scrollToItem(it.albumsIndex, it.albumsOffset)
-                            libraryArtistsListState.scrollToItem(it.artistsIndex, it.artistsOffset)
+                            librarySongsListState.requestScrollToItem(it.songsIndex, it.songsOffset)
+                            libraryAlbumsGridState.requestScrollToItem(it.albumsIndex, it.albumsOffset)
+                            libraryArtistsListState.requestScrollToItem(it.artistsIndex, it.artistsOffset)
                             libraryScrollSnapshot = null
                         }
                         Routes.SETTINGS -> settingsScrollSnapshot?.let {
-                            settingsListState.scrollToItem(it.index, it.offset)
+                            settingsListState.requestScrollToItem(it.index, it.offset)
                             settingsScrollSnapshot = null
                         }
                     }
@@ -212,7 +219,9 @@ fun AppNavHost() {
                         artistsIndex = libraryArtistsListState.firstVisibleItemIndex,
                         artistsOffset = libraryArtistsListState.firstVisibleItemScrollOffset,
                     )
-                    Routes.SETTINGS -> settingsScrollSnapshot = settingsListState.snapshot()
+                    Routes.SETTINGS -> {
+                        settingsScrollSnapshot = settingsListState.snapshot()
+                    }
                 }
             }
         }
@@ -271,6 +280,9 @@ fun AppNavHost() {
     // - PlayerMorphLayer 把迷你条的封面/标题/艺术家连续插值到播放页位置，卡片背景同步长到全屏；
     // - p→1 时 morph 层淡出，交给真正的播放页（两端位置已对齐，无跳变）。
     var miniBarRect by remember { mutableStateOf<Rect?>(null) }
+    // 迷你条静止时的 top（不跟随 graphicsLayer translationY 变化），作为 sheet 的滑动锚点，
+    // 避免「读取被平移后的 rect → 再影响 sheet → 抖动」。
+    var miniAnchorTopPx by remember { mutableFloatStateOf(0f) }
     var miniCoverRect by remember { mutableStateOf<Rect?>(null) }
     var miniTitleRect by remember { mutableStateOf<Rect?>(null) }
     var miniArtistRect by remember { mutableStateOf<Rect?>(null) }
@@ -327,57 +339,10 @@ fun AppNavHost() {
     }
 
     Scaffold(
-        bottomBar = {
-            // 底栏出现/消失做高度 + 淡入淡出，避免页面切换时“啪”一下出现；
-            // 播放页展开时不再在 2% 处立刻收缩（会让根页面视口突然变大、出现方角/圆角闪烁）；
-            // 改为先跟随展开进度淡出/下移，等播放页几乎铺满（92%）再收起高度。
-            // 底栏必须在 sheet 盖到它之前完全退场（Scaffold 的 bottomBar 绘制在内容之上），
-            // 用 0→18% 的进度做 alpha/下移，而不是突然 shrink 高度。
-            val bottomBarHide = smoothStep(0.0f, 0.18f, playerProgress)
-            AnimatedVisibility(
-                // 底栏高度在播放页展开期间保持不变（避免根页面视口重排）；
-                // 只通过 alpha/translation 优雅退场，播放页完全覆盖后仍透明存在。
-                visible = showChrome,
-                enter = expandVertically(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarEnterMs,
-                        easing = BiliMotion.EmphasizedDecelerate,
-                    ),
-                    expandFrom = Alignment.Bottom,
-                ) + fadeIn(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarEnterMs,
-                        easing = BiliMotion.EmphasizedDecelerate,
-                    ),
-                ),
-                exit = shrinkVertically(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarExitMs,
-                        easing = BiliMotion.EmphasizedAccelerate,
-                    ),
-                    shrinkTowards = Alignment.Bottom,
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarExitMs,
-                        easing = BiliMotion.EmphasizedAccelerate,
-                    ),
-                ),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .onSizeChanged { bottomBarHeightPx = it.height }
-                        .graphicsLayer {
-                            alpha = 1f - bottomBarHide
-                            translationY = bottomBarHide * size.height
-                        },
-                ) {
-                    BiliBottomBar(
-                        current = currentTab,
-                        onSelect = { switchTab(it) },
-                    )
-                }
-            }
-        },
+        // 底栏不再放在 Scaffold.bottomBar：它会参与内容 viewport 测量，
+        // 从详情返回时第一帧的 inset/高度动画会导致滚动位置被 clamp。
+        // 现在改为内容层之上的固定高度 overlay，滚动位置只由下面显式的 bottom padding 决定。
+        bottomBar = { },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
@@ -387,6 +352,15 @@ fun AppNavHost() {
                     .fillMaxSize()
                     .hazeSource(hazeState)
                     .padding(innerPadding)
+                    // 根 Tab 显式预留底栏高度（overlay 不参与 Scaffold 测量）；详情页仍用系统底 inset。
+                    .padding(
+                        bottom = if (showChrome && bottomBarHeightPx > 0) {
+                            (with(density) { bottomBarHeightPx.toDp() } -
+                                innerPadding.calculateBottomPadding()).coerceAtLeast(0.dp)
+                        } else {
+                            0.dp
+                        },
+                    )
                     .padding(bottom = miniPlayerContentInset)
                     .imePadding(),
                 // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
@@ -604,18 +578,82 @@ fun AppNavHost() {
 
             }
 
+            // 底栏 overlay：固定高度 + 内容层之上的绘制顺序；
+            // 播放页 sheet 会盖住它，所以不再需要担心「底栏按钮浮在 sheet 上」。
+            LaunchedEffect(showChrome) { if (showChrome) bottomBarShownOnce = true }
+            AnimatedVisibility(
+                visible = showChrome,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = if (bottomBarShownOnce) {
+                    EnterTransition.None
+                } else {
+                    expandVertically(
+                        animationSpec = tween(
+                            durationMillis = BiliMotion.BottomBarEnterMs,
+                            easing = BiliMotion.EmphasizedDecelerate,
+                        ),
+                        expandFrom = Alignment.Bottom,
+                    ) + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = BiliMotion.BottomBarEnterMs,
+                            easing = BiliMotion.EmphasizedDecelerate,
+                        ),
+                    )
+                },
+                exit = shrinkVertically(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarExitMs,
+                        easing = BiliMotion.EmphasizedAccelerate,
+                    ),
+                    shrinkTowards = Alignment.Bottom,
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = BiliMotion.BottomBarExitMs,
+                        easing = BiliMotion.EmphasizedAccelerate,
+                    ),
+                ),
+            ) {
+                val fixedBarHeight = if (bottomBarHeightPx > 0) {
+                    with(density) { bottomBarHeightPx.toDp() }
+                } else {
+                    null
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (fixedBarHeight != null) Modifier.height(fixedBarHeight) else Modifier)
+                        .onSizeChanged { measured ->
+                            if (measured.height > bottomBarHeightPx) bottomBarHeightPx = measured.height
+                        }
+                        .graphicsLayer {
+                            val hide = smoothStep(0.0f, 0.18f, playerProgress)
+                            alpha = 1f - hide
+                            translationY = hide * size.height
+                        },
+                ) {
+                    BiliBottomBar(
+                        current = currentTab,
+                        onSelect = { switchTab(it) },
+                    )
+                }
+            }
+
             // 悬浮迷你播放条：只负责上报自身/封面/标题/艺术家在窗口中的位置（供 morph 层插值）。
             // 开启播放页时快速淡出，交给 morph 层做连续展开。
             // 迷你条必须始终组合：它承载跟手拖拽的 pointerInput。
             // 之前因为 playerProgress > 20% 把它移出组合，导致慢速拖动时手势节点被销毁，进度卡在中间。
             if (showMiniPlayer) {
                 // 迷你条固定在底部，只做淡出；拖拽 pointerInput 始终存在。
-                val miniAlpha = 1f - smoothStep(0.02f, 0.18f, playerProgress)
+                // 只在最开始 5% 内淡出：避免收起/展开中段同时看到「迷你条 + sheet 顶部文字」两层。
+                val miniAlpha = 1f - smoothStep(0.0f, 0.05f, playerProgress)
                 MiniPlayerHost(
                     playbackController = container.playbackController,
                     onClick = { animatePlayerTo(true) },
                     dragModifier = playerDragModifier,
-                    onBarBounds = { miniBarRect = it },
+                    onBarBounds = {
+                        miniBarRect = it
+                        if (playerProgress <= 0.001f) miniAnchorTopPx = it.top
+                    },
                     onCoverBounds = { miniCoverRect = it },
                     onTitleBounds = { miniTitleRect = it },
                     onArtistBounds = { miniArtistRect = it },
@@ -623,7 +661,11 @@ fun AppNavHost() {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(1f) // 低展开进度时迷你条覆盖在播放页卡片顶部，避免卡片文字先露出来
-                        .graphicsLayer { alpha = miniAlpha }
+                        .graphicsLayer {
+                            alpha = miniAlpha
+                            // 迷你条本身骑在 sheet 顶边上一起上移，而不是原地淡出。
+                            translationY = -miniAnchorTopPx * playerProgress
+                        }
                         .padding(bottom = miniBottomPadding),
                 )
             }
@@ -631,8 +673,8 @@ fun AppNavHost() {
             // 正在播放页：整块 sheet 跟随展开进度从迷你条位置向上滑出，并被裁剪成底部锚定的圆角卡片。
             // 播放控制、频谱、封面都在同一个 sheet 里，所以控件会跟封面一起被拖上来，而不是原地淡入。
             if (playerProgress > 0.001f) {
-                val travelPx = (miniBarRect?.top ?: (screenHeightPx * 0.72f))
-                    .coerceAtLeast(0f)
+                val travelPx = (if (miniAnchorTopPx > 0f) miniAnchorTopPx else miniBarRect?.top
+                    ?: (screenHeightPx * 0.72f)).coerceAtLeast(0f)
                 val offsetY = travelPx * (1f - playerProgress)
                 // 轻微压暗底层页面，让上滑中的卡片像「从页面上升起」而不是透明叠字。
                 Box(
@@ -646,6 +688,8 @@ fun AppNavHost() {
                         .fillMaxSize()
                         .graphicsLayer {
                             translationY = offsetY
+                            // 最后 3% 让 sheet 淡出，避免收起时 sheet 被移除的瞬间与迷你条出现重叠一帧。
+                            alpha = (playerProgress / 0.03f).coerceIn(0f, 1f)
                             val radius = 24.dp * (1f - playerProgress)
                             shape = RoundedCornerShape(
                                 topStart = radius,

@@ -360,6 +360,13 @@ private fun NowPlayingBody(
                 else -> NowPlayingCoverPage(
                     state = state,
                     entry = entry,
+                    spectrumBands = spectrumBands,
+                    onSeek = onSeek,
+                    onTogglePlay = onTogglePlay,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                    onCyclePlaybackMode = onCyclePlaybackMode,
+                    onOpenPlaylist = onOpenPlaylist,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
                     onCoverBounds = onCoverBounds,
                     onVolumeOffsetChange = onVolumeOffsetChange,
@@ -368,55 +375,21 @@ private fun NowPlayingBody(
                 )
             }
         }
-        // 歌词页不显示进度条/时间/播放控制，把空间留给歌词本身。
-        if (pagerState.currentPage == COVER_PAGE) {
-        Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
-            PlaybackSeekBar(
-                positionMs = state.positionMs,
-                durationMs = state.trackDurationMs,
-                isPlaying = state.isPlaying,
-                spectrumBands = spectrumBands,
-                onSeek = onSeek,
-            )
-            Spacer(Modifier.height(Spacing.xs))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xxs),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = TimeUtils.formatDuration(state.positionMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = TimeUtils.formatDuration(state.trackDurationMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(Modifier.height(Spacing.sm))
-            ControlsRow(
-                state = state,
-                onTogglePlay = onTogglePlay,
-                onNext = onNext,
-                onPrevious = onPrevious,
-                onCyclePlaybackMode = onCyclePlaybackMode,
-                onOpenPlaylist = onOpenPlaylist,
-            )
-            // 底部留白：频谱变高、时间行下移后，适当压缩留白，避免控制行被挤出屏幕
-            Spacer(Modifier.height(Spacing.xxl))
-        }
-        }
     }
 }
 
-/** 封面页：大封面；点封面进入歌词页。曲名/艺术家已上移到页面顶部。 */
+/** 封面页：大封面 + 进度/播放控制。控制条在 pager 内部，左右切换时和封面一起滑走。 */
 @Composable
 private fun NowPlayingCoverPage(
     state: PlaybackState,
     entry: QueueEntry?,
+    spectrumBands: FloatArray,
+    onSeek: (Long) -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onCyclePlaybackMode: () -> Unit,
+    onOpenPlaylist: () -> Unit,
     onOpenLyrics: () -> Unit,
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onVolumeOffsetChange: (Int) -> Unit,
@@ -424,9 +397,11 @@ private fun NowPlayingCoverPage(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
@@ -454,6 +429,18 @@ private fun NowPlayingCoverPage(
             )
         }
 
+        NowPlayingFooter(
+            state = state,
+            spectrumBands = spectrumBands,
+            onSeek = onSeek,
+            onTogglePlay = onTogglePlay,
+            onNext = onNext,
+            onPrevious = onPrevious,
+            onCyclePlaybackMode = onCyclePlaybackMode,
+            onOpenPlaylist = onOpenPlaylist,
+        )
+        }
+
         // 音量微调：完美隐藏，点一下在屏幕最右侧显形，再拖动；
         // 位置紧贴屏幕边框，不占封面空间（触控区向左延伸，视觉条贴边）。
         VolumeFineTune(
@@ -462,6 +449,57 @@ private fun NowPlayingCoverPage(
             hazeState = volumeHazeState,
             modifier = Modifier.align(Alignment.CenterEnd),
         )
+    }
+}
+
+/** 封面页底部：频谱进度、时间、播放控制（在 pager 内，随封面页一起滑动）。 */
+@Composable
+private fun NowPlayingFooter(
+    state: PlaybackState,
+    spectrumBands: FloatArray,
+    onSeek: (Long) -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onCyclePlaybackMode: () -> Unit,
+    onOpenPlaylist: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+        PlaybackSeekBar(
+            positionMs = state.positionMs,
+            durationMs = state.trackDurationMs,
+            isPlaying = state.isPlaying,
+            spectrumBands = spectrumBands,
+            onSeek = onSeek,
+        )
+        Spacer(Modifier.height(Spacing.xs))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.xxs),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = TimeUtils.formatDuration(state.positionMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = TimeUtils.formatDuration(state.trackDurationMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(Spacing.sm))
+        ControlsRow(
+            state = state,
+            onTogglePlay = onTogglePlay,
+            onNext = onNext,
+            onPrevious = onPrevious,
+            onCyclePlaybackMode = onCyclePlaybackMode,
+            onOpenPlaylist = onOpenPlaylist,
+        )
+        Spacer(Modifier.height(Spacing.xxl))
     }
 }
 

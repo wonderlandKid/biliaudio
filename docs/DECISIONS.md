@@ -1149,3 +1149,18 @@
   3. 迷你条始终组合，只淡出 alpha；底栏不再收缩高度，0→18% 淡出/下移；mini 内容 inset 保持稳定；
   4. 对照 SPICaMusic 的 SubcomposeLayout/分级 reveal 思路；椒盐闭源，按其「整块 sheet 全程跟手」原则实现。
 - **影响**：AppNavHost（sheet/底栏/迷你条组合）；204 单测；release v0.45.0。
+
+
+## D73 底栏 overlay + 控制条并入封面页（v0.46.0）
+
+- **日期**：2026-11-12
+- **背景**：设置→诊断日志返回后滚动位置仍偏移；播放按钮不随封面页滑动；收起时出现两层文字闪一帧。
+- **根因**：底栏参与 Scaffold.bottomBar 测量，进入详情时根页面视口变大导致 LazyColumn clamp；
+  控制 footer 在 pager 外，不随封面页横滑；迷你条/sheet 淡出时序重叠。
+- **决策**：
+  1. 底栏移出 Scaffold.bottomBar，改为固定高度 overlay；根 Tab 显式 padding = 实测底栏高度，
+     测高只增不减；返回根 Tab 时底栏直接以最终高度布局（不再 0→全高动画）；
+  2. 进度/时间/播放控制移入封面 pager page 内部，随封面横向移动；
+  3. sheet 最后 3% 淡出、mini 只在前 5% 淡出；mini 骑 sheet 顶边上移；
+  4. 滚动恢复用 requestScrollToItem（两帧后），实测 bounds 完全一致。
+- **影响**：AppNavHost、NowPlayingScreen；204 单测；release v0.46.0。
