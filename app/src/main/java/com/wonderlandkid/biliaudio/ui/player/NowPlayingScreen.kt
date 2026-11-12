@@ -93,6 +93,10 @@ fun NowPlayingScreen(
     onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     sharedElementsAlpha: Float = 1f,
+    /** 共享封面动画期间只控制真实封面的显隐。 */
+    coverAlpha: Float = 1f,
+    /** 播放页控件整体渐入（盐系：卡片先只有封面，控件后出现）。 */
+    contentAlpha: Float = 1f,
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
     },
@@ -113,6 +117,7 @@ fun NowPlayingScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = contentAlpha }
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -172,6 +177,7 @@ fun NowPlayingScreen(
                         onArtistBounds = onArtistBounds,
                         onPlayBounds = onPlayBounds,
                         sharedElementsAlpha = sharedElementsAlpha,
+                        coverAlpha = coverAlpha,
                         onSeek = viewModel::seekToTrackPosition,
                         onTogglePlay = viewModel::togglePlayPause,
                         onNext = viewModel::next,
@@ -216,6 +222,7 @@ private fun NowPlayingBody(
     onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     sharedElementsAlpha: Float,
+    coverAlpha: Float,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
@@ -292,6 +299,7 @@ private fun NowPlayingBody(
                     onCoverBounds = onCoverBounds,
                     onPlayBounds = onPlayBounds,
                     sharedElementsAlpha = sharedElementsAlpha,
+                    coverAlpha = coverAlpha,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -314,6 +322,7 @@ private fun NowPlayingCoverPage(
     onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     sharedElementsAlpha: Float,
+    coverAlpha: Float,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -340,7 +349,7 @@ private fun NowPlayingCoverPage(
                 modifier = Modifier
                     .size(coverSize)
                     .graphicsLayer {
-                        alpha = sharedElementsAlpha
+                        alpha = coverAlpha
                         scaleX = coverScale
                         scaleY = coverScale
                     }

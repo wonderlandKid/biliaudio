@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.54.0**（tag `v0.54.0`，2026-11-13；release commit 以 `git rev-parse v0.54.0` 为准）
+- **版本：v0.55.0**（tag `v0.55.0`，2026-11-13；release commit 以 `git rev-parse v0.55.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.54.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.55.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.54.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.55.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -107,8 +107,8 @@ scripts/screenshot.sh home 8
      横向滑动切换；v0.46 起进度/播放控制放在封面页内部，随封面一起横向滑走，歌词页无控制；
      歌词页按返回先滑回封面页；
      迷你条 ↔ 播放页为上下关系：v0.48 起是单一 PlayerSurface，从迷你条 rect 连续长到全屏；
-     v0.53 起封面/标题/艺术家/播放按钮作为共享元素，从迷你条位置连续插值到播放页；
-     歌词页只插值标题/艺术家，封面/播放按钮淡出；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
+     v0.55 起只保留**封面**作为连续共享元素；标题/艺术家/控件由迷你条侧淡出、播放页侧淡入；
+     歌词页没有封面，卡片先空白再淡入歌词；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
      歌词页歌词左对齐；
      播放模式为单按钮四态（随机/顺序/列表循环/单曲循环），底部第五个按钮为播放列表；
      曲名/艺术家在页面顶部（headlineLarge 30sp）共用；**全局主题从当前播放封面取种子色**（AppTheme 级别，
@@ -124,7 +124,7 @@ scripts/screenshot.sh home 8
      Material 默认 ripple 关闭；只对 enabled 的可点击组件生效。
 10. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽；
     上滑展开是 v0.48 起的 **PlayerSurface 单一表面**：surface 从迷你条 rect 连续长到全屏，
-    v0.53 起封面/标题/播放按钮由共享元素 overlay 连续插值；迷你条始终保留在组合中（只淡出 alpha），
+    v0.55 起只有封面由共享元素 overlay 连续插值，其他元素淡出/淡入；迷你条始终保留在组合中（只淡出 alpha），
     保证跟手 pointerInput 不被中途销毁；并保存当前页，收起再拉起恢复歌词页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
@@ -154,7 +154,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.54.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.55.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
