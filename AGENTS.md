@@ -136,7 +136,7 @@ scripts/screenshot.sh home 8
 12. **页面底部安全区**：迷你条可见时由 `AppNavHost` 全局抬升 NavHost 内容区，页面最后一项不会被 Haze 遮住；
     键盘打开时全局 `imePadding()` 接管，并撤销迷你条 inset，避免重复叠加；页面不要再单独写 Snackbar 迷你条避让。
 
-13. **图层架构（v0.51.0）**：不再使用 App 级 Scaffold；insets 由 AppNavHost 统一计算。
+13. **图层架构（v0.53.0）**：不再使用 App 级 Scaffold；insets 由 AppNavHost 统一计算。
     底栏属于根 Tab 页面自身（`RootTabPage`），不再作为全局 overlay；持久 chrome 只有播放器：
     `Content(0) < MiniPlayer(200) < Player(300) < Modal(400)`。
     - Content 只保留 NavHost；根 Tab 页面内部预留自己的底栏高度，详情页只预留系统导航 inset；
