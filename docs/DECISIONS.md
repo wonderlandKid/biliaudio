@@ -1219,3 +1219,16 @@
   3. 根 Tab 底部按实测底栏高度留白，详情页按系统导航 inset；IME 可见时取 max(IME, 系统导航)；
   4. BottomBar/PlayerSurface 仍通过 AppLayerHost 绘制，不参与 Content 测量。
 - **影响**：AppNavHost；204 单测；release v0.50.0。
+
+
+## D78 底栏归属根 Tab 页面（v0.51.0）
+
+- **日期**：2026-11-13
+- **背景**：全局底栏 overlay 在进入设置子页时先退场，左页仍可见，因此看起来“底栏消失+上一页下移”。
+- **决策**：
+  1. 底栏移入 `RootTabPage`，与根 Tab 内容同属一个页面；
+  2. 转场时底栏随页面一起滑走，不再有独立的 hide 动画；
+  3. 全局 Content 只预留系统导航 inset，根 Tab 页面内部预留底栏高度；
+  4. 底栏不再跟随 playerProgress 淡出；PlayerSurface 层级在上，自然遮挡；
+  5. 迷你条底部位置 = 底栏高度 + 系统导航 inset。
+- **影响**：RootTabPage/BiliBottomBar windowInsets；删除 BottomBarLayer；204 单测；release v0.51.0。

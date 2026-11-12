@@ -17,8 +17,8 @@ android {
         applicationId = "com.wonderlandkid.biliaudio"
         minSdk = 24
         targetSdk = 37
-        versionCode = 65
-        versionName = "0.50.0"
+        versionCode = 66
+        versionName = "0.51.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

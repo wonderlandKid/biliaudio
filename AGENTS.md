@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.50.0**（tag `v0.50.0`，2026-11-12；release commit 以 `git rev-parse v0.50.0` 为准）
+- **版本：v0.51.0**（tag `v0.51.0`，2026-11-13；release commit 以 `git rev-parse v0.51.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.50.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.51.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.50.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.51.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -138,11 +138,11 @@ scripts/screenshot.sh home 8
 12. **页面底部安全区**：迷你条可见时由 `AppNavHost` 全局抬升 NavHost 内容区，页面最后一项不会被 Haze 遮住；
     键盘打开时全局 `imePadding()` 接管，并撤销迷你条 inset，避免重复叠加；页面不要再单独写 Snackbar 迷你条避让。
 
-13. **图层架构（v0.50.0）**：不再使用 App 级 Scaffold；insets 由 AppNavHost 统一计算。持久 chrome 显式分层，所有层必须是同一个 `AppLayerHost` 的直接子节点：
-    `Content(0) < BottomBar(100) < MiniPlayer(200) < Player(300) < Modal(400)`。
-    - Content 只保留 NavHost；根 Tab 底部 padding = 实测底栏高度，详情页 = 系统导航 inset；
+13. **图层架构（v0.51.0）**：不再使用 App 级 Scaffold；insets 由 AppNavHost 统一计算。
+    底栏属于根 Tab 页面自身（`RootTabPage`），不再作为全局 overlay；持久 chrome 只有播放器：
+    `Content(0) < MiniPlayer(200) < Player(300) < Modal(400)`。
+    - Content 只保留 NavHost；根 Tab 页面内部预留自己的底栏高度，详情页只预留系统导航 inset；
     - 页面切换（根 Tab、详情 push/pop、封面↔歌词 Pager）都在 Content 层内部完成，不要给每个页面分配 z 值；
-    - `BottomBarLayer` 固定高度、不参与 Content 测量，只做 alpha/位移；
     - `PlayerSurfaceLayer` 是迷你条 + 播放页的唯一表面：surface 边界/圆角随 progress 插值，
       迷你条内容只在前 5% 淡出，展开后 surface 在底栏/迷你条之上，收起最后 6% 不再绘制播放页内容；
       播放页内容始终按全屏尺寸布局，再由 mask 裁剪到 surface，避免中间帧布局约束变化；
@@ -156,7 +156,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.50.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.51.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

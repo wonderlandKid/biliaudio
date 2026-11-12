@@ -5,7 +5,9 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
@@ -24,10 +26,12 @@ enum class MainTab(val label: String, val icon: ImageVector) {
 fun BiliBottomBar(
     current: MainTab,
     onSelect: (MainTab) -> Unit,
+    windowInsets: WindowInsets = NavigationBarDefaults.windowInsets,
 ) {
     NavigationBar(
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
+        windowInsets = windowInsets,
     ) {
         MainTab.entries.forEach { tab ->
             NavigationBarItem(

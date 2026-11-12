@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.safeDrawing
 
 import com.wonderlandkid.biliaudio.ui.layers.PlayerSurfaceLayer
 
-import com.wonderlandkid.biliaudio.ui.layers.BottomBarLayer
 import com.wonderlandkid.biliaudio.ui.layers.AppLayer
 import com.wonderlandkid.biliaudio.ui.layers.AppLayerHost
 import com.wonderlandkid.biliaudio.ui.layers.layer
@@ -169,9 +168,6 @@ fun AppNavHost() {
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
-    // 首次出现才做高度展开动画；从详情页返回根 Tab 时底栏直接以最终高度出现，
-    // 这样 LazyColumn 第一帧就能按正确视口恢复滚动位置，不会先错位再补。
-    var bottomBarShownOnce by remember { mutableStateOf(false) }
     // 非 Tab 页面没有底部导航时，迷你条平滑下移到系统手势区上方，而不是瞬间掉落
     val systemBottomInset = WindowInsets.navigationBars
         .asPaddingValues()
@@ -181,7 +177,11 @@ fun AppNavHost() {
         .asPaddingValues()
         .calculateTopPadding()
     val animatedMiniBottomPadding: Dp by animateDpAsState(
-        targetValue = if (showChrome) with(density) { bottomBarHeightPx.toDp() } else systemBottomInset,
+        targetValue = if (showChrome) {
+            with(density) { bottomBarHeightPx.toDp() } + systemBottomInset
+        } else {
+            systemBottomInset
+        },
         animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
         label = "miniBottomPadding",
     )
@@ -346,11 +346,12 @@ fun AppNavHost() {
     val layoutDirection = LocalLayoutDirection.current
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val barHeightDp = with(density) { bottomBarHeightPx.toDp() }
-    val contentBottom = when {
-        imeVisible -> maxOf(imeBottom, systemBottomInset)
-        showChrome && bottomBarHeightPx > 0 -> barHeightDp
-        else -> systemBottomInset
-    }
+    // 全局 Content 只预留系统导航 inset；根 Tab 的底栏空间由 Tab 页面自己预留。
+    // 这样底栏在详情页收起时不会改变底层根 Tab 的布局。
+    val contentBottom = if (imeVisible) maxOf(imeBottom, systemBottomInset) else systemBottomInset
+    // 底栏现在在根 Tab 页面内部（不带系统导航 inset），页面内容只需让出底栏自身高度；
+    // 系统导航 inset 已由全局 contentBottom 预留。
+    val tabBottomExtra = barHeightDp
 
     AppLayerHost {
         NavHost(
@@ -386,6 +387,12 @@ fun AppNavHost() {
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
+                        RootTabPage(
+                            contentBottom = tabBottomExtra,
+                            currentTab = currentTab,
+                            onSelect = { switchTab(it) },
+                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                        ) {
                         HomeScreen(
                             listState = homeListState,
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
@@ -398,6 +405,7 @@ fun AppNavHost() {
                             onOpenStats = { navController.navigate(Routes.STATS) },
                             onOpenRecentAlbums = { navController.navigate(Routes.RECENT_ALBUMS) },
                         )
+                        }
                     }
                 }
                 composable(
@@ -408,6 +416,12 @@ fun AppNavHost() {
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
+                        RootTabPage(
+                            contentBottom = tabBottomExtra,
+                            currentTab = currentTab,
+                            onSelect = { switchTab(it) },
+                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                        ) {
                         LibraryScreen(
                             songsListState = librarySongsListState,
                             albumsGridState = libraryAlbumsGridState,
@@ -415,6 +429,7 @@ fun AppNavHost() {
                             onOpenAlbum = { albumId -> navController.navigate(Routes.album(albumId)) },
                             onOpenArtist = { artistName -> navController.navigate(Routes.artist(artistName)) },
                         )
+                        }
                     }
                 }
                 composable(
@@ -425,6 +440,12 @@ fun AppNavHost() {
                     popExitTransition = { ExitTransition.None },
                 ) {
                     Page {
+                        RootTabPage(
+                            contentBottom = tabBottomExtra,
+                            currentTab = currentTab,
+                            onSelect = { switchTab(it) },
+                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                        ) {
                         SettingsScreen(
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
                             onOpenBackupImport = { navController.navigate(Routes.IMPORT_ARCHIVE) },
@@ -432,6 +453,7 @@ fun AppNavHost() {
                             onOpenCacheManagement = { navController.navigate(Routes.CACHE_MANAGEMENT) },
                             listState = settingsListState,
                         )
+                        }
                     }
                 }
 
@@ -581,18 +603,7 @@ fun AppNavHost() {
 
             }
 
-            // 持久 chrome 层：顺序固定在 AppLayer 中，所有层都是 AppLayerHost 的直接子节点。
-            BottomBarLayer(
-                showChrome = showChrome,
-                shownOnce = bottomBarShownOnce,
-                onShown = { bottomBarShownOnce = true },
-                heightPx = bottomBarHeightPx,
-                onHeightMeasured = { bottomBarHeightPx = it },
-                playerProgress = playerProgress,
-                currentTab = currentTab,
-                onSelect = { switchTab(it) },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            // 持久 chrome 层：播放器/迷你条由 AppLayerHost 统一绘制；底栏属于根 Tab 页面自身。
             PlayerSurfaceLayer(
                 visible = showMiniPlayer || playerProgress > 0.001f,
                 playbackController = container.playbackController,
@@ -642,6 +653,38 @@ private fun Page(
         color = MaterialTheme.colorScheme.background,
     ) {
         content()
+    }
+}
+
+/** 根 Tab 的页面壳：底栏属于页面自身，页面转场时和内容一起滑走，不单独消失。 */
+@Composable
+private fun RootTabPage(
+    contentBottom: androidx.compose.ui.unit.Dp,
+    currentTab: MainTab,
+    onSelect: (MainTab) -> Unit,
+    onHeightMeasured: (Int) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = contentBottom),
+        ) {
+            content()
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .onSizeChanged { onHeightMeasured(it.height) },
+        ) {
+            BiliBottomBar(
+                current = currentTab,
+                onSelect = onSelect,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+            )
+        }
     }
 }
 

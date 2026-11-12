@@ -11,14 +11,13 @@ import androidx.compose.ui.zIndex
  * 应用内持久 chrome 的图层深度。
  *
  * 只用于「同一父容器内、真正会互相覆盖」的常驻层：
- * 页面内容 < 底栏 < 迷你播放条 < 播放页 sheet < 应用内弹层。
+ * 页面内容（根 Tab 底栏属于页面自身） < 播放器 surface < 应用内弹层。
  *
  * 页面之间的切换（Tab、详情 push/pop、封面/歌词 Pager）仍由 Content 层内部的 NavHost/Pager 负责，
  * 不要给每个页面单独分配 z 值——否则会退化成全局 zIndex 面条。
  */
 object AppLayer {
     const val Content = 0f
-    const val BottomBar = 100f
     const val MiniPlayer = 200f
     const val Player = 300f
     const val Modal = 400f
