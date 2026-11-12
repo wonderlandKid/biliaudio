@@ -42,9 +42,9 @@ private const val FUTURE_ALPHA = 0.28f
 /**
  * 单行歌词渲染（全屏歌词页的列表项）。
  *
- * - [isActive]：当前演唱行 → primary 主题色填充（左对齐下不再放大字号，只靠颜色/透明度区分）；
+ * - [isActive]：当前演唱行 → 最深的 onSurface 色 + Bold（比浅色主题背景更深，清楚看出播放位置）；
  * - [isPast]：已唱行 → onSurfaceVariant 较高透明度；未唱行更低透明度（拉开层次）；
- * - `WordsLyric` 且当前行时按帧做逐字卡拉 OK 上色：已唱词 primary、未唱词 onSurfaceVariant、
+ * - `WordsLyric` 且当前行时按帧做逐字卡拉 OK 上色：已唱词 onSurface、未唱词 onSurfaceVariant、
  *   当前词用 `(time - start) / (end - start)` 在两种颜色间 [lerp]（纯 SpanStyle，不画 mask）；
  * - 翻译（`NormalLyric.translation` / `WordsLyric.translation` 第一条）在主行下方小一号展示；
  * - [isSynced] 为 false（无时间轴歌词）时不响应点击。
@@ -67,7 +67,8 @@ internal fun LyricLineRow(
     val colorScheme = MaterialTheme.colorScheme
     // 歌词统一用 titleLarge（22sp）；切行时不改字号，只用缩放/权重/颜色做强调，避免列表高度抖动。
     val mainStyle = MaterialTheme.typography.titleLarge.copy(
-        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+        // 整体略微加粗；当前行再重一档，保证在浅色背景上清楚可读。
+        fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
     )
     val rowAlpha by animateFloatAsState(
         targetValue = when {
@@ -82,7 +83,8 @@ internal fun LyricLineRow(
         label = "lyricLineAlpha",
     )
     val mainColor by animateColorAsState(
-        targetValue = if (isActive) colorScheme.primary else colorScheme.onSurfaceVariant,
+        // 当前行用最深的前景色；其余行用 onSurfaceVariant，避免主题色在浅色背景上发灰。
+        targetValue = if (isActive) colorScheme.onSurface else colorScheme.onSurfaceVariant,
         animationSpec = tween(
             durationMillis = BiliMotion.LyricsActiveMs,
             easing = BiliMotion.Emphasized,
@@ -124,7 +126,7 @@ internal fun LyricLineRow(
                         text = buildProgressWordsText(
                             line = line,
                             currentTimeMs = time,
-                            sungColor = colorScheme.primary,
+                            sungColor = colorScheme.onSurface,
                             unsungColor = colorScheme.onSurfaceVariant,
                         ),
                         style = mainStyle,
@@ -162,7 +164,7 @@ private fun TranslationLine(
     Spacer(Modifier.height(Spacing.xxs))
     Text(
         text = text,
-        style = style,
+        style = style.copy(fontWeight = FontWeight.Medium),
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
             alpha = if (isActive) 0.85f else 0.55f,
         ),

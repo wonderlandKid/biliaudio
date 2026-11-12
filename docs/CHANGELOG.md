@@ -1,5 +1,16 @@
 # 版本记录
 
+## v0.54.0（2026-11-13 · tag `v0.54.0`）
+
+**歌词可读性：整体加粗 + 当前行用深色前景**
+
+- 非当前行字重 Medium → SemiBold，当前行保持 Bold；
+- 当前行颜色 primary → onSurface（比浅色主题背景更深，明显看出播放到哪一行）；
+- 逐字歌词已唱部分同步改为 onSurface，未唱保持 onSurfaceVariant；
+- 翻译行字重 Medium，保持低对比度层级。
+
+验证：204 单测全绿；Debug/Release 构建成功；截图 `docs/screenshots/v054_lyrics_contrast.png`。
+
 ## v0.53.0（2026-11-13 · tag `v0.53.0`）
 
 **共享元素展开：迷你条 → 播放页（封面页 / 歌词页）连续插值**
