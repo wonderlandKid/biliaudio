@@ -72,9 +72,6 @@ fun MiniPlayerBar(
     dragModifier: Modifier = Modifier,
     /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
     onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val track = state.currentTrack
     AnimatedVisibility(
@@ -106,7 +103,7 @@ fun MiniPlayerBar(
         if (track == null) return@AnimatedVisibility
         val cover = state.queue.getOrNull(state.currentIndex)?.coverModel()
         // v0.38 起迷你条只作为「连续展开 morph 层」的起点，不再做自身的拉伸；
-        // 展开过程由 AppNavHost 的 PlayerMorphLayer 完成。
+        // 展开过程由 AppLayerHost 的 PlayerSheetLayer 完成。
         val coverSize = 46.dp
         val contentVerticalPadding = Spacing.sm + 2.dp
         val shape = RoundedCornerShape(24.dp)
@@ -164,9 +161,7 @@ fun MiniPlayerBar(
                 ) {
                     CoverImage(
                         url = cover,
-                        modifier = Modifier
-                            .size(coverSize)
-                            .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
+                        modifier = Modifier.size(coverSize),
                         cornerRadius = 14.dp,
                     )
                     Column(
@@ -180,7 +175,6 @@ fun MiniPlayerBar(
                             color = onContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
                         )
                         Text(
                             text = state.queue.getOrNull(state.currentIndex)?.artist.orEmpty(),
@@ -188,7 +182,6 @@ fun MiniPlayerBar(
                             color = onContainer.copy(alpha = 0.66f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
                         )
                     }
                     IconButton(onClick = onPrevious) {

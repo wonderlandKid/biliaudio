@@ -1,5 +1,12 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import com.wonderlandkid.biliaudio.ui.layers.PlayerSheetLayer
+import com.wonderlandkid.biliaudio.ui.layers.MiniPlayerLayer
+import com.wonderlandkid.biliaudio.ui.layers.BottomBarLayer
+import com.wonderlandkid.biliaudio.ui.layers.AppLayer
+import com.wonderlandkid.biliaudio.ui.layers.AppLayerHost
+import com.wonderlandkid.biliaudio.ui.layers.layer
+
 import androidx.compose.runtime.LaunchedEffect
 
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,7 +98,6 @@ import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
-import com.wonderlandkid.biliaudio.ui.player.PlayerMorphLayer
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
@@ -275,20 +281,10 @@ fun AppNavHost() {
         },
     )
 
-    // 连续展开（v0.34.0）：迷你条与播放页不再分两层硬切。
-    // - 播放页 NowPlayingScreen 从 p>0 就组合（alpha 从 0 逐渐出现），上报封面/标题/艺术家位置；
-    // - PlayerMorphLayer 把迷你条的封面/标题/艺术家连续插值到播放页位置，卡片背景同步长到全屏；
-    // - p→1 时 morph 层淡出，交给真正的播放页（两端位置已对齐，无跳变）。
-    var miniBarRect by remember { mutableStateOf<Rect?>(null) }
+    // 播放页 sheet 的滑动锚点：迷你条静止位置（不再使用封面/标题位置做 morph）。
     // 迷你条静止时的 top（不跟随 graphicsLayer translationY 变化），作为 sheet 的滑动锚点，
     // 避免「读取被平移后的 rect → 再影响 sheet → 抖动」。
     var miniAnchorTopPx by remember { mutableFloatStateOf(0f) }
-    var miniCoverRect by remember { mutableStateOf<Rect?>(null) }
-    var miniTitleRect by remember { mutableStateOf<Rect?>(null) }
-    var miniArtistRect by remember { mutableStateOf<Rect?>(null) }
-    var playerCoverRect by remember { mutableStateOf<Rect?>(null) }
-    var playerTitleRect by remember { mutableStateOf<Rect?>(null) }
-    var playerArtistRect by remember { mutableStateOf<Rect?>(null) }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -344,7 +340,7 @@ fun AppNavHost() {
         // 现在改为内容层之上的固定高度 overlay，滚动位置只由下面显式的 bottom padding 决定。
         bottomBar = { },
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        AppLayerHost {
             NavHost(
                 navController = navController,
                 startDestination = Routes.HOME,
@@ -578,152 +574,40 @@ fun AppNavHost() {
 
             }
 
-            // 底栏 overlay：固定高度 + 内容层之上的绘制顺序；
-            // 播放页 sheet 会盖住它，所以不再需要担心「底栏按钮浮在 sheet 上」。
-            LaunchedEffect(showChrome) { if (showChrome) bottomBarShownOnce = true }
-            AnimatedVisibility(
-                visible = showChrome,
+            // 持久 chrome 层：顺序固定在 AppLayer 中，所有层都是 AppLayerHost 的直接子节点。
+            BottomBarLayer(
+                showChrome = showChrome,
+                shownOnce = bottomBarShownOnce,
+                onShown = { bottomBarShownOnce = true },
+                heightPx = bottomBarHeightPx,
+                onHeightMeasured = { bottomBarHeightPx = it },
+                playerProgress = playerProgress,
+                currentTab = currentTab,
+                onSelect = { switchTab(it) },
                 modifier = Modifier.align(Alignment.BottomCenter),
-                enter = if (bottomBarShownOnce) {
-                    EnterTransition.None
-                } else {
-                    expandVertically(
-                        animationSpec = tween(
-                            durationMillis = BiliMotion.BottomBarEnterMs,
-                            easing = BiliMotion.EmphasizedDecelerate,
-                        ),
-                        expandFrom = Alignment.Bottom,
-                    ) + fadeIn(
-                        animationSpec = tween(
-                            durationMillis = BiliMotion.BottomBarEnterMs,
-                            easing = BiliMotion.EmphasizedDecelerate,
-                        ),
-                    )
+            )
+            MiniPlayerLayer(
+                visible = showMiniPlayer,
+                playbackController = container.playbackController,
+                playerProgress = playerProgress,
+                anchorTopPx = miniAnchorTopPx,
+                onClick = { animatePlayerTo(true) },
+                dragModifier = playerDragModifier,
+                onBarBounds = { rect ->
+                    if (playerProgress <= 0.001f) miniAnchorTopPx = rect.top
                 },
-                exit = shrinkVertically(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarExitMs,
-                        easing = BiliMotion.EmphasizedAccelerate,
-                    ),
-                    shrinkTowards = Alignment.Bottom,
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = BiliMotion.BottomBarExitMs,
-                        easing = BiliMotion.EmphasizedAccelerate,
-                    ),
-                ),
-            ) {
-                val fixedBarHeight = if (bottomBarHeightPx > 0) {
-                    with(density) { bottomBarHeightPx.toDp() }
-                } else {
-                    null
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (fixedBarHeight != null) Modifier.height(fixedBarHeight) else Modifier)
-                        .onSizeChanged { measured ->
-                            if (measured.height > bottomBarHeightPx) bottomBarHeightPx = measured.height
-                        }
-                        .graphicsLayer {
-                            val hide = smoothStep(0.0f, 0.18f, playerProgress)
-                            alpha = 1f - hide
-                            translationY = hide * size.height
-                        },
-                ) {
-                    BiliBottomBar(
-                        current = currentTab,
-                        onSelect = { switchTab(it) },
-                    )
-                }
-            }
-
-            // 悬浮迷你播放条：只负责上报自身/封面/标题/艺术家在窗口中的位置（供 morph 层插值）。
-            // 开启播放页时快速淡出，交给 morph 层做连续展开。
-            // 迷你条必须始终组合：它承载跟手拖拽的 pointerInput。
-            // 之前因为 playerProgress > 20% 把它移出组合，导致慢速拖动时手势节点被销毁，进度卡在中间。
-            if (showMiniPlayer) {
-                // 迷你条固定在底部，只做淡出；拖拽 pointerInput 始终存在。
-                // 只在最开始 5% 内淡出：避免收起/展开中段同时看到「迷你条 + sheet 顶部文字」两层。
-                val miniAlpha = 1f - smoothStep(0.0f, 0.05f, playerProgress)
-                MiniPlayerHost(
-                    playbackController = container.playbackController,
-                    onClick = { animatePlayerTo(true) },
-                    dragModifier = playerDragModifier,
-                    onBarBounds = {
-                        miniBarRect = it
-                        if (playerProgress <= 0.001f) miniAnchorTopPx = it.top
-                    },
-                    onCoverBounds = { miniCoverRect = it },
-                    onTitleBounds = { miniTitleRect = it },
-                    onArtistBounds = { miniArtistRect = it },
-                    hazeState = hazeState,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .zIndex(1f) // 低展开进度时迷你条覆盖在播放页卡片顶部，避免卡片文字先露出来
-                        .graphicsLayer {
-                            alpha = miniAlpha
-                            // 迷你条本身骑在 sheet 顶边上一起上移，而不是原地淡出。
-                            translationY = -miniAnchorTopPx * playerProgress
-                        }
-                        .padding(bottom = miniBottomPadding),
-                )
-            }
-
-            // 正在播放页：整块 sheet 跟随展开进度从迷你条位置向上滑出，并被裁剪成底部锚定的圆角卡片。
-            // 播放控制、频谱、封面都在同一个 sheet 里，所以控件会跟封面一起被拖上来，而不是原地淡入。
-            if (playerProgress > 0.001f) {
-                val travelPx = (if (miniAnchorTopPx > 0f) miniAnchorTopPx else miniBarRect?.top
-                    ?: (screenHeightPx * 0.72f)).coerceAtLeast(0f)
-                val offsetY = travelPx * (1f - playerProgress)
-                // 轻微压暗底层页面，让上滑中的卡片像「从页面上升起」而不是透明叠字。
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = playerProgress * 0.18f }
-                        .background(MaterialTheme.colorScheme.scrim),
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            translationY = offsetY
-                            // 最后 3% 让 sheet 淡出，避免收起时 sheet 被移除的瞬间与迷你条出现重叠一帧。
-                            alpha = (playerProgress / 0.03f).coerceIn(0f, 1f)
-                            val radius = 24.dp * (1f - playerProgress)
-                            shape = RoundedCornerShape(
-                                topStart = radius,
-                                topEnd = radius,
-                            )
-                            clip = true
-                        }
-                        // 播放页自己的渐变顶部是半透明的，必须垫不透明 surface，否则会透出下面的列表。
-                        .background(MaterialTheme.colorScheme.surface),
-                ) {
-                    // 先于 NowPlayingScreen 注册：播放页内的弹层（播放列表 ModalBottomSheet）
-                    // 自己的返回处理会晚于这里注册，从而优先关闭弹层而不是收起播放页。
-                    BackHandler(enabled = playerProgress > 0.01f) {
-                        animatePlayerTo(false)
-                    }
-                    NowPlayingScreen(
-                        initialPage = playerPage,
-                        onPageChanged = { playerPage = it },
-                        onCoverBounds = { playerCoverRect = it },
-                        onTitleBounds = { playerTitleRect = it },
-                        onArtistBounds = { playerArtistRect = it },
-                    )
-                    // 播放页顶部下拉关闭区域：从状态栏下方开始，覆盖标题/艺术家区（112dp）。
-                    // 放在状态栏下面，避免向下滑时被系统通知栏/快捷设置抢走手势。
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .offset(y = statusBarInset)
-                            .height(112.dp)
-                            .then(playerDragModifier),
-                    )
-                }
-            }
+                bottomPadding = miniBottomPadding,
+                hazeState = hazeState,
+            )
+            PlayerSheetLayer(
+                playerProgress = playerProgress,
+                playerPage = playerPage,
+                onPageChanged = { playerPage = it },
+                travelPx = if (miniAnchorTopPx > 0f) miniAnchorTopPx else screenHeightPx * 0.72f,
+                statusBarInset = statusBarInset,
+                dragModifier = playerDragModifier,
+                onClose = { animatePlayerTo(false) },
+            )
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。
             val context = LocalContext.current
@@ -806,45 +690,9 @@ private fun slideOutToRight(): ExitTransition =
 // 迷你播放条宿主
 // ---------------------------------------------------------------------------
 
-@Composable
-private fun MiniPlayerHost(
-    playbackController: PlaybackController,
-    onClick: () -> Unit,
-    dragModifier: Modifier,
-    onBarBounds: (Rect) -> Unit,
-    onCoverBounds: (Rect) -> Unit,
-    onTitleBounds: (Rect) -> Unit,
-    onArtistBounds: (Rect) -> Unit,
-    hazeState: dev.chrisbanes.haze.HazeState?,
-    modifier: Modifier = Modifier,
-) {
-    val state by playbackController.state.collectAsStateWithLifecycle()
-    MiniPlayerBar(
-        state = state,
-        onClick = onClick,
-        onTogglePlay = { playbackController.togglePlayPause() },
-        onPrevious = { playbackController.previous() },
-        onNext = { playbackController.next() },
-        hazeState = hazeState,
-        dragModifier = dragModifier,
-        onBarBounds = onBarBounds,
-        onCoverBounds = onCoverBounds,
-        onTitleBounds = onTitleBounds,
-        onArtistBounds = onArtistBounds,
-        modifier = modifier,
-    )
-}
-
 // ---------------------------------------------------------------------------
 // 连续展开插值
 // ---------------------------------------------------------------------------
-
-/** 平滑阶跃：progress 在 [start, end] 内从 0 平滑过渡到 1。 */
-private fun smoothStep(start: Float, end: Float, progress: Float): Float {
-    if (end <= start) return if (progress >= end) 1f else 0f
-    val t = ((progress - start) / (end - start)).coerceIn(0f, 1f)
-    return t * t * (3f - 2f * t)
-}
 
 // ---------------------------------------------------------------------------
 // 根 Tab 滚动位置快照（详见 AppNavHost 中 OnDestinationChangedListener 的注释）

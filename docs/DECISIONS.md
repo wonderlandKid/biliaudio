@@ -1164,3 +1164,16 @@
   3. sheet 最后 3% 淡出、mini 只在前 5% 淡出；mini 骑 sheet 顶边上移；
   4. 滚动恢复用 requestScrollToItem（两帧后），实测 bounds 完全一致。
 - **影响**：AppNavHost、NowPlayingScreen；204 单测；release v0.46.0。
+
+
+## D74 AppLayerHost 图层架构（v0.47.0）
+
+- **日期**：2026-11-12
+- **背景**：底栏/迷你条/播放页/弹层反复出现遮挡、测量、返回顺序问题；需要把持久 chrome 的层级固定下来。
+- **决策**：
+  1. 采用「单一 AppLayerHost + 显式深度」的应用内 layer 架构：
+     Content 0 → BottomBar 100 → MiniPlayer 200 → Player 300 → Modal 400；
+  2. 页面切换仍由 Content 层内 NavHost/Pager 负责，不给每个页面单独 z 值；
+  3. BottomBar 固定高度 overlay，不参与 Content 测量；MiniPlayer 始终组合；PlayerSheet 统一表面；
+  4. 删除停止使用的 PlayerMorphLayer 和 bounds 回调管线；暂未实现真正 mini→full 共享布局 morph。
+- **影响**：新增 ui/layers/；AppNavHost 减到约 713 行；204 单测；release v0.47.0。

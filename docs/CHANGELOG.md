@@ -1,5 +1,30 @@
 # 版本记录
 
+## v0.47.0（2026-11-12 · tag `v0.47.0`）
+
+**AppLayerHost 图层架构：持久 chrome 显式分层，删除遗留 morph 层**
+
+### 架构
+
+- 新增 `ui/layers/`：
+  - `AppLayer`：`Content(0) < BottomBar(100) < MiniPlayer(200) < Player(300) < Modal(400)`；
+  - `AppLayerHost`：所有持久 chrome overlay 必须挂在同一个 Box 下，`zIndex` 才生效；
+  - `BottomBarLayer`、`MiniPlayerLayer`、`PlayerSheetLayer`、`SmoothStep` 独立文件；
+- `AppNavHost` 从 865 行降到约 713 行，只保留导航、滚动快照、播放进度/手势状态和层调用；
+- 页面层内部仍是 NavHost + Pager；不给每个页面单独分配 z 值，避免全局 zIndex 面条。
+
+### 清理
+
+- 删除已停止使用的 `PlayerMorphLayer.kt` 及 AppNavHost/MiniPlayerBar/NowPlayingScreen 里的
+  cover/title/artist bounds 回调管线；
+- 迷你条注释同步为 PlayerSheetLayer。
+
+### 验证
+
+- 204 单测全绿；Debug/Release 构建成功；
+- 模拟器回归：Tab 切换、音乐库、打开/关闭播放页、设置滚到底→诊断日志→返回，
+  控件 bounds 完全一致；底部导航/迷你条/播放页层级正常。
+
 ## v0.46.0（2026-11-12 · tag `v0.46.0`）
 
 **底栏移出 Scaffold + 控制条并入封面页 + 滚动恢复根治**

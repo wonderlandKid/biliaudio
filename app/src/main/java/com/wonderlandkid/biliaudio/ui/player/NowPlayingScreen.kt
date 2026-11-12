@@ -102,10 +102,6 @@ fun NowPlayingScreen(
     /** 重新打开播放页时恢复的页（0 封面 / 1 歌词）；由 AppNavHost 保存。 */
     initialPage: Int = 0,
     onPageChanged: (Int) -> Unit = {},
-    /** 供 AppNavHost 做共享元素（连续展开）定位：封面/标题/艺术家在窗口中的位置。 */
-    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
     },
@@ -256,9 +252,6 @@ fun NowPlayingScreen(
                         onCyclePlaybackMode = viewModel::cyclePlaybackMode,
                         onOpenPlaylist = { showPlaylist = true },
                         onVolumeOffsetChange = viewModel::setVolumeOffsetSteps,
-                        onCoverBounds = onCoverBounds,
-                        onTitleBounds = onTitleBounds,
-                        onArtistBounds = onArtistBounds,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -301,9 +294,6 @@ private fun NowPlayingBody(
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
     onVolumeOffsetChange: (Int) -> Unit,
-    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
-    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
-    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
@@ -335,7 +325,7 @@ private fun NowPlayingBody(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
+                modifier = Modifier,
             )
             Spacer(Modifier.height(Spacing.xxs))
             Text(
@@ -346,7 +336,7 @@ private fun NowPlayingBody(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
+                modifier = Modifier,
             )
         }
         HorizontalPager(
@@ -368,7 +358,6 @@ private fun NowPlayingBody(
                     onCyclePlaybackMode = onCyclePlaybackMode,
                     onOpenPlaylist = onOpenPlaylist,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
-                    onCoverBounds = onCoverBounds,
                     onVolumeOffsetChange = onVolumeOffsetChange,
                     volumeHazeState = volumeHazeState,
                     modifier = Modifier.fillMaxSize(),
@@ -391,7 +380,6 @@ private fun NowPlayingCoverPage(
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
     onOpenLyrics: () -> Unit,
-    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
     onVolumeOffsetChange: (Int) -> Unit,
     volumeHazeState: HazeState,
     modifier: Modifier = Modifier,
@@ -423,8 +411,7 @@ private fun NowPlayingCoverPage(
                         scaleX = coverScale
                         scaleY = coverScale
                     }
-                    .clickable(onClick = onOpenLyrics)
-                    .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
+                    .clickable(onClick = onOpenLyrics),
                 cornerRadius = 22.dp,
             )
         }
