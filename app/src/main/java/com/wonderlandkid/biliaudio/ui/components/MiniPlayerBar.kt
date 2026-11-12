@@ -74,6 +74,10 @@ fun MiniPlayerBar(
     dragModifier: Modifier = Modifier,
     /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
     onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val track = state.currentTrack
     AnimatedVisibility(
@@ -165,7 +169,9 @@ fun MiniPlayerBar(
                 ) {
                     CoverImage(
                         url = cover,
-                        modifier = Modifier.size(coverSize),
+                        modifier = Modifier
+                            .size(coverSize)
+                            .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                         cornerRadius = 14.dp,
                     )
                     Column(
@@ -179,6 +185,7 @@ fun MiniPlayerBar(
                             color = onContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
                         )
                         Text(
                             text = state.queue.getOrNull(state.currentIndex)?.artist.orEmpty(),
@@ -186,6 +193,7 @@ fun MiniPlayerBar(
                             color = onContainer.copy(alpha = 0.66f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
                         )
                     }
                     IconButton(onClick = onPrevious) {
@@ -197,7 +205,9 @@ fun MiniPlayerBar(
                     }
                     FilledIconButton(
                         onClick = onTogglePlay,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .onGloballyPositioned { onPlayBounds(it.boundsInWindow()) },
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                         ),

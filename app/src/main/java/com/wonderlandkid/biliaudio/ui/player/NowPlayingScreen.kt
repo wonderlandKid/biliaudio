@@ -88,6 +88,11 @@ fun NowPlayingScreen(
     /** 重新打开播放页时恢复的页（0 封面 / 1 歌词）；由 AppNavHost 保存。 */
     initialPage: Int = 0,
     onPageChanged: (Int) -> Unit = {},
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    sharedElementsAlpha: Float = 1f,
     viewModel: NowPlayingViewModel = appViewModel { container ->
         NowPlayingViewModel(container.playbackController)
     },
@@ -162,6 +167,11 @@ fun NowPlayingScreen(
                         state = state,
                         initialPage = initialPage,
                         onPageChanged = onPageChanged,
+                        onCoverBounds = onCoverBounds,
+                        onTitleBounds = onTitleBounds,
+                        onArtistBounds = onArtistBounds,
+                        onPlayBounds = onPlayBounds,
+                        sharedElementsAlpha = sharedElementsAlpha,
                         onSeek = viewModel::seekToTrackPosition,
                         onTogglePlay = viewModel::togglePlayPause,
                         onNext = viewModel::next,
@@ -201,6 +211,11 @@ private fun NowPlayingBody(
     state: PlaybackState,
     initialPage: Int,
     onPageChanged: (Int) -> Unit,
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onTitleBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onArtistBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    sharedElementsAlpha: Float,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
@@ -238,7 +253,9 @@ private fun NowPlayingBody(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier,
+                modifier = Modifier
+                    .graphicsLayer { alpha = sharedElementsAlpha }
+                    .onGloballyPositioned { onTitleBounds(it.boundsInWindow()) },
             )
             Spacer(Modifier.height(Spacing.xxs))
             Text(
@@ -249,7 +266,9 @@ private fun NowPlayingBody(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier,
+                modifier = Modifier
+                    .graphicsLayer { alpha = sharedElementsAlpha }
+                    .onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
             )
         }
         HorizontalPager(
@@ -270,6 +289,9 @@ private fun NowPlayingBody(
                     onCyclePlaybackMode = onCyclePlaybackMode,
                     onOpenPlaylist = onOpenPlaylist,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
+                    onCoverBounds = onCoverBounds,
+                    onPlayBounds = onPlayBounds,
+                    sharedElementsAlpha = sharedElementsAlpha,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -289,6 +311,9 @@ private fun NowPlayingCoverPage(
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
     onOpenLyrics: () -> Unit,
+    onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    sharedElementsAlpha: Float,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -315,10 +340,12 @@ private fun NowPlayingCoverPage(
                 modifier = Modifier
                     .size(coverSize)
                     .graphicsLayer {
+                        alpha = sharedElementsAlpha
                         scaleX = coverScale
                         scaleY = coverScale
                     }
-                    .clickable(onClick = onOpenLyrics),
+                    .clickable(onClick = onOpenLyrics)
+                    .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
                 cornerRadius = 22.dp,
             )
         }
@@ -331,6 +358,8 @@ private fun NowPlayingCoverPage(
             onPrevious = onPrevious,
             onCyclePlaybackMode = onCyclePlaybackMode,
             onOpenPlaylist = onOpenPlaylist,
+            onPlayBounds = onPlayBounds,
+            playAlpha = sharedElementsAlpha,
         )
         }
 
@@ -347,6 +376,8 @@ private fun NowPlayingFooter(
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit,
+    playAlpha: Float,
 ) {
     Column(modifier = Modifier.padding(horizontal = Spacing.lg)) {
         PlaybackSeekBar(
@@ -380,6 +411,8 @@ private fun NowPlayingFooter(
             onPrevious = onPrevious,
             onCyclePlaybackMode = onCyclePlaybackMode,
             onOpenPlaylist = onOpenPlaylist,
+            onPlayBounds = onPlayBounds,
+            playAlpha = playAlpha,
         )
         Spacer(Modifier.height(Spacing.xxl))
     }

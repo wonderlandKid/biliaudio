@@ -1232,3 +1232,16 @@
   4. 底栏不再跟随 playerProgress 淡出；PlayerSurface 层级在上，自然遮挡；
   5. 迷你条底部位置 = 底栏高度 + 系统导航 inset。
 - **影响**：RootTabPage/BiliBottomBar windowInsets；删除 BottomBarLayer；204 单测；release v0.51.0。
+
+
+## D79 共享元素展开（v0.53.0）
+
+- **日期**：2026-11-13
+- **背景**：v0.52 的 PlayerSurface 只有边界动画，封面/标题/播放按钮仍是内容交叉淡化。
+- **决策**：
+  1. 迷你条和播放页分别上报共享元素 window bounds；
+  2. 播放页负责隐藏自身共享元素，PlayerSurfaceLayer overlay 单份绘制并插值；
+  3. 封面页目标：封面/标题/艺术家/播放按钮；歌词页目标：只插值标题/艺术家，封面/播放按钮淡出；
+  4. 播放按钮目标 bounds 早期不稳定时使用全屏布局兜底位置；
+  5. 外层 AppLayerHost/PlayerSurface 层不变。
+- **影响**：MiniPlayerBar/NowPlayingScreen/PlaybackControls/PlayerSurfaceLayer；204 单测；release v0.53.0。

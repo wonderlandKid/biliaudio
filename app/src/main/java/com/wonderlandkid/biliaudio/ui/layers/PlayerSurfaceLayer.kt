@@ -1,5 +1,39 @@
 package com.wonderlandkid.biliaudio.ui.layers
 
+import androidx.compose.ui.platform.LocalConfiguration
+
+import androidx.compose.foundation.layout.width
+
+import com.wonderlandkid.biliaudio.ui.components.coverModel
+
+import com.wonderlandkid.biliaudio.ui.components.CoverImage
+
+import androidx.compose.ui.unit.sp
+
+import androidx.compose.ui.text.style.TextOverflow
+
+import androidx.compose.ui.geometry.CornerRadius
+
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.runtime.setValue
+
+import androidx.compose.runtime.mutableStateOf
+
+import androidx.compose.material3.Text
+
+import androidx.compose.material3.Icon
+
+import androidx.compose.material.icons.rounded.PlayArrow
+
+import androidx.compose.material.icons.rounded.Pause
+
+import androidx.compose.material.icons.Icons
+
+import androidx.compose.foundation.shape.CircleShape
+
+import androidx.compose.foundation.layout.size
+
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +107,14 @@ internal fun BoxScope.PlayerSurfaceLayer(
     if (!visible) return
     val state by playbackController.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
+    var miniCoverRect by remember { mutableStateOf<Rect?>(null) }
+    var miniTitleRect by remember { mutableStateOf<Rect?>(null) }
+    var miniArtistRect by remember { mutableStateOf<Rect?>(null) }
+    var miniPlayRect by remember { mutableStateOf<Rect?>(null) }
+    var playerCoverMeasured by remember { mutableStateOf<MeasuredRect?>(null) }
+    var playerTitleMeasured by remember { mutableStateOf<MeasuredRect?>(null) }
+    var playerArtistMeasured by remember { mutableStateOf<MeasuredRect?>(null) }
+    var playerPlayMeasured by remember { mutableStateOf<MeasuredRect?>(null) }
     // 从“无播放”进入迷你条时，整块 surface + 迷你条一起从下方淡入，避免突然出现。
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
@@ -86,6 +128,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
     }
     val appearOffsetPx = (1f - appear.value) * with(density) { 48.dp.toPx() }
     val screenHeightPx = with(density) { screenHeight.toPx() }
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     val rect = miniRect
     if (rect == null) {
         // 第一帧还没测到迷你条位置时只画迷你条，避免画错位置的 surface 闪一下。
@@ -99,6 +142,10 @@ internal fun BoxScope.PlayerSurfaceLayer(
             surfaceOpaque = playerProgress > 0.001f,
             dragModifier = dragModifier,
             onBarBounds = onBarBounds,
+            onCoverBounds = { miniCoverRect = it },
+            onTitleBounds = { miniTitleRect = it },
+            onArtistBounds = { miniArtistRect = it },
+            onPlayBounds = { miniPlayRect = it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = miniBottomPadding),
@@ -109,7 +156,6 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // 迷你条实际 rect（窗口坐标）→ 当前 surface 边界；p=1 时顶到 0，底到屏幕底。
     val topPx = rect.top * (1f - playerProgress)
     val bottomPx = rect.bottom + (screenHeightPx - rect.bottom) * playerProgress
-    android.util.Log.d("BarDebug", "surface p=$playerProgress rect=$rect top=$topPx bottom=$bottomPx screen=$screenHeightPx")
     val heightPx = (bottomPx - topPx).coerceAtLeast(1f)
     val shape = RoundedCornerShape(24.dp * (1f - playerProgress))
 
@@ -169,6 +215,11 @@ internal fun BoxScope.PlayerSurfaceLayer(
             NowPlayingScreen(
                 initialPage = playerPage,
                 onPageChanged = onPageChanged,
+                onCoverBounds = { playerCoverMeasured = MeasuredRect(it, topPx) },
+                onTitleBounds = { playerTitleMeasured = MeasuredRect(it, topPx) },
+                onArtistBounds = { playerArtistMeasured = MeasuredRect(it, topPx) },
+                onPlayBounds = { playerPlayMeasured = MeasuredRect(it, topPx) },
+                sharedElementsAlpha = smoothStep(0.94f, 0.995f, playerProgress),
                 modifier = Modifier.fillMaxSize(),
             )
             // 顶部下拉关闭热区（相对播放页内容）。
@@ -195,6 +246,10 @@ internal fun BoxScope.PlayerSurfaceLayer(
         surfaceOpaque = playerProgress > 0.001f,
         dragModifier = dragModifier,
         onBarBounds = onBarBounds,
+        onCoverBounds = { miniCoverRect = it },
+        onTitleBounds = { miniTitleRect = it },
+        onArtistBounds = { miniArtistRect = it },
+        onPlayBounds = { miniPlayRect = it },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .layer(if (playerProgress >= 0.06f) AppLayer.MiniPlayer else AppLayer.MiniPlayer + 1f)
@@ -204,4 +259,124 @@ internal fun BoxScope.PlayerSurfaceLayer(
             }
             .padding(bottom = miniBottomPadding),
     )
+
+    // ---- 迷你条 → 播放页的共享元素 overlay（封面/标题/艺术家/播放按钮）----
+    // 真实元素在过渡期间透明，由这里在同一个 surface mask 内插值绘制。
+    val realAlpha = smoothStep(0.94f, 0.995f, playerProgress)
+    if (playerProgress > 0.001f && realAlpha < 0.999f) {
+        val morph = ((playerProgress - 0.06f) / 0.94f).coerceIn(0f, 1f)
+        val targetCover = playerCoverMeasured?.let { it.rect.translate(0f, -it.topOffset) }
+        val targetTitle = playerTitleMeasured?.let { it.rect.translate(0f, -it.topOffset) }
+        val targetArtist = playerArtistMeasured?.let { it.rect.translate(0f, -it.topOffset) }
+        val measuredPlay = playerPlayMeasured?.let { it.rect.translate(0f, -it.topOffset) }
+        // 播放页 footer 的播放按钮在过渡早期可能尚未完成定位（bounds 为 0），
+        // 用稳定的全屏布局位置兜底：水平居中、底部控制行中心。
+        val playSizePx = with(density) { 76.dp.toPx() }
+        val fallbackPlay = Rect(
+            left = (screenWidthPx - playSizePx) / 2f,
+            top = screenHeightPx - with(density) { 70.dp.toPx() } - playSizePx / 2f,
+            right = (screenWidthPx + playSizePx) / 2f,
+            bottom = screenHeightPx - with(density) { 70.dp.toPx() } + playSizePx / 2f,
+        )
+        val targetPlay = if ((measuredPlay?.width ?: 0f) > 1f) measuredPlay else fallbackPlay
+        val cornerPx = with(density) { 24.dp.toPx() } * (1f - playerProgress)
+        val overlayShape = GenericShape { size, _ ->
+            addRoundRect(
+                RoundRect(
+                    left = 0f,
+                    top = topPx,
+                    right = size.width,
+                    bottom = bottomPx,
+                    radiusX = cornerPx,
+                    radiusY = cornerPx,
+                ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layer(AppLayer.Player + 1f)
+                .graphicsLayer {
+                    alpha = 1f - realAlpha
+                    this.shape = overlayShape
+                    clip = true
+                },
+        ) {
+            // 封面：只在封面页目标存在；歌词页时随迷你条一起淡出。
+            if (playerPage == 0 && miniCoverRect != null && targetCover != null) {
+                val rect = lerpRect(miniCoverRect!!, targetCover, morph)
+                CoverImage(
+                    url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
+                    modifier = Modifier
+                        .offset { IntOffset(rect.left.roundToInt(), rect.top.roundToInt()) }
+                        .size(
+                            with(density) { rect.width.toDp() },
+                            with(density) { rect.height.toDp() },
+                        ),
+                    cornerRadius = (14f + 8f * morph).dp,
+                )
+            }
+            // 标题 / 艺术家：封面页和歌词页共用顶部，始终插值。
+            if (miniTitleRect != null && targetTitle != null) {
+                val rect = lerpRect(miniTitleRect!!, targetTitle, morph)
+                Text(
+                    text = state.currentTrack?.title.orEmpty(),
+                    fontSize = (16f + 14f * morph).sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .offset { IntOffset(rect.left.roundToInt(), rect.top.roundToInt()) }
+                        .width(with(density) { rect.width.toDp() }),
+                )
+            }
+            if (miniArtistRect != null && targetArtist != null) {
+                val rect = lerpRect(miniArtistRect!!, targetArtist, morph)
+                Text(
+                    text = listOfNotNull(
+                        state.queue.getOrNull(state.currentIndex)?.artist,
+                        state.queue.getOrNull(state.currentIndex)?.albumTitle,
+                    ).filter { it.isNotBlank() }.joinToString(" · "),
+                    fontSize = (12f + 2f * morph).sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .offset { IntOffset(rect.left.roundToInt(), rect.top.roundToInt()) }
+                        .width(with(density) { rect.width.toDp() }),
+                )
+            }
+            // 播放按钮：只在封面页目标存在；歌词页无控制，淡出。
+            if (playerPage == 0 && miniPlayRect != null && targetPlay != null) {
+                val rect = lerpRect(miniPlayRect!!, targetPlay, morph)
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(rect.left.roundToInt(), rect.top.roundToInt()) }
+                        .size(
+                            with(density) { rect.width.toDp() },
+                            with(density) { rect.height.toDp() },
+                        )
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(with(density) { rect.width.toDp() * 0.5f }),
+                    )
+                }
+            }
+        }
+    }
 }
+
+private data class MeasuredRect(val rect: Rect, val topOffset: Float)
+
+private fun lerpRect(a: Rect, b: Rect, t: Float): Rect = Rect(
+    left = a.left + (b.left - a.left) * t,
+    top = a.top + (b.top - a.top) * t,
+    right = a.right + (b.right - a.right) * t,
+    bottom = a.bottom + (b.bottom - a.bottom) * t,
+)

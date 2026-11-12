@@ -1,5 +1,11 @@
 package com.wonderlandkid.biliaudio.ui.player
 
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.ui.layout.boundsInWindow
+
+import androidx.compose.ui.layout.onGloballyPositioned
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +46,8 @@ internal fun ControlsRow(
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
+    onPlayBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    playAlpha: Float = 1f,
 ) {
     val mode = state.playbackMode
     Row(
@@ -67,7 +75,10 @@ internal fun ControlsRow(
         }
         FilledIconButton(
             onClick = onTogglePlay,
-            modifier = Modifier.size(76.dp),
+            modifier = Modifier
+                .size(76.dp)
+                .graphicsLayer { alpha = playAlpha }
+                .onGloballyPositioned { onPlayBounds(it.boundsInWindow()) },
         ) {
             if (state.isLoading) {
                 CircularProgressIndicator(
