@@ -1,7 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
-import com.wonderlandkid.biliaudio.ui.layers.PlayerSheetLayer
-import com.wonderlandkid.biliaudio.ui.layers.MiniPlayerLayer
+import com.wonderlandkid.biliaudio.ui.layers.PlayerSurfaceLayer
+
 import com.wonderlandkid.biliaudio.ui.layers.BottomBarLayer
 import com.wonderlandkid.biliaudio.ui.layers.AppLayer
 import com.wonderlandkid.biliaudio.ui.layers.AppLayerHost
@@ -281,10 +281,8 @@ fun AppNavHost() {
         },
     )
 
-    // 播放页 sheet 的滑动锚点：迷你条静止位置（不再使用封面/标题位置做 morph）。
-    // 迷你条静止时的 top（不跟随 graphicsLayer translationY 变化），作为 sheet 的滑动锚点，
-    // 避免「读取被平移后的 rect → 再影响 sheet → 抖动」。
-    var miniAnchorTopPx by remember { mutableFloatStateOf(0f) }
+    // 迷你条实际 rect，作为 PlayerSurface 收起态边界。
+    var miniBarRect by remember { mutableStateOf<Rect?>(null) }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
@@ -586,26 +584,20 @@ fun AppNavHost() {
                 onSelect = { switchTab(it) },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
-            MiniPlayerLayer(
-                visible = showMiniPlayer,
+            PlayerSurfaceLayer(
+                visible = showMiniPlayer || playerProgress > 0.001f,
                 playbackController = container.playbackController,
-                playerProgress = playerProgress,
-                anchorTopPx = miniAnchorTopPx,
-                onClick = { animatePlayerTo(true) },
-                dragModifier = playerDragModifier,
-                onBarBounds = { rect ->
-                    if (playerProgress <= 0.001f) miniAnchorTopPx = rect.top
-                },
-                bottomPadding = miniBottomPadding,
-                hazeState = hazeState,
-            )
-            PlayerSheetLayer(
                 playerProgress = playerProgress,
                 playerPage = playerPage,
                 onPageChanged = { playerPage = it },
-                travelPx = if (miniAnchorTopPx > 0f) miniAnchorTopPx else screenHeightPx * 0.72f,
+                miniRect = miniBarRect,
+                miniBottomPadding = miniBottomPadding,
+                screenHeight = with(density) { screenHeightPx.toDp() },
                 statusBarInset = statusBarInset,
                 dragModifier = playerDragModifier,
+                onClick = { animatePlayerTo(true) },
+                onBarBounds = { rect -> miniBarRect = rect },
+                hazeState = hazeState,
                 onClose = { animatePlayerTo(false) },
             )
 

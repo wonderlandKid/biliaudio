@@ -69,6 +69,8 @@ fun MiniPlayerBar(
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
+    /** 展开/收起 transitions 中强制不透明，避免半透明迷你条透出下方播放页残影。 */
+    surfaceOpaque: Boolean = false,
     dragModifier: Modifier = Modifier,
     /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
     onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
@@ -129,7 +131,9 @@ fun MiniPlayerBar(
             }
         }
         val glassModifier =
-            if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (surfaceOpaque) {
+                Modifier.background(containerColor)
+            } else if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Modifier.hazeBlur(
                     input = HazeInput.Sources(hazeState),
                     style = blurStyle,

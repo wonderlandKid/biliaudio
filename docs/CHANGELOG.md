@@ -1,5 +1,27 @@
 # 版本记录
 
+## v0.48.0（2026-11-12 · tag `v0.48.0`）
+
+**PlayerSurface 单一表面：迷你条和播放页合并为一个连续收缩的 surface**
+
+### 架构
+
+- 新增 `PlayerSurfaceLayer`：迷你条和播放页不再各自持有 sheet 背景/层级，而是**同一个 surface**：
+  - p=0：surface 边界 = 迷你条 rect，圆角 24dp；
+  - p=1：surface 边界 = 全屏，圆角 0；
+  - 中间：top/bottom/radius 随 progress 连续插值，播放页内容在 surface 内被裁剪；
+  - 迷你条内容只在前 5% 淡出；展开后 surface 位于 MiniPlayer 层之上，避免底栏/迷你条盖住；
+  - 收起最后 6% 不再绘制播放页内容，surface 缩到迷你条附近后由迷你条接管，
+    消除「最后一帧还能看到一条播放页专辑图」；
+  - 过渡期迷你条使用实色背景（不透明），不再透出下方播放页残影；收起完成恢复 Haze。
+- 删除 `MiniPlayerLayer.kt` / `PlayerSheetLayer.kt`；播放器相关 chrome 只剩一个 `PlayerSurfaceLayer`。
+
+### 验证
+
+- 204 单测全绿；Debug/Release 构建成功；
+- 模拟器：慢速上滑仍可到顶；收起录屏逐帧检查，最后 6% 已无播放页内容残影；
+- 截图：`docs/screenshots/v048_player_surface.png`、`v048_surface_close.png`。
+
 ## v0.47.0（2026-11-12 · tag `v0.47.0`）
 
 **AppLayerHost 图层架构：持久 chrome 显式分层，删除遗留 morph 层**

@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.47.0）
+# 项目现状与交接（v0.48.0）
 
-> 最后更新：2026-11-12 · 版本 v0.47.0 · tag `v0.47.0`（release commit 以 `git rev-parse v0.47.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-12 · 版本 v0.48.0 · tag `v0.48.0`（release commit 以 `git rev-parse v0.48.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -62,6 +62,7 @@
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.48.0** PlayerSurface 单一表面：迷你条/播放页合并为一个连续收缩的 surface，收起残影收敛
 - **v0.47.0** AppLayerHost 图层架构：持久 chrome 显式分层（Content/BottomBar/MiniPlayer/Player/Modal），删除遗留 morph 层
 - **v0.46.0** 底栏移出 Scaffold（滚动恢复根治）、播放控制并入封面页、收起淡出时序修复
 - **v0.45.0** 播放页展开改为整块滑动裁剪 sheet（控件/封面/频谱一体上滑），修复慢拖中断、控件不同步与交叉淡入闪色
@@ -126,7 +127,7 @@
 - **v0.9.0** 归档数据层 v2：DB v3（source + (source,bvid,page) 唯一键 + tracks.uid）、v2 schema/kind/features/cover hash/空语义；
   v1 归档不再兼容，旧快捷导入文本仍归一化为 v2
 
-## 5. 最近验证状态（截至 v0.47.0）
+## 5. 最近验证状态（截至 v0.48.0）
 
 - 单元测试 **192 / 0 失败**（wbi、批量/归档解析、导入模式、播放映射、音频缓存逻辑、歌词 LRC/YRC/AMLL 解析与匹配、曲名清洗、UI 架构守卫等）。
 - 模拟器端到端已验证：
@@ -184,6 +185,7 @@
   - 逐行平滑滚动（520ms Emphasized）：录屏逐帧看到中间过渡位置，无跳变；
   - 点歌词行跳转、点指示器切换、歌词页按返回先回封面页、来源/偏移面板；
   - 截屏：`docs/screenshots/v028_*.png`。
+- v0.48.0 单一表面验证：慢速上滑到顶；收起最后 6% 无播放页内容残影；204 单测全绿；release 构建成功。
 - v0.47.0 图层架构验证：Tab/详情/播放页层级正常；设置滚到底→诊断日志→返回 bounds 完全一致；
   204 单测全绿；release 构建成功。
 - v0.46.0 验证：设置滚到底→诊断日志→返回，控件 bounds 完全一致；播放页控制条随封面页横向移动；

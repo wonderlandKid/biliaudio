@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.47.0**（tag `v0.47.0`，2026-11-12；release commit 以 `git rev-parse v0.47.0` 为准）
+- **版本：v0.48.0**（tag `v0.48.0`，2026-11-12；release commit 以 `git rev-parse v0.48.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.47.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.48.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.47.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.48.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -106,8 +106,8 @@ scripts/screenshot.sh home 8
    - 播放页内部是**左右分页**（v0.28.0；v0.33.0 去掉分页指示条）：第 1 页封面/曲名、第 2 页歌词；
      横向滑动切换；v0.46 起进度/播放控制放在封面页内部，随封面一起横向滑走，歌词页无控制；
      歌词页按返回先滑回封面页；
-     迷你条 ↔ 播放页为上下关系：v0.45 起整块播放页 sheet 从迷你条位置向上滑动，底部锚定裁剪；
-     封面/标题/频谱/进度/播放按钮在同一 sheet 内一起上移；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
+     迷你条 ↔ 播放页为上下关系：v0.48 起是单一 PlayerSurface，从迷你条 rect 连续长到全屏；
+     封面/标题/频谱/进度/播放按钮在同一 surface 内随边界上移；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
      歌词页歌词左对齐；
      播放模式为单按钮四态（随机/顺序/列表循环/单曲循环），底部第五个按钮为播放列表；
      曲名/艺术家在页面顶部（headlineLarge 30sp）共用；**全局主题从当前播放封面取种子色**（AppTheme 级别，
@@ -125,8 +125,8 @@ scripts/screenshot.sh home 8
    - **按压反馈全局统一**：`AppTheme` 提供自绘 `LocalIndication`（水波纹 + 按压底色），
      Material 默认 ripple 关闭；只对 enabled 的可点击组件生效。
 10. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽；
-    上滑展开是 v0.45 起的**整块播放页 sheet 上滑**：sheet 从迷你条位置向上滑动、底部锚定裁剪，
-    封面/标题/频谱/进度/播放按钮在同一 sheet 内一起移动；迷你条始终保留在组合中（只淡出 alpha），
+    上滑展开是 v0.48 起的 **PlayerSurface 单一表面**：surface 从迷你条 rect 连续长到全屏，
+    封面/标题/频谱/进度/播放按钮都在同一 surface 内被裁剪；迷你条始终保留在组合中（只淡出 alpha），
     保证跟手 pointerInput 不被中途销毁；并保存当前页，收起再拉起恢复歌词页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
@@ -142,8 +142,8 @@ scripts/screenshot.sh home 8
     `Content(0) < BottomBar(100) < MiniPlayer(200) < Player(300) < Modal(400)`。
     - 页面切换（根 Tab、详情 push/pop、封面↔歌词 Pager）都在 Content 层内部完成，不要给每个页面分配 z 值；
     - `BottomBarLayer` 固定高度、不参与 Content 测量，只做 alpha/位移；
-    - `MiniPlayerLayer` 始终保留组合（拖拽 pointerInput 不能中途销毁），只做淡出/跟随上移；
-    - `PlayerSheetLayer` 是整块播放页 sheet，封面/标题/频谱/进度/控制都在同一表面；
+    - `PlayerSurfaceLayer` 是迷你条 + 播放页的唯一表面：surface 边界/圆角随 progress 插值，
+      迷你条内容只在前 5% 淡出，展开后 surface 在底栏/迷你条之上，收起最后 6% 不再绘制播放页内容；
     - `ui/layers/AppLayer.kt` 是唯一深度来源；新增长期覆盖层必须在这里登记。
     - 系统 Window（Dialog/Popup/IME/状态栏）不受应用内层控制，产品要求「某层永远高于弹层」时必须用应用内弹层。
 
@@ -154,7 +154,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.47.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.48.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

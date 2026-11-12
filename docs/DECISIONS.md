@@ -1177,3 +1177,19 @@
   3. BottomBar 固定高度 overlay，不参与 Content 测量；MiniPlayer 始终组合；PlayerSheet 统一表面；
   4. 删除停止使用的 PlayerMorphLayer 和 bounds 回调管线；暂未实现真正 mini→full 共享布局 morph。
 - **影响**：新增 ui/layers/；AppNavHost 减到约 713 行；204 单测；release v0.47.0。
+
+
+## D75 PlayerSurface 单一表面（v0.48.0）
+
+- **日期**：2026-11-12
+- **背景**：v0.47 收起时仍有「迷你条 + sheet 残影」一帧；用户要求完整展开/收起连续。
+- **决策**：
+  1. 迷你条和播放页合并为一个 PlayerSurface：p=0 边界=迷你条 rect，p=1 边界=全屏，
+     top/bottom/圆角随 progress 插值，播放页内容在 surface 内裁剪；
+  2. 迷你条内容只在前 5% 淡出；展开后 surface 层级高于底栏/迷你条；收起最后 6% 停止绘制播放页内容，
+     由迷你条接管；
+  3. 过渡期迷你条用实色背景，避免 Haze 透出下方播放页残影；
+  4. 删除 MiniPlayerLayer/PlayerSheetLayer。
+- **仍未做**：surface 内 mini 布局与 full 布局的逐元素插值（真正椒盐式 morph）；当前是同一表面内的
+  content 交叉淡化 + 边界连续，已消除跨层残影。
+- **影响**：ui/layers/PlayerSurfaceLayer.kt；204 单测；release v0.48.0。
