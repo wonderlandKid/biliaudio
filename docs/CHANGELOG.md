@@ -1,5 +1,19 @@
 # 版本记录
 
+## v0.56.0（2026-11-13 · tag `v0.56.0`）
+
+**共享封面连续性修复：目标校验、禁用 Coil crossfade、迷你卡片背景不淡出**
+
+- 播放页封面目标 bounds 为 0 时不再参与插值，避免封面飞向左上/出现黑边；
+- 去掉播放页真实封面的播放/暂停缩放（0.92↔1.0），保证 overlay 与真实封面尺寸完全一致；
+- Coil 封面统一关闭 `crossfade`：交接帧不再先淡出占位色，避免末尾闪一下/发灰；
+- 迷你条拆成「内容 alpha」和「卡片背景」：文字/按钮淡出，但 Haze 卡片背景保留，
+  被 PlayerSurface 自然覆盖，不再整张 miniplayer 渐隐；
+- PlayerSurface 背景色改为 surfaceContainer，与迷你条 Haze 底色一致。
+
+验证：204 单测全绿；Debug/Release 构建成功；release 安装 v0.56.0；
+截图 `docs/screenshots/v056_cover_handoff.png`。
+
 ## v0.55.0（2026-11-13 · tag `v0.55.0`）
 
 **展开动画改为椒盐式：只让封面连续移动，其他元素淡出/淡入**

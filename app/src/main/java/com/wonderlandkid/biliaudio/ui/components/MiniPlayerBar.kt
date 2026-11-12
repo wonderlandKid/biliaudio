@@ -1,5 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -71,6 +73,8 @@ fun MiniPlayerBar(
     hazeState: HazeState? = null,
     /** 展开/收起 transitions 中强制不透明，避免半透明迷你条透出下方播放页残影。 */
     surfaceOpaque: Boolean = false,
+    /** 只让内部文字/按钮淡出，卡片背景（Haze/边框）保留到被 PlayerSurface 覆盖。 */
+    contentAlpha: Float = 1f,
     dragModifier: Modifier = Modifier,
     /** 供 AppNavHost 做共享元素（连续展开）定位用：迷你条/封面/标题/艺术家在窗口中的位置。 */
     onBarBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
@@ -162,7 +166,9 @@ fun MiniPlayerBar(
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            Column {
+            Column(
+                modifier = Modifier.graphicsLayer { alpha = contentAlpha },
+            ) {
                 Row(
                     modifier = Modifier.padding(horizontal = Spacing.sm, vertical = contentVerticalPadding),
                     verticalAlignment = Alignment.CenterVertically,

@@ -336,14 +336,8 @@ private fun NowPlayingCoverPage(
         ) {
             // 比 v0.35 略小一点：给封面右侧的音量微调小球留出空间，同时保证单手可拨。
             val coverSize = minOf(maxWidth * 0.90f, maxHeight * 0.94f)
-            val coverScale by animateFloatAsState(
-                targetValue = if (state.isPlaying) 1f else 0.92f,
-                animationSpec = tween(
-                    durationMillis = BiliMotion.Medium2,
-                    easing = BiliMotion.EmphasizedDecelerate,
-                ),
-                label = "coverScale",
-            )
+            // 共享封面交接要求真实封面与 overlay 尺寸完全一致；不再做播放/暂停缩放。
+            val coverScale = 1f
             CoverImage(
                 url = entry?.coverModel(),
                 modifier = Modifier

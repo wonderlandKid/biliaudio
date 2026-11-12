@@ -181,7 +181,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 this.shape = shape
                 clip = true
             }
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .layer(if (playerProgress >= 0.06f) AppLayer.Player else AppLayer.MiniPlayer),
     )
 
@@ -237,8 +237,8 @@ internal fun BoxScope.PlayerSurfaceLayer(
     }
 
     // 迷你条内容：它只在 p<5% 可见；始终保留组合以维持拖拽 pointerInput。
-    // 迷你条上的文字/按钮/背景快速淡出；封面由 overlay 继续。
-    val miniAlpha = 1f - smoothStep(0f, 0.10f, playerProgress)
+    // 迷你条内容（文字/按钮）快速淡出；卡片背景保留，直到被 PlayerSurface 覆盖。
+    val miniContentAlpha = 1f - smoothStep(0f, 0.10f, playerProgress)
     MiniPlayerBar(
         state = state,
         onClick = onClick,
@@ -247,6 +247,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
         onNext = { playbackController.next() },
         hazeState = hazeState,
         surfaceOpaque = playerProgress > 0.001f,
+        contentAlpha = miniContentAlpha,
         dragModifier = dragModifier,
         onBarBounds = onBarBounds,
         onCoverBounds = { miniCoverRect = it },
@@ -257,7 +258,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
             .align(Alignment.BottomCenter)
             .layer(if (playerProgress >= 0.06f) AppLayer.MiniPlayer else AppLayer.MiniPlayer + 1f)
             .graphicsLayer {
-                alpha = miniAlpha * appear.value
+                alpha = appear.value
                 translationY = appearOffsetPx
             }
             .padding(bottom = miniBottomPadding),
@@ -268,7 +269,9 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // 迷你条自身元素先淡出，封面单独放大/移动到播放页封面位置。
     val realAlpha = smoothStep(0.94f, 0.995f, playerProgress)
     if (playerProgress > 0.001f && realAlpha < 0.999f) {
-        val targetCover = playerCoverMeasured?.let { it.rect.translate(0f, -it.topOffset) }
+        val targetCover = playerCoverMeasured
+            ?.takeIf { it.rect.width > 1f && it.rect.height > 1f }
+            ?.let { it.rect.translate(0f, -it.topOffset) }
         val sourceCover = miniCoverRect
         if (playerPage == 0 && sourceCover != null) {
             val morph = ((playerProgress - 0.06f) / 0.94f).coerceIn(0f, 1f)

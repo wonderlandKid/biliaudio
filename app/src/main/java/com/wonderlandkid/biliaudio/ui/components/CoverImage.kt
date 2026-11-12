@@ -34,7 +34,9 @@ fun CoverImage(
     AsyncImage(
         model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
             .data(url)
-            .crossfade(true)
+            // 共享封面过渡要求 overlay 与真实封面逐帧一致；Coil 自带的 crossfade
+            // 会在交接帧先淡出占位色，造成闪烁/发灰，所以封面统一不做交叉淡入。
+            .crossfade(false)
             .build(),
         contentDescription = null,
         contentScale = contentScale,
