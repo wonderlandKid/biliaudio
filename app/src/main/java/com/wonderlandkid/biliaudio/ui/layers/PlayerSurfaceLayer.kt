@@ -1,5 +1,9 @@
 package com.wonderlandkid.biliaudio.ui.layers
 
+import androidx.compose.ui.geometry.RoundRect
+
+import androidx.compose.foundation.shape.GenericShape
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -9,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -99,7 +102,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
         )
     }
 
-    // 唯一 surface：迷你条时就是那张卡片，展开后就是全屏播放页。
+    // 唯一 surface 的背景：迷你条时就是那张卡片，展开后就是全屏背景。
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -110,23 +113,42 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 clip = true
             }
             .background(MaterialTheme.colorScheme.surface)
-            // 展开后 surface 在迷你条/底栏之上，避免被底栏盖住；
-            // 收起最后 6% 切回迷你条在上，让迷你条覆盖缩小的 surface，而不是露出播放页残影。
             .layer(if (playerProgress >= 0.06f) AppLayer.Player else AppLayer.MiniPlayer),
-    ) {
-        // 最后 6% 不再绘制播放页内容：surface 已缩到迷你条附近，content 交给迷你条，
-        // 避免收起末尾还能看到一条“播放页专辑图”从迷你条下面露出来。
-        if (playerProgress >= 0.06f) {
+    )
+
+    // 播放页内容始终按“全屏尺寸”布局，再由 mask 裁剪到当前 surface 边界。
+    // 不把内容放进高度变化的 surface，避免内部 Layout 约束变化导致标题/封面错位。
+    if (playerProgress >= 0.06f) {
+        val maskCornerPx = with(density) { 24.dp.toPx() } * (1f - playerProgress)
+        val mask = GenericShape { size, _ ->
+            addRoundRect(
+                RoundRect(
+                    left = 0f,
+                    top = 0f,
+                    right = size.width,
+                    bottom = heightPx,
+                    radiusX = maskCornerPx,
+                    radiusY = maskCornerPx,
+                ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = topPx
+                    this.shape = mask
+                    clip = true
+                }
+                .layer(AppLayer.Player),
+        ) {
             BackHandler(enabled = playerProgress > 0.01f) { onClose() }
             NowPlayingScreen(
                 initialPage = playerPage,
                 onPageChanged = onPageChanged,
-                // 播放页按完整屏幕高度布局，再由 surface 裁剪；不能跟随 surface 高度重排。
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .requiredHeight(screenHeight),
+                modifier = Modifier.fillMaxSize(),
             )
-            // 顶部下拉关闭热区（相对 surface，p 越高越接近屏幕顶部）。
+            // 顶部下拉关闭热区（相对播放页内容）。
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)

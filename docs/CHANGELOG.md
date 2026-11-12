@@ -1,5 +1,29 @@
 # 版本记录
 
+## v0.49.0（2026-11-12 · tag `v0.49.0`）
+
+**PlayerSurface 内部布局修正：全屏测量 + mask 裁剪**
+
+### 问题
+
+- v0.48 PlayerSurface 把播放页内容直接放进「高度随 progress 变化的 Box」里，
+  内部 Layout 会跟着 surface 高度重新约束；过渡中间帧出现标题/封面错位、空白区域。
+- 共享元素实验因此失败：target bounds 取自不稳定布局，overlay 对不上。
+
+### 修复
+
+- 播放页内容改为**始终按全屏尺寸布局**（`fillMaxSize`），再通过 `graphicsLayer` 的
+  `GenericShape` mask（top=0、bottom=当前 surface 高度、圆角随 progress）裁剪到当前 surface；
+- surface 背景单独一层，不再承载内容；
+- 这样中间帧标题/封面/频谱位置稳定，不再因 surface 高度变化而重排；
+- 共享封面/播放按钮 overlay 暂未启用（实验版未通过，已回滚），但 target bounds 已具备稳定基础。
+
+### 验证
+
+- 204 单测全绿；Debug/Release 构建成功；
+- 模拟器慢速上滑：中间帧标题/艺术家/封面正常显示，不再空白/错位；
+- 截图：`docs/screenshots/v049_surface_mid.png`。
+
 ## v0.48.0（2026-11-12 · tag `v0.48.0`）
 
 **PlayerSurface 单一表面：迷你条和播放页合并为一个连续收缩的 surface**

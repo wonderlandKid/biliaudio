@@ -1193,3 +1193,16 @@
 - **仍未做**：surface 内 mini 布局与 full 布局的逐元素插值（真正椒盐式 morph）；当前是同一表面内的
   content 交叉淡化 + 边界连续，已消除跨层残影。
 - **影响**：ui/layers/PlayerSurfaceLayer.kt；204 单测；release v0.48.0。
+
+
+## D76 PlayerSurface 全屏测量 + mask 裁剪（v0.49.0）
+
+- **日期**：2026-11-12
+- **背景**：v0.48 的播放页内容放在高度变化的 surface 里，中间帧布局被重新约束，标题/封面错位，
+  共享元素 target bounds 不稳定。
+- **决策**：
+  1. 播放页内容始终 `fillMaxSize()` 按全屏布局；
+  2. 用 `GenericShape` mask + `graphicsLayer(translationY=topPx, clip=true)` 裁剪到当前 surface；
+  3. surface 背景独立一层，不承载内容；
+  4. 共享元素 overlay 暂不启用，等布局稳定后再做。
+- **影响**：PlayerSurfaceLayer；204 单测；release v0.49.0。

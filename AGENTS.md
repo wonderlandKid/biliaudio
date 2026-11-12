@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.48.0**（tag `v0.48.0`，2026-11-12；release commit 以 `git rev-parse v0.48.0` 为准）
+- **版本：v0.49.0**（tag `v0.49.0`，2026-11-12；release commit 以 `git rev-parse v0.49.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.48.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.49.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.48.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.49.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -144,6 +144,7 @@ scripts/screenshot.sh home 8
     - `BottomBarLayer` 固定高度、不参与 Content 测量，只做 alpha/位移；
     - `PlayerSurfaceLayer` 是迷你条 + 播放页的唯一表面：surface 边界/圆角随 progress 插值，
       迷你条内容只在前 5% 淡出，展开后 surface 在底栏/迷你条之上，收起最后 6% 不再绘制播放页内容；
+      播放页内容始终按全屏尺寸布局，再由 mask 裁剪到 surface，避免中间帧布局约束变化；
     - `ui/layers/AppLayer.kt` 是唯一深度来源；新增长期覆盖层必须在这里登记。
     - 系统 Window（Dialog/Popup/IME/状态栏）不受应用内层控制，产品要求「某层永远高于弹层」时必须用应用内弹层。
 
@@ -154,7 +155,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.48.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.49.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |
