@@ -1,5 +1,26 @@
 # 版本记录
 
+## v0.50.0（2026-11-12 · tag `v0.50.0`）
+
+**最终架构地基：移除 Scaffold，AppNavHost 自管 WindowInsets**
+
+### 架构
+
+- 删除 App 级 `Scaffold`；不再有 Scaffold.bottomBar/内容测量参与；
+- `AppNavHost` 统一计算：
+  - `safeDrawing` 的 top/start/end；
+  - 根 Tab 底部 = 实测底栏高度（包含系统导航 inset）；详情页 = 系统导航 inset；
+  - IME 可见时底部 = max(IME, 系统导航)；mini 内容 inset 单独叠加；
+- Content 层只保留 NavHost；BottomBar/PlayerSurface 继续由 AppLayerHost 绘制；
+- 页面内部不再依赖 App 级 Scaffold 的 innerPadding；
+- 保留 v0.49 的 PlayerSurface 全屏布局 + mask 裁剪。
+
+### 验证
+
+- 204 单测全绿；Debug/Release 构建成功；
+- 模拟器：首页/设置/详情/播放页布局正常；设置滚到底→诊断日志→返回 bounds 完全一致；
+- 截图：`docs/screenshots/v050_home_no_scaffold.png`。
+
 ## v0.49.0（2026-11-12 · tag `v0.49.0`）
 
 **PlayerSurface 内部布局修正：全屏测量 + mask 裁剪**

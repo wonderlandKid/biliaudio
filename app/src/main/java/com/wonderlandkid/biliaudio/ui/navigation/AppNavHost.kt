@@ -1,5 +1,15 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.foundation.layout.calculateEndPadding
+
+import androidx.compose.foundation.layout.calculateStartPadding
+
+import androidx.compose.ui.platform.LocalLayoutDirection
+
+import androidx.compose.foundation.layout.ime
+
+import androidx.compose.foundation.layout.safeDrawing
+
 import com.wonderlandkid.biliaudio.ui.layers.PlayerSurfaceLayer
 
 import com.wonderlandkid.biliaudio.ui.layers.BottomBarLayer
@@ -42,7 +52,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
@@ -51,7 +60,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -332,31 +340,32 @@ fun AppNavHost() {
         0.dp
     }
 
-    Scaffold(
-        // 底栏不再放在 Scaffold.bottomBar：它会参与内容 viewport 测量，
-        // 从详情返回时第一帧的 inset/高度动画会导致滚动位置被 clamp。
-        // 现在改为内容层之上的固定高度 overlay，滚动位置只由下面显式的 bottom padding 决定。
-        bottomBar = { },
-    ) { innerPadding ->
-        AppLayerHost {
-            NavHost(
-                navController = navController,
-                startDestination = Routes.HOME,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(hazeState)
-                    .padding(innerPadding)
-                    // 根 Tab 显式预留底栏高度（overlay 不参与 Scaffold 测量）；详情页仍用系统底 inset。
-                    .padding(
-                        bottom = if (showChrome && bottomBarHeightPx > 0) {
-                            (with(density) { bottomBarHeightPx.toDp() } -
-                                innerPadding.calculateBottomPadding()).coerceAtLeast(0.dp)
-                        } else {
-                            0.dp
-                        },
-                    )
-                    .padding(bottom = miniPlayerContentInset)
-                    .imePadding(),
+    // 最终架构：不再使用 Scaffold。insets 由 AppNavHost 统一计算，
+    // Content 只负责 NavHost，所有 chrome 都由 AppLayerHost 的图层绘制。
+    val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
+    val layoutDirection = LocalLayoutDirection.current
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val barHeightDp = with(density) { bottomBarHeightPx.toDp() }
+    val contentBottom = when {
+        imeVisible -> maxOf(imeBottom, systemBottomInset)
+        showChrome && bottomBarHeightPx > 0 -> barHeightDp
+        else -> systemBottomInset
+    }
+
+    AppLayerHost {
+        NavHost(
+            navController = navController,
+            startDestination = Routes.HOME,
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState)
+                .padding(
+                    start = safeInsets.calculateStartPadding(layoutDirection),
+                    end = safeInsets.calculateEndPadding(layoutDirection),
+                    top = safeInsets.calculateTopPadding(),
+                )
+                .padding(bottom = contentBottom)
+                .padding(bottom = miniPlayerContentInset),
                 // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
                 // 一级 Tab 自身无转场（见各 composable 的 None），所以底层不会“往右撤”或缩小。
                 enterTransition = { slideInFromRight() },
@@ -617,7 +626,6 @@ fun AppNavHost() {
                 }
             }
         }
-    }
 }
 
 /**

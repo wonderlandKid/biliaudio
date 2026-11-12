@@ -1206,3 +1206,16 @@
   3. surface 背景独立一层，不承载内容；
   4. 共享元素 overlay 暂不启用，等布局稳定后再做。
 - **影响**：PlayerSurfaceLayer；204 单测；release v0.49.0。
+
+
+## D77 移除 App 级 Scaffold，自管 WindowInsets（v0.50.0）
+
+- **日期**：2026-11-12
+- **背景**：最终架构要求 App 内所有 chrome 为显式图层；Scaffold 的 bottomBar/content inset 测量会引入
+  隐式布局依赖，且不利于「迷你条/弹层/播放器」统一排序。
+- **决策**：
+  1. 删除 App 级 Scaffold；Content 只保留 NavHost；
+  2. AppNavHost 用 safeDrawing/ime/navigationBars 统一计算 top/start/end/bottom；
+  3. 根 Tab 底部按实测底栏高度留白，详情页按系统导航 inset；IME 可见时取 max(IME, 系统导航)；
+  4. BottomBar/PlayerSurface 仍通过 AppLayerHost 绘制，不参与 Content 测量。
+- **影响**：AppNavHost；204 单测；release v0.50.0。
