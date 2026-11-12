@@ -37,9 +37,6 @@ class NowPlayingViewModel(
     /** 合并后的播放模式按钮（随机 / 顺序 / 列表循环 / 单曲循环）。 */
     fun cyclePlaybackMode() = controller.cyclePlaybackMode()
 
-    /** 音量微调档位（封面右侧棘轮，-3..+3）。 */
-    fun setVolumeOffsetSteps(steps: Int) = controller.setVolumeOffsetSteps(steps)
-
     fun cycleRepeatMode() = controller.cycleRepeatMode()
 
     fun toggleShuffle() = controller.toggleShuffle()

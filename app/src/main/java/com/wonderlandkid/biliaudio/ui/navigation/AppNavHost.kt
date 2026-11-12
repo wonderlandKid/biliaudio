@@ -1,5 +1,9 @@
 package com.wonderlandkid.biliaudio.ui.navigation
 
+import androidx.compose.runtime.compositionLocalOf
+
+import androidx.compose.runtime.CompositionLocalProvider
+
 import androidx.compose.foundation.layout.calculateEndPadding
 
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -117,6 +121,9 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
+
+/** 当前迷你条需要让出的底部内容高度；由 AppNavHost 供给，Page 自行消费。 */
+private val LocalMiniPlayerContentInset = compositionLocalOf { 0.dp }
 
 /**
  * 应用导航壳（v0.8.0）。
@@ -349,11 +356,11 @@ fun AppNavHost() {
     // 全局 Content 只预留系统导航 inset；根 Tab 的底栏空间由 Tab 页面自己预留。
     // 这样底栏在详情页收起时不会改变底层根 Tab 的布局。
     val contentBottom = if (imeVisible) maxOf(imeBottom, systemBottomInset) else systemBottomInset
-    // 底栏现在在根 Tab 页面内部（不带系统导航 inset），页面内容只需让出底栏自身高度；
-    // 系统导航 inset 已由全局 contentBottom 预留。
-    val tabBottomExtra = barHeightDp
+    // 根 Tab 内容 = 底栏高度 + 迷你条内容 inset；底栏本身在页面内锚定在系统导航上方。
+    val tabBottomExtra = barHeightDp + miniPlayerContentInset
 
     AppLayerHost {
+        CompositionLocalProvider(LocalMiniPlayerContentInset provides miniPlayerContentInset) {
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
@@ -365,8 +372,7 @@ fun AppNavHost() {
                     end = safeInsets.calculateEndPadding(layoutDirection),
                     top = safeInsets.calculateTopPadding(),
                 )
-                .padding(bottom = contentBottom)
-                .padding(bottom = miniPlayerContentInset),
+                .padding(bottom = contentBottom),
                 // 层级页面统一 push/pop：整页从右侧进入，退出向左 1/4 视差；返回严格反向。
                 // 一级 Tab 自身无转场（见各 composable 的 None），所以底层不会“往右撤”或缩小。
                 enterTransition = { slideInFromRight() },
@@ -386,7 +392,7 @@ fun AppNavHost() {
                     popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
-                    Page {
+                    Page(applyMiniInset = false) {
                         RootTabPage(
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
@@ -415,7 +421,7 @@ fun AppNavHost() {
                     popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
-                    Page {
+                    Page(applyMiniInset = false) {
                         RootTabPage(
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
@@ -439,7 +445,7 @@ fun AppNavHost() {
                     popEnterTransition = { tabPopEnterTransition() },
                     popExitTransition = { ExitTransition.None },
                 ) {
-                    Page {
+                    Page(applyMiniInset = false) {
                         RootTabPage(
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
@@ -602,6 +608,7 @@ fun AppNavHost() {
                 }
 
             }
+            }
 
             // 持久 chrome 层：播放器/迷你条由 AppLayerHost 统一绘制；底栏属于根 Tab 页面自身。
             PlayerSurfaceLayer(
@@ -646,13 +653,26 @@ fun AppNavHost() {
 @Composable
 private fun Page(
     modifier: Modifier = Modifier,
+    applyMiniInset: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (applyMiniInset) {
+                        Modifier.padding(bottom = LocalMiniPlayerContentInset.current)
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            content()
+        }
     }
 }
 

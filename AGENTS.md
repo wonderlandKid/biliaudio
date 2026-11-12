@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.51.0**（tag `v0.51.0`，2026-11-13；release commit 以 `git rev-parse v0.51.0` 为准）
+- **版本：v0.52.0**（tag `v0.52.0`，2026-11-13；release commit 以 `git rev-parse v0.52.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.51.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.52.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.51.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.52.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -107,15 +107,12 @@ scripts/screenshot.sh home 8
      横向滑动切换；v0.46 起进度/播放控制放在封面页内部，随封面一起横向滑走，歌词页无控制；
      歌词页按返回先滑回封面页；
      迷你条 ↔ 播放页为上下关系：v0.48 起是单一 PlayerSurface，从迷你条 rect 连续长到全屏；
-     封面/标题/频谱/进度/播放按钮在同一 surface 内随边界上移；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
+     封面/标题/进度/播放按钮在同一 surface 内随边界上移；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
      歌词页歌词左对齐；
      播放模式为单按钮四态（随机/顺序/列表循环/单曲循环），底部第五个按钮为播放列表；
      曲名/艺术家在页面顶部（headlineLarge 30sp）共用；**全局主题从当前播放封面取种子色**（AppTheme 级别，
-     发现/音乐库/设置/详情/播放页/歌词页/底栏统一；无播放时回退品牌粉）；音量微调完美隐藏，点按后在屏幕最右缘显形（24dp ×128dp、Haze 模糊、7 档 ±3、
-     5% 听感步长、±数字、2s 自动隐藏）；进度条为**真实 FFT 频谱**：
-     Visualizer（milliHz 采样率）→ Hann → 基 2 FFT → 48 个对数频段，60fps 平滑；
-     已播放染色、未播放灰色、圆点位于边界，拖动 seek 时振幅压缩到 30%；
-     真实频谱需要 `RECORD_AUDIO`：首次打开播放页弹一次说明，拒绝则显示低电平占位（不再造假波形）
+     发现/音乐库/设置/详情/播放页/歌词页/底栏统一；无播放时回退品牌粉）；进度条为普通 Material Slider（拖动 seek）；
+     已取消频谱/音量微调，音量使用系统音量
    - 一级 Tab 入场规则：**固定页头/搜索/登录卡等静态元素不动；只有列表/内容区播放「淡入 + 上浮」**
      （320ms 起、50ms/项、封顶 650ms、交错 45ms；音乐库内部 Tab 用 replayKey 重播；Tab 切换本身无转场）；
    - 底部导航是内容层之上的固定高度 overlay（不参与 Scaffold 内容测量）；根 Tab 用显式 bottom padding，
@@ -126,7 +123,7 @@ scripts/screenshot.sh home 8
      Material 默认 ripple 关闭；只对 enabled 的可点击组件生效。
 10. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽；
     上滑展开是 v0.48 起的 **PlayerSurface 单一表面**：surface 从迷你条 rect 连续长到全屏，
-    封面/标题/频谱/进度/播放按钮都在同一 surface 内被裁剪；迷你条始终保留在组合中（只淡出 alpha），
+    封面/标题/进度/播放按钮都在同一 surface 内被裁剪；迷你条始终保留在组合中（只淡出 alpha），
     保证跟手 pointerInput 不被中途销毁；并保存当前页，收起再拉起恢复歌词页；
    不再有拖拽提示条；只允许迷你条使用毛玻璃，其余页面保持 Material 3 扁平（无大面积玻璃）；
    底部导航消失/出现时，迷你条底部位置用 spring 平滑过渡（`animateDpAsState`，**必须无过冲 + 非负兜底**，
@@ -156,7 +153,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.51.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.52.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

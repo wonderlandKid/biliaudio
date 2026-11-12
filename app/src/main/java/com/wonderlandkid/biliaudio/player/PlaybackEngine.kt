@@ -179,16 +179,6 @@ class PlaybackEngine private constructor(
     /** 供 [PlaybackService] 构建 MediaSession 使用（同一个 ExoPlayer 实例）。 */
     internal val exoPlayer: ExoPlayer get() = player
 
-    // ---- 音量微调（7 档：-3..+3） ----
-    // 不能直接用 AudioManager 的 maxStreamVolume 换算——很多 ROM 把档位报成 100+，
-    // 除以 4 后每档不到 1%，用户会感觉「没反应」。这里用固定听感步长：
-    // 每档 5%，-3→+3 总计 30%（0.70→1.00），听感约等于 2 个系统音量步；
-    // 居中档 0.85 留出上行空间。
-    private val volumeDetent: Float = 0.05f
-    /** 居中档的基础音量：留出 +3 档的上行空间（约 -5% 幅度，听感几乎无差）。 */
-    private val volumeBase: Float = (1f - 3f * volumeDetent).coerceIn(0.5f, 1f) // 0.85
-    private var volumeOffsetSteps: Int = 0
-
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
@@ -229,8 +219,8 @@ class PlaybackEngine private constructor(
 
     init {
         player.addListener(PlayerEvents())
-        player.volume = volumeBase
-        _state.update { it.copy(volume = volumeBase, volumeOffsetSteps = 0) }
+        player.volume = 1f
+        _state.update { it.copy(volume = 1f) }
         startProgressTicker()
     }
 
@@ -429,14 +419,6 @@ class PlaybackEngine private constructor(
 
     override fun toggleShuffle() {
         player.shuffleModeEnabled = !player.shuffleModeEnabled
-    }
-
-    override fun setVolumeOffsetSteps(steps: Int) {
-        val clamped = steps.coerceIn(-3, 3)
-        volumeOffsetSteps = clamped
-        val effective = (volumeBase + clamped * volumeDetent).coerceIn(0f, 1f)
-        player.volume = effective
-        _state.update { it.copy(volume = effective, volumeOffsetSteps = clamped) }
     }
 
     override fun cyclePlaybackMode() {
@@ -712,7 +694,6 @@ class PlaybackEngine private constructor(
             repeatMode = player.repeatMode.toAppRepeatMode(),
             shuffle = player.shuffleModeEnabled,
             volume = player.volume,
-            volumeOffsetSteps = volumeOffsetSteps,
             audioSessionId = player.audioSessionId,
         )
         Diag.log(

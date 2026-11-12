@@ -1,5 +1,14 @@
 package com.wonderlandkid.biliaudio.ui.layers
 
+import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
+
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+
+import androidx.compose.animation.core.tween
+
+import androidx.compose.animation.core.Animatable
+
 import androidx.compose.ui.geometry.RoundRect
 
 import androidx.compose.foundation.shape.GenericShape
@@ -64,6 +73,18 @@ internal fun BoxScope.PlayerSurfaceLayer(
     if (!visible) return
     val state by playbackController.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
+    // 从“无播放”进入迷你条时，整块 surface + 迷你条一起从下方淡入，避免突然出现。
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        appear.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
+        )
+    }
+    val appearOffsetPx = (1f - appear.value) * with(density) { 48.dp.toPx() }
     val screenHeightPx = with(density) { screenHeight.toPx() }
     val rect = miniRect
     if (rect == null) {
@@ -88,6 +109,7 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // 迷你条实际 rect（窗口坐标）→ 当前 surface 边界；p=1 时顶到 0，底到屏幕底。
     val topPx = rect.top * (1f - playerProgress)
     val bottomPx = rect.bottom + (screenHeightPx - rect.bottom) * playerProgress
+    android.util.Log.d("BarDebug", "surface p=$playerProgress rect=$rect top=$topPx bottom=$bottomPx screen=$screenHeightPx")
     val heightPx = (bottomPx - topPx).coerceAtLeast(1f)
     val shape = RoundedCornerShape(24.dp * (1f - playerProgress))
 
@@ -106,9 +128,10 @@ internal fun BoxScope.PlayerSurfaceLayer(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .offset { IntOffset(0, topPx.roundToInt()) }
+            .offset { IntOffset(0, (topPx + appearOffsetPx).roundToInt()) }
             .height(with(density) { heightPx.toDp() })
             .graphicsLayer {
+                alpha = appear.value
                 this.shape = shape
                 clip = true
             }
@@ -175,7 +198,10 @@ internal fun BoxScope.PlayerSurfaceLayer(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .layer(if (playerProgress >= 0.06f) AppLayer.MiniPlayer else AppLayer.MiniPlayer + 1f)
-            .graphicsLayer { alpha = miniAlpha }
+            .graphicsLayer {
+                alpha = miniAlpha * appear.value
+                translationY = appearOffsetPx
+            }
             .padding(bottom = miniBottomPadding),
     )
 }

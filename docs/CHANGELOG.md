@@ -1,5 +1,39 @@
 # 版本记录
 
+## v0.52.0（2026-11-13 · tag `v0.52.0`）
+
+**回到基础播放体验：普通进度条、取消音量微调、底栏与迷你条修复**
+
+### 1. 底栏消失/页面下移修复
+
+- 根 Tab 底栏属于 `RootTabPage`，页面转场时随页面一起滑走；
+- 根 Tab 页面内部预留 `底栏高度 + 迷你条内容 inset`；
+- `Page` 通过 CompositionLocal 自行消费迷你条 inset，详情页不再受全局 padding 切换影响；
+- 恢复底栏高度测量，修复迷你条出现后底栏被 mini inset 推走/消失；
+- 修复播放页打开/关闭后底栏消失。
+
+### 2. 普通进度条
+
+- 删除真实 FFT 频谱、Visualizer、RECORD_AUDIO 权限与权限弹窗；
+- `PlaybackSeekBar` 改为标准 Material 3 `Slider`，只保留播放位置/拖动 seek；
+- 删除 `RealSpectrumAnalyzer.kt`。
+
+### 3. 取消音量微调
+
+- 删除封面右侧音量棘轮 `VolumeFineTune`；
+- 删除 `setVolumeOffsetSteps` 契约、状态、引擎逻辑；播放器音量固定 100%（系统音量控制）；
+- 删除相关 ViewModel 方法。
+
+### 4. 迷你条出现动画
+
+- 首次从无播放进入迷你条时，PlayerSurface + 迷你条一起从下方 48dp 淡入/上移。
+
+### 验证
+
+- 204 单测全绿；Debug/Release 构建成功；release 安装 v0.52.0；
+- 模拟器：播放后底栏保留、播放页打开/关闭后底栏保留、普通 Slider 可拖动；
+- 频谱/音量微调相关 UI 已移除。
+
 ## v0.51.0（2026-11-13 · tag `v0.51.0`）
 
 **底栏回归根 Tab 页面自身，修复转场时消失/页面下移**

@@ -1,11 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.player
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -25,7 +20,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -35,10 +29,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,15 +45,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.player.PlaybackState
 import com.wonderlandkid.biliaudio.player.QueueEntry
-import com.wonderlandkid.biliaudio.player.RealSpectrumAnalyzer
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
@@ -70,9 +59,6 @@ import com.wonderlandkid.biliaudio.ui.player.lyrics.NowPlayingLyricsPane
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
 
 /** 播放页横向分页：0 = 封面页，1 = 歌词页（左右滑动切换，无指示条）。 */
@@ -108,43 +94,7 @@ fun NowPlayingScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-    val volumeHazeState = rememberHazeState()
 
-    // 真实频谱（需要麦克风权限，仅在用户确认后启用；拒绝则回退合成波形）
-    var audioPermissionGranted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO,
-            ) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    var spectrumBands by remember { mutableStateOf(FloatArray(0)) }
-    var showSpectrumPrompt by rememberSaveable { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        audioPermissionGranted = granted
-        spectrumPrompted(context)
-    }
-    LaunchedEffect(state.audioSessionId, audioPermissionGranted) {
-        if (!audioPermissionGranted && state.audioSessionId != 0 && !isSpectrumPrompted(context)) {
-            showSpectrumPrompt = true
-        }
-    }
-    DisposableEffect(audioPermissionGranted, state.audioSessionId) {
-        if (!audioPermissionGranted || state.audioSessionId == 0) {
-            spectrumBands = FloatArray(0)
-            onDispose { }
-        } else {
-            val analyzer = RealSpectrumAnalyzer(state.audioSessionId) { bands ->
-                spectrumBands = bands
-            }
-            analyzer.start()
-            onDispose { analyzer.release() }
-        }
-    }
     var showPlaylist by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -153,36 +103,6 @@ fun NowPlayingScreen(
         val error = state.error ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(error)
         viewModel.dismissError()
-    }
-
-    if (showSpectrumPrompt) {
-        AlertDialog(
-            onDismissRequest = {
-                showSpectrumPrompt = false
-                spectrumPrompted(context)
-            },
-            title = { Text("真实频谱") },
-            text = {
-                Text(
-                    "让播放进度条随歌曲的真实频谱摆动，需要麦克风权限。\n" +
-                        "只会读取当前播放音频的能量用于动画，不会录音、保存或上传；" +
-                        "可随时在系统设置中关闭。",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSpectrumPrompt = false
-                    spectrumPrompted(context)
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                }) { Text("允许") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSpectrumPrompt = false
-                    spectrumPrompted(context)
-                }) { Text("暂不") }
-            },
-        )
     }
 
     Box(
@@ -196,8 +116,7 @@ fun NowPlayingScreen(
                         MaterialTheme.colorScheme.surface,
                     ),
                 ),
-            )
-            .hazeSource(volumeHazeState),
+            ),
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -241,8 +160,6 @@ fun NowPlayingScreen(
                 } else {
                     NowPlayingBody(
                         state = state,
-                        spectrumBands = spectrumBands,
-                        volumeHazeState = volumeHazeState,
                         initialPage = initialPage,
                         onPageChanged = onPageChanged,
                         onSeek = viewModel::seekToTrackPosition,
@@ -251,7 +168,6 @@ fun NowPlayingScreen(
                         onPrevious = viewModel::previous,
                         onCyclePlaybackMode = viewModel::cyclePlaybackMode,
                         onOpenPlaylist = { showPlaylist = true },
-                        onVolumeOffsetChange = viewModel::setVolumeOffsetSteps,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -283,8 +199,6 @@ fun NowPlayingScreen(
 @Composable
 private fun NowPlayingBody(
     state: PlaybackState,
-    spectrumBands: FloatArray,
-    volumeHazeState: HazeState,
     initialPage: Int,
     onPageChanged: (Int) -> Unit,
     onSeek: (Long) -> Unit,
@@ -293,7 +207,6 @@ private fun NowPlayingBody(
     onPrevious: () -> Unit,
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
-    onVolumeOffsetChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entry = state.queue.getOrNull(state.currentIndex)
@@ -350,7 +263,6 @@ private fun NowPlayingBody(
                 else -> NowPlayingCoverPage(
                     state = state,
                     entry = entry,
-                    spectrumBands = spectrumBands,
                     onSeek = onSeek,
                     onTogglePlay = onTogglePlay,
                     onNext = onNext,
@@ -358,8 +270,6 @@ private fun NowPlayingBody(
                     onCyclePlaybackMode = onCyclePlaybackMode,
                     onOpenPlaylist = onOpenPlaylist,
                     onOpenLyrics = { scope.launch { pagerState.animateScrollToPage(LYRICS_PAGE) } },
-                    onVolumeOffsetChange = onVolumeOffsetChange,
-                    volumeHazeState = volumeHazeState,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -372,7 +282,6 @@ private fun NowPlayingBody(
 private fun NowPlayingCoverPage(
     state: PlaybackState,
     entry: QueueEntry?,
-    spectrumBands: FloatArray,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
@@ -380,8 +289,6 @@ private fun NowPlayingCoverPage(
     onCyclePlaybackMode: () -> Unit,
     onOpenPlaylist: () -> Unit,
     onOpenLyrics: () -> Unit,
-    onVolumeOffsetChange: (Int) -> Unit,
-    volumeHazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -418,7 +325,6 @@ private fun NowPlayingCoverPage(
 
         NowPlayingFooter(
             state = state,
-            spectrumBands = spectrumBands,
             onSeek = onSeek,
             onTogglePlay = onTogglePlay,
             onNext = onNext,
@@ -428,14 +334,6 @@ private fun NowPlayingCoverPage(
         )
         }
 
-        // 音量微调：完美隐藏，点一下在屏幕最右侧显形，再拖动；
-        // 位置紧贴屏幕边框，不占封面空间（触控区向左延伸，视觉条贴边）。
-        VolumeFineTune(
-            offsetSteps = state.volumeOffsetSteps,
-            onOffsetChange = onVolumeOffsetChange,
-            hazeState = volumeHazeState,
-            modifier = Modifier.align(Alignment.CenterEnd),
-        )
     }
 }
 
@@ -443,7 +341,6 @@ private fun NowPlayingCoverPage(
 @Composable
 private fun NowPlayingFooter(
     state: PlaybackState,
-    spectrumBands: FloatArray,
     onSeek: (Long) -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
@@ -455,8 +352,6 @@ private fun NowPlayingFooter(
         PlaybackSeekBar(
             positionMs = state.positionMs,
             durationMs = state.trackDurationMs,
-            isPlaying = state.isPlaying,
-            spectrumBands = spectrumBands,
             onSeek = onSeek,
         )
         Spacer(Modifier.height(Spacing.xs))
@@ -488,14 +383,4 @@ private fun NowPlayingFooter(
         )
         Spacer(Modifier.height(Spacing.xxl))
     }
-}
-
-/** 真实频谱权限提示是否已问过（只问一次，之后可在系统设置修改）。 */
-private fun isSpectrumPrompted(context: android.content.Context): Boolean =
-    context.getSharedPreferences("ui_prefs", android.content.Context.MODE_PRIVATE)
-        .getBoolean("spectrum_prompted", false)
-
-private fun spectrumPrompted(context: android.content.Context) {
-    context.getSharedPreferences("ui_prefs", android.content.Context.MODE_PRIVATE)
-        .edit().putBoolean("spectrum_prompted", true).apply()
 }
