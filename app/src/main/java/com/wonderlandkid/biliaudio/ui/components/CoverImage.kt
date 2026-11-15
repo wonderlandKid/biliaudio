@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size
 
 /**
  * 统一封面加载组件：自动圆角、占位底色、渐显。
@@ -29,6 +30,12 @@ fun CoverImage(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
     contentScale: ContentScale = ContentScale.Crop,
+    /**
+     * 固定解码尺寸（px，正方形）。共享封面 overlay 的容器尺寸会随拖动逐帧变化，
+     * 若不固定，Coil 会按每帧尺寸反复请求/解码，过渡中容易停留在低清位图（封面发糊、像重影）。
+     * 传 null 时沿用按实际布局尺寸请求（普通封面）。
+     */
+    requestSizePx: Int? = null,
 ) {
     val shape = RoundedCornerShape(cornerRadius)
     AsyncImage(
@@ -37,6 +44,11 @@ fun CoverImage(
             // 共享封面过渡要求 overlay 与真实封面逐帧一致；Coil 自带的 crossfade
             // 会在交接帧先淡出占位色，造成闪烁/发灰，所以封面统一不做交叉淡入。
             .crossfade(false)
+            .apply {
+                if (requestSizePx != null && requestSizePx > 0) {
+                    size(Size(requestSizePx, requestSizePx))
+                }
+            }
             .build(),
         contentDescription = null,
         contentScale = contentScale,

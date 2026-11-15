@@ -261,7 +261,9 @@ internal fun BoxScope.PlayerSurfaceLayer(
                     coverTargetAnomaly = anomaly
                 },
                 sharedElementsAlpha = 1f,
-                coverAlpha = smoothStep(0.94f, 0.995f, playerProgress),
+                // v0.59.1：播放页真实封面只在完全展开时出现；过渡中由共享封面 overlay 绘制，
+                // 两者在 p=1 时位置/尺寸/圆角完全一致，所以切换无感，不再出现「重影」。
+                coverAlpha = if (playerProgress >= 0.9995f) 1f else 0f,
                 contentAlpha = smoothStep(0.55f, 0.92f, playerProgress),
                 modifier = Modifier.fillMaxSize(),
             )
@@ -307,8 +309,9 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // ---- 迷你条 → 播放页：只保留封面作为共享元素 ----
     // 标题/艺术家/控件都不插值，避免字号、省略号和布局在拖动中抽动；
     // 迷你条自身元素先淡出，封面单独放大/移动到播放页封面位置。
-    val realAlpha = smoothStep(0.94f, 0.995f, playerProgress)
-    val sharingCover = hasTrack && playerProgress > 0.001f && realAlpha < 0.999f
+    // v0.59.1：过渡中只由 overlay 绘制封面（不透明），真实封面只在完全展开时出现。
+    // 以前真实封面在 94%→99.5% 交叉淡入，但两者位置/尺寸/圆角不同 → 刚开始拖动就出现「重影/双封面」。
+    val sharingCover = hasTrack && playerProgress > 0.001f && playerProgress < 0.9995f
     // 维测：共享封面 overlay 显隐（排查「封面飞错位置/没有共享元素」）。
     // 首次组合时不记 HIDE（本来就没显示），避免每次进入播放器表面都多一条噪音。
     var sharedCoverShown by remember { mutableStateOf(false) }
@@ -356,13 +359,18 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 .layer(AppLayer.Player + 1f)
                 .graphicsLayer {
                     // 不在共享过程中时 alpha=0：overlay 仍然留在组合里预热 Coil 图片。
-                    alpha = if (sharingCover) 1f - realAlpha else 0f
+                    alpha = if (sharingCover) 1f else 0f
                     this.shape = overlayShape
                     clip = true
                 },
         ) {
+            // 共享封面 overlay 的容器尺寸逐帧变化：必须用固定解码尺寸，
+            // 否则 Coil 会按动画中的尺寸反复解码，拖动过程中容易停在低清位图（封面发糊/像重影）。
+            // 取播放页真实封面的目标像素尺寸（还没量到时用 1280），确保放大到全尺寸时依然清晰。
+            val requestPx = (playerCoverMeasured?.rect?.width ?: 1280f).roundToInt().coerceIn(720, 1536)
             CoverImage(
                 url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
+                requestSizePx = requestPx,
                 modifier = Modifier
                     .offset { IntOffset(coverRect.left.roundToInt(), coverRect.top.roundToInt()) }
                     .size(
