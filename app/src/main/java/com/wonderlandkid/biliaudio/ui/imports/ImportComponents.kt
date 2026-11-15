@@ -68,9 +68,6 @@ import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 import java.util.Locale
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
-import com.wonderlandkid.biliaudio.ui.theme.biliClickable
-import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 // ---------------------------------------------------------------------------
 // 通用小部件
@@ -167,7 +164,7 @@ fun ImportErrorCard(
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             if (onRetry != null) {
-                BiliTextButton(
+                TextButton(
                     onClick = onRetry,
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -258,7 +255,7 @@ fun VideoPreviewCard(
                     modifier = Modifier
                         .size(92.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .biliClickable(onClick = onChangeCover, pressedScale = 0.92f),
+                        .clickable(onClick = onChangeCover),
                 ) {
                     CoverImage(
                         url = state.pendingCoverModel,
@@ -301,7 +298,7 @@ fun VideoPreviewCard(
                         InfoPill("${info.pages.size} 个分 P")
                         InfoPill(info.bvid)
                     }
-                    BiliTextButton(
+                    TextButton(
                         onClick = {
                             runCatching {
                                 context.startActivity(
@@ -441,7 +438,7 @@ fun VideoPreviewCard(
                         },
                         modifier = Modifier.weight(1f),
                     )
-                    BiliTextButton(onClick = { onSplitTextChange("") }) { Text("清空") }
+                    TextButton(onClick = { onSplitTextChange("") }) { Text("清空") }
                 }
                 if (segments.isEmpty()) {
                     Text(
@@ -506,7 +503,7 @@ fun VideoPreviewCard(
                     resetLabel = resetLabel,
                 )
             } else {
-                BiliButton(
+                Button(
                     onClick = onImport,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -590,13 +587,13 @@ private fun ImportSuccessPanel(
             )
             Spacer(Modifier.height(Spacing.sm))
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                BiliButton(
+                Button(
                     onClick = { onOpenAlbum(albumId) },
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     Text("查看专辑")
                 }
-                BiliTextButton(
+                TextButton(
                     onClick = onReset,
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -757,10 +754,10 @@ fun ArchiveFormatGuide(
                 style = MaterialTheme.typography.bodySmall,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                BiliTextButton(onClick = { showSample = !showSample }) {
+                TextButton(onClick = { showSample = !showSample }) {
                     Text(if (showSample) "收起示例" else "查看最小分割点示例")
                 }
-                BiliTextButton(onClick = { showLegacy = !showLegacy }) {
+                TextButton(onClick = { showLegacy = !showLegacy }) {
                     Text(if (showLegacy) "收起旧格式" else "兼容旧格式")
                 }
             }

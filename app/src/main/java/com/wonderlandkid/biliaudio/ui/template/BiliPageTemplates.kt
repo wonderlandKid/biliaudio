@@ -20,7 +20,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
 
 /**
  * 页面模板（docs/UI_ARCHITECTURE.md）：
@@ -53,7 +52,7 @@ fun BiliTopBar(
             }
         },
         navigationIcon = {
-            BiliIconButton(onClick = onBack) {
+            IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "返回",

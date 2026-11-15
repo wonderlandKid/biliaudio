@@ -50,7 +50,6 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
 import com.wonderlandkid.biliaudio.util.TimeUtils
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 发现页。
@@ -204,12 +203,12 @@ private fun RandomAlbumsSection(
         title = "随机专辑",
         subtitle = if (albums.isEmpty()) "从音乐库随机挑选 4 张" else "从音乐库随机挑选 ${albums.size} 张",
         actions = {
-            BiliTextButton(onClick = onShuffle, enabled = albums.isNotEmpty()) {
+            TextButton(onClick = onShuffle, enabled = albums.isNotEmpty()) {
                 Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(Spacing.xxs))
                 Text("换一批")
             }
-            BiliTextButton(onClick = onImport) {
+            TextButton(onClick = onImport) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(Spacing.xxs))
                 Text("导入")
@@ -237,7 +236,7 @@ private fun PlaylistsPreviewSection(
         title = "我的歌单",
         subtitle = if (totalCount > 0) "$totalCount 个歌单" else "自己整理播放列表",
         actions = {
-            BiliTextButton(onClick = onOpenAll) { Text("查看全部") }
+            TextButton(onClick = onOpenAll) { Text("查看全部") }
         },
     ) {
         if (playlists.isEmpty()) {
@@ -287,7 +286,7 @@ private fun StatsPreviewSection(
             HomeStatsMode.TRACK_PLAY_COUNT -> "按歌曲播放次数"
         },
         actions = {
-            BiliTextButton(onClick = onOpenAll) { Text("查看全部") }
+            TextButton(onClick = onOpenAll) { Text("查看全部") }
         },
     ) {
         Row(
@@ -363,7 +362,7 @@ private fun RecentPreviewSection(
         title = "最近播放",
         subtitle = "最近听过的专辑",
         actions = {
-            BiliTextButton(onClick = onOpenAll) { Text("查看全部") }
+            TextButton(onClick = onOpenAll) { Text("查看全部") }
         },
     ) {
         if (albums.isEmpty()) {
@@ -395,7 +394,7 @@ private fun SectionEmptyRow(
             modifier = Modifier.weight(1f),
         )
         if (actionLabel != null && onAction != null) {
-            BiliTextButton(onClick = onAction) { Text(actionLabel) }
+            TextButton(onClick = onAction) { Text(actionLabel) }
         }
     }
 }

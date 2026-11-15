@@ -27,8 +27,6 @@ fun BiliAudioTheme(
     )
     MaterialTheme(
         colorScheme = colorScheme,
-        // 说明：material3 1.5.0-alpha22（BOM 2026.09.00）的 MotionScheme 在 Kotlin 层仍是 internal，
-        // 无法全局注入 M3 Expressive 弹簧；v0.61.0 曾升到 1.5.0-rc01 验证，手感提升不明显已回撤。
         typography = BiliTypography,
         shapes = BiliShapes,
         content = content,

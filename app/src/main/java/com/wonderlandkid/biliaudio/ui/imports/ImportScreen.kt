@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -73,10 +74,6 @@ import com.wonderlandkid.biliaudio.ui.components.SearchField
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Dimens
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
-import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
-import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 /**
  * 导入专辑页（三个 Tab）：
@@ -219,7 +216,7 @@ fun ImportScreen(
             onDismissRequest = viewModel::dismissSearchPreview,
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = null,
+            dragHandle = { BottomSheetDefaults.DragHandle() },
         ) {
             Column(
                 modifier = Modifier
@@ -305,7 +302,7 @@ fun ImportScreen(
                 )
             },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         showReplaceConfirm = false
                         viewModel.setArchiveMode(ArchiveImportMode.REPLACE)
@@ -315,7 +312,7 @@ fun ImportScreen(
                 }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
             },
         )
     }
@@ -422,7 +419,7 @@ private fun BvImportTab(
                         },
                         trailingIcon = if (state.input.isNotEmpty()) {
                             {
-                                BiliIconButton(onClick = { onInputChange("") }) {
+                                IconButton(onClick = { onInputChange("") }) {
                                     Icon(Icons.Rounded.Close, contentDescription = "清空")
                                 }
                             }
@@ -438,7 +435,7 @@ private fun BvImportTab(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    BiliButton(
+                    Button(
                         onClick = onParse,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -608,7 +605,7 @@ private fun ArchiveImportTab(
                     )
                     // 文件读取 + 清空 + 行数
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BiliOutlinedButton(
+                        OutlinedButton(
                             onClick = onPickFile,
                             enabled = !state.isReadingFile,
                             shape = RoundedCornerShape(50),
@@ -630,7 +627,7 @@ private fun ArchiveImportTab(
                                 Text("从文件读取")
                             }
                         }
-                        BiliTextButton(
+                        TextButton(
                             onClick = onClear,
                             enabled = state.text.isNotBlank() || preview != null || report != null,
                         ) {
@@ -654,7 +651,7 @@ private fun ArchiveImportTab(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    BiliButton(
+                    Button(
                         onClick = onPreview,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -734,7 +731,7 @@ private fun ArchiveImportTab(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    BiliButton(
+                    Button(
                         onClick = onImport,
                         modifier = Modifier
                             .fillMaxWidth()

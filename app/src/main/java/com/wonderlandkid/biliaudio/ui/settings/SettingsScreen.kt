@@ -84,9 +84,6 @@ import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
-import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 /**
  * 设置页（底部导航 Tab）：
@@ -313,7 +310,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         pendingTreeImportUri = null
                         viewModel.importTreeFromFolder(treeImportUri, treeImportMode)
@@ -321,7 +318,7 @@ fun SettingsScreen(
                 ) { Text("开始导入") }
             },
             dismissButton = {
-                BiliTextButton(onClick = { pendingTreeImportUri = null }) { Text("取消") }
+                TextButton(onClick = { pendingTreeImportUri = null }) { Text("取消") }
             },
         )
     }
@@ -375,7 +372,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                BiliTextButton(onClick = viewModel::dismissTreeImportResult) { Text("确定") }
+                TextButton(onClick = viewModel::dismissTreeImportResult) { Text("确定") }
             },
         )
     }
@@ -387,7 +384,7 @@ fun SettingsScreen(
             title = { Text("退出登录") },
             text = { Text("退出后部分高音质音频可能无法获取，确定要退出当前 B 站账号吗？") },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         showLogoutDialog = false
                         viewModel.logout()
@@ -397,7 +394,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showLogoutDialog = false }) { Text("取消") }
+                TextButton(onClick = { showLogoutDialog = false }) { Text("取消") }
             },
         )
     }
@@ -458,7 +455,7 @@ private fun AccountCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    BiliOutlinedButton(
+                    OutlinedButton(
                         onClick = onLogoutClick,
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -514,7 +511,7 @@ private fun AccountCard(
                             strokeWidth = 2.5.dp,
                         )
                     } else {
-                        BiliButton(
+                        Button(
                             onClick = onOpenLogin,
                             shape = RoundedCornerShape(50),
                         ) {
@@ -664,7 +661,7 @@ private fun BackupRestoreCard(
             title = "导出整库到文件夹",
             description = "生成 manifest/library/settings/covers（同名文件覆盖）",
             action = {
-                BiliOutlinedButton(
+                OutlinedButton(
                     onClick = onExportTreeClick,
                     enabled = !isExportingTree && !isImportingTree,
                     shape = RoundedCornerShape(50),
@@ -689,7 +686,7 @@ private fun BackupRestoreCard(
             title = "从文件夹恢复",
             description = "选择 bundle 目录，校验 manifest/hash 后按所选模式导入",
             action = {
-                BiliOutlinedButton(
+                OutlinedButton(
                     onClick = onImportTreeClick,
                     enabled = !isExportingTree && !isImportingTree,
                     shape = RoundedCornerShape(50),
@@ -714,7 +711,7 @@ private fun BackupRestoreCard(
             title = "导入分享文件",
             description = "导入单专辑 / 分割点 JSON（整库恢复请用上面的 bundle 目录）",
             action = {
-                BiliOutlinedButton(
+                OutlinedButton(
                     onClick = onImportShareClick,
                     shape = RoundedCornerShape(50),
                     contentPadding = PaddingValues(horizontal = Spacing.md),
@@ -899,11 +896,11 @@ private fun UserDataBackupCard(
                 subtitle = "独立 JSON，不含音乐库专辑/分曲/封面/缓存",
             )
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                BiliOutlinedButton(
+                androidx.compose.material3.OutlinedButton(
                     onClick = onExport,
                     modifier = Modifier.weight(1f),
                 ) { Text("导出") }
-                BiliButton(
+                androidx.compose.material3.Button(
                     onClick = onImport,
                     modifier = Modifier.weight(1f),
                 ) { Text("导入") }

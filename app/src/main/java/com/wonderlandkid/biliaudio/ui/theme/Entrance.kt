@@ -1,8 +1,7 @@
 package com.wonderlandkid.biliaudio.ui.theme
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import kotlinx.coroutines.delay
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,18 +39,21 @@ fun Modifier.entrance(
         if (play) {
             // 关键：从 false 切到 true 时先回到 0，否则会从 1→1 无动画。
             progress.snapTo(0f)
-            // v0.60.0：入场改成 iOS 式弹簧（轻微过冲的落位），交错延迟用 delay 实现。
-            delay((order.coerceAtLeast(0) * BiliMotion.EntranceStaggerMs).toLong())
             progress.animateTo(
                 targetValue = 1f,
-                animationSpec = BiliMotion.springSnappy(),
+                animationSpec = tween(
+                    delayMillis = order.coerceAtLeast(0) * BiliMotion.EntranceStaggerMs,
+                    durationMillis = (BiliMotion.EntranceBaseMs + order * BiliMotion.EntranceStepMs)
+                        .coerceAtMost(BiliMotion.EntranceMaxMs),
+                    easing = BiliMotion.EmphasizedDecelerate,
+                ),
             )
         } else {
             progress.snapTo(1f)
         }
     }
     graphicsLayer {
-        val p = progress.value.coerceIn(0f, 1f)
+        val p = progress.value
         alpha = p
         translationY = (1f - p) * EntranceTranslationDp.dp.toPx()
     }

@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 歌词偏移面板（T4 弹层，ModalBottomSheet）。
@@ -97,7 +96,7 @@ internal fun LyricsOffsetSheet(
                 OffsetButton(text = "+0.5s", onClick = { onAdjust(500L) })
             }
             Spacer(Modifier.height(Spacing.sm))
-            BiliTextButton(
+            TextButton(
                 onClick = onReset,
                 enabled = delayMs != 0L,
                 modifier = Modifier.fillMaxWidth(),

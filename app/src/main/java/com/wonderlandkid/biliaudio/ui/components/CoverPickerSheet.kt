@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,7 +70,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import com.wonderlandkid.biliaudio.ui.theme.biliClickable
 
 /**
  * 一次封面选择的结果（由调用方负责保存到数据库 / 文件）。
@@ -161,7 +161,7 @@ fun CoverPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = null,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
         Column(
             modifier = Modifier
@@ -185,7 +185,7 @@ fun CoverPickerSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                BiliTextButton(onClick = onDismiss) { Text("取消") }
+                TextButton(onClick = onDismiss) { Text("取消") }
             }
             Spacer(Modifier.height(Spacing.md))
 
@@ -214,7 +214,7 @@ fun CoverPickerSheet(
             Spacer(Modifier.height(Spacing.lg))
 
             // ---- 从相册选择 ----
-            BiliButton(
+            Button(
                 onClick = {
                     localError = null
                     photoPicker.launch(
@@ -248,7 +248,7 @@ fun CoverPickerSheet(
             Spacer(Modifier.height(Spacing.sm))
 
             // ---- 网易云搜索（可折叠） ----
-            BiliOutlinedButton(
+            OutlinedButton(
                 onClick = {
                     if (searchOpen) {
                         searchOpen = false
@@ -274,7 +274,7 @@ fun CoverPickerSheet(
 
             // ---- 恢复 B 站封面 ----
             if (allowRestoreBilibili) {
-                BiliTextButton(
+                TextButton(
                     onClick = { onPick(CoverPick.RestoreBilibili) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -302,7 +302,7 @@ fun CoverPickerSheet(
                         Icon(Icons.Rounded.Search, contentDescription = null)
                     },
                     trailingIcon = {
-                        BiliIconButton(
+                        IconButton(
                             onClick = {
                                 focusManager.clearFocus()
                                 viewModel.search()
@@ -363,7 +363,7 @@ fun CoverPickerSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
-                        BiliTextButton(onClick = { viewModel.search() }) { Text("重试") }
+                        TextButton(onClick = { viewModel.search() }) { Text("重试") }
                     }
 
                     searchState.results.isNotEmpty() -> LazyVerticalGrid(
@@ -417,7 +417,7 @@ private fun CoverCandidateCell(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .biliClickable(onClick = onClick, pressedScale = 0.92f)
+            .clickable(onClick = onClick)
             .padding(2.dp),
     ) {
         CoverImage(
@@ -473,7 +473,7 @@ private fun CoverPickerError(
                 modifier = Modifier.weight(1f),
             )
             if (onRetry != null) {
-                BiliTextButton(onClick = onRetry) {
+                TextButton(onClick = onRetry) {
                     Text("重试", color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }

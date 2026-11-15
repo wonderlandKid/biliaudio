@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,7 +53,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
-import com.wonderlandkid.biliaudio.ui.theme.biliClickable
 
 /**
  * 底部悬浮迷你播放条（v0.8.0）。
@@ -90,11 +88,16 @@ fun MiniPlayerBar(
     val track = state.currentTrack
     AnimatedVisibility(
         visible = track != null,
-        // v0.60.0：出现/消失在 iOS 式弹簧上做（出现带一点点落位回弹，消失保持加速离场）。
         enter = slideInVertically(
-            animationSpec = BiliMotion.springSnappy(),
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
         ) { it / 2 } + fadeIn(
-            animationSpec = BiliMotion.springSnappy(),
+            animationSpec = tween(
+                durationMillis = BiliMotion.MiniPlayerEnterMs,
+                easing = BiliMotion.EmphasizedDecelerate,
+            ),
         ),
         exit = slideOutVertically(
             animationSpec = tween(
@@ -169,7 +172,7 @@ fun MiniPlayerBar(
                 .then(glassModifier)
                 .border(1.dp, onContainer.copy(alpha = 0.06f), shape)
                 .then(dragModifier)
-                .biliClickable(onClick = onClick, pressedScale = 0.96f)
+                .clickable(onClick = onClick)
                 .onGloballyPositioned { onBarBounds(it.boundsInWindow()) },
             shape = shape,
             color = Color.Transparent,
@@ -212,14 +215,14 @@ fun MiniPlayerBar(
                             modifier = Modifier.onGloballyPositioned { onArtistBounds(it.boundsInWindow()) },
                         )
                     }
-                    BiliIconButton(onClick = onPrevious) {
+                    IconButton(onClick = onPrevious) {
                         Icon(
                             Icons.Rounded.SkipPrevious,
                             contentDescription = "上一首",
                             tint = onContainer.copy(alpha = 0.86f),
                         )
                     }
-                    BiliFilledIconButton(
+                    FilledIconButton(
                         onClick = onTogglePlay,
                         modifier = Modifier
                             .size(40.dp)
@@ -234,7 +237,7 @@ fun MiniPlayerBar(
                             tint = MaterialTheme.colorScheme.onPrimary,
                         )
                     }
-                    BiliIconButton(onClick = onNext) {
+                    IconButton(onClick = onNext) {
                         Icon(
                             Icons.Rounded.SkipNext,
                             contentDescription = "下一首",

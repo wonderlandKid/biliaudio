@@ -4,26 +4,6 @@
 > 禁止页面内散写时长，禁止 `LinearEasing` / 匀速。
 > 页面分类见 [UI_ARCHITECTURE.md](UI_ARCHITECTURE.md)。
 
-## 0. iOS 式肉感物理（v0.60.0）
-
-> 目标：像 iPhone 一样“有质量的物理回弹”，只取手感，不换视觉体系。
-
-| token | damping / stiffness | 用在 |
-| --- | --- | --- |
-| `springPage()` | 1.0 / 320 | 层级页 push/pop（整页不过冲，只取 spring 减速曲线） |
-| `springSettle()` | 0.9 / 360 | 播放页松手归位、Pager 吸附、迷你条底部避让 |
-| `springSnappy()` | 0.85 / 500 | 列表入场、迷你条出现、按压缩小之后的中等回弹 |
-| `springBouncy()` | 0.75 / 340 | 按钮松手弹回（可见轻微过冲） |
-
-规矩：
-- 整页/大表面**不允许过冲**（会露出背景、引起眩晕）；小控件/按钮才允许可见回弹；
-- 按压缩放只用 `graphicsLayer`（transform），不改布局/热区；行类元素不缩放，只做按压状态层；
-- M3 按钮必须用 `ui/components/BiliButtons.kt` 的 Bili 包装（新代码禁止直接用 M3 按钮）；
-- 本轮明确不做：可打断转场、边缘侧滑返回、自定义列表回弹 overscroll（安卓原生拉伸已表达到底）。
-- **v0.61.1 起**：material3 继续跟随 Compose BOM；v0.61.0 曾单独升级 1.5.0-rc01 并开启
-  `MotionScheme.expressive()`（M3 组件内置动画弹簧化），因手感提升不明显已回撤。
-  底部抽屉（ModalBottomSheet）统一 `dragHandle = null`，不再显示顶部拖拽提示条。
-
 ## 1. 总原则
 
 1. **导航类动画固定时长，不跟手势速度联动**：返回手势只提交一次普通 back，
@@ -39,18 +19,18 @@
 | 动效 | 时长 | 曲线 | 说明 |
 | --- | --- | --- | --- |
 | 顶层 Tab ↔ Tab | 0ms | - | 平级瞬时切换，只保留底部导航/内容入场 |
-| 顶层 Tab 内容入场 | 交错 45ms 后 springSnappy（v0.60.0 起） | 弹簧（微过冲落位） | 固定页头/搜索/登录卡不动，只有列表/内容区 |
-| Tab ↔ 详情页 push/pop | **spring（v0.60.0 起，取代固定 500ms tween）** | **临界阻尼 springPage（1.0/320）** | 详情从右整页进入、旧页只退 1/3 宽（iOS 视差）；pop 反向对称 |
+| 顶层 Tab 内容入场 | 320ms 起，每项 +50ms，封顶 650ms；交错 45ms | EmphasizedDecelerate | 固定页头/搜索/登录卡不动，只有列表/内容区 |
+| Tab ↔ 详情页 push/pop | **500ms** | **进出都用 Emphasized（同一条曲线，仅方向相反）** | 完整宽度：详情从右进/向右出，旧页整页向左/上一页从左回位；完全对称 |
 | 详情页 ↔ 详情页 | **500ms** | 同上，进出对称 | 同一套层级页转场 |
 | 预测式返回预演 | 0ms | - | Manifest 关闭 predictive back；不预演 |
-| 迷你播放条显示 | springSnappy（v0.60.0 起） | 弹簧（微回弹） | 上滑 + 淡入；触发条件 = 当前曲目从无到有 |
+| 迷你播放条显示 | 280ms | EmphasizedDecelerate | 上滑 + 淡入；触发条件 = 当前曲目从无到有（v0.57.0 起，不再是图层首次组合） |
 | 迷你播放条隐藏 | 220ms | EmphasizedAccelerate | 下滑 + 淡出；曲目被清空时反向播放 |
 | 迷你条底部避让 | spring | damping 1.0 / stiffness 400 | 无过冲，padding 非负兜底 |
 | 底部导航出现 | 300ms | EmphasizedDecelerate | 高度扩展 + 淡入；Scaffold 高度同步 |
 | 底部导航消失 | 250ms | EmphasizedAccelerate | 高度收缩 + 淡出；迷你条避让同步 |
 | 播放页展开/收起（手指） | 跟手 | 手指位置 | 拖动期间实时；这是交互，不是自动动画 |
-| 播放页松手归位 | spring | damping **0.92** / stiffness 360（v0.60.0） | 带初速度，iOS 抽屉式落位；progress 端部 coerce 在 0..1 |
-| 播放页左右分页（封面 ↔ 歌词） | 跟手 | pager 吸附 = springSettle（v0.60.0 起） | 水平滑动切换；底部进度/控制固定不跟页 |
+| 播放页松手归位 | spring | damping 0.90 / stiffness 320 | 带初速度，有自然回弹但不甩 |
+| 播放页左右分页（封面 ↔ 歌词） | 跟手 | pager 默认 fling 曲线 | 水平滑动切换；底部进度/控制固定不跟页（v0.28.0） |
 | 歌词行高亮（颜色/透明度） | `BiliMotion.LyricsActiveMs`（380ms） | Emphasized | v0.35 起不再缩放字号：当前行主题色填充，非当前行分层透明度 |
 | 歌词自动滚动 | `BiliMotion.LyricsScrollMs`（520ms） | Emphasized | 当前行平滑滚动到视口中心（长缓出，Apple Music 手感）；用户手动滚动后暂停 3s 再恢复 |
 | 歌词上下边缘渐隐 | - | 渐变遮罩（DstIn） | 歌词在面板上下边缘淡出，避免生硬截断 |
@@ -71,5 +51,11 @@
 - 列表入场：`EntranceBaseMs / EntranceStepMs / EntranceMaxMs / EntranceStaggerMs`
 - 播放页弹簧：`AppNavHost` 内 `animatePlayerTo`（交互特殊，保留在调用处）
 - 任何新增动画必须在本表补一行。
-- 按钮/可点击元素：统一用 `BiliButtons.kt` 的包装或 `Modifier.biliClickable`（按下 90ms 缩到
-  0.90~0.97，松手 `springBouncy` 回弹）；新增 M3 直接调用会被视为违规。
+
+## 5. 否决记录（v0.62.0）
+
+- v0.60.0～v0.61.2-demo 曾尝试「iOS 肉感」：按压缩放回弹、弹簧转场/视差、列表入场弹簧、
+  播放页归位弹簧与触觉、Pager 弹簧，以及 Bili 按钮包装层。用户实测无感，v0.62.0 已全部移除，
+  恢复 Material 3 原动效（页面转场固定 500ms Emphasized，按钮用 M3 默认 ripple）。
+- 结论：不要重复引入同类改动（按压缩放/包装层/手写弹簧转场），除非用户明确要求重新设计。
+- v0.61.1 起的独立约定仍然有效：ModalBottomSheet 一律 `dragHandle = null`（不要顶部提示条）。

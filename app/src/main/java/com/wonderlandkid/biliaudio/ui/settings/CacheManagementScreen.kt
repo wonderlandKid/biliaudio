@@ -46,8 +46,6 @@ import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 缓存管理页（设置 → 存储）。
@@ -148,7 +146,7 @@ fun CacheManagementScreen(
                 )
             },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         pendingDelete = null
                         viewModel.delete(item)
@@ -156,7 +154,7 @@ fun CacheManagementScreen(
                 ) { Text("删除") }
             },
             dismissButton = {
-                BiliTextButton(onClick = { pendingDelete = null }) { Text("取消") }
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
             },
         )
     }
@@ -167,7 +165,7 @@ fun CacheManagementScreen(
             title = { Text("清空全部缓存？") },
             text = { Text("会删除所有已缓存的专辑音频（含多 P 全部分 P），无法恢复。") },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         showClearConfirm = false
                         viewModel.clearAll()
@@ -175,7 +173,7 @@ fun CacheManagementScreen(
                 ) { Text("清空", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
             },
         )
     }
@@ -208,7 +206,7 @@ private fun CacheSummaryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            BiliTextButton(onClick = onClearAll) { Text("清空全部") }
+            TextButton(onClick = onClearAll) { Text("清空全部") }
         }
     }
 }
@@ -232,7 +230,7 @@ private fun CacheAlbumCard(
                 )
             },
             trailing = {
-                BiliIconButton(onClick = onDelete) {
+                IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Rounded.DeleteOutline,
                         contentDescription = "删除缓存",

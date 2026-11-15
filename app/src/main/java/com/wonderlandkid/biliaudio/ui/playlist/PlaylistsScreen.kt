@@ -38,8 +38,6 @@ import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /** 我的歌单列表（发现 → 我的歌单）。 */
 @Composable
@@ -60,7 +58,7 @@ fun PlaylistsScreen(
         title = "我的歌单",
         modifier = modifier,
         actions = {
-            BiliIconButton(onClick = { showCreateDialog = true }) {
+            IconButton(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Rounded.Add, contentDescription = "新建歌单")
             }
         },
@@ -107,7 +105,7 @@ fun PlaylistsScreen(
                 )
             },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         val name = newName.trim()
                         if (name.isNotEmpty()) {
@@ -120,7 +118,7 @@ fun PlaylistsScreen(
                 ) { Text("创建") }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showCreateDialog = false }) { Text("取消") }
+                TextButton(onClick = { showCreateDialog = false }) { Text("取消") }
             },
         )
     }

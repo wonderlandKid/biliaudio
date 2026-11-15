@@ -65,8 +65,6 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 诊断日志页（设置 → 诊断与维护 → 诊断日志）。
@@ -227,7 +225,7 @@ fun DiagnosticsScreen(
 
                 // ---- 操作按钮 ----
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    BiliOutlinedButton(
+                    OutlinedButton(
                         onClick = {
                             refresh()
                             scope.launch { snackbarHostState.showSnackbar("已刷新") }
@@ -244,7 +242,7 @@ fun DiagnosticsScreen(
                         Spacer(Modifier.width(Spacing.xs))
                         Text("刷新")
                     }
-                    BiliOutlinedButton(
+                    OutlinedButton(
                         onClick = { copyAll() },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(50),
@@ -261,7 +259,7 @@ fun DiagnosticsScreen(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    BiliOutlinedButton(
+                    OutlinedButton(
                         onClick = { exportLauncher.launch(defaultDiagFileName()) },
                         modifier = Modifier.weight(1f),
                         enabled = !isExporting,
@@ -276,7 +274,7 @@ fun DiagnosticsScreen(
                         Spacer(Modifier.width(Spacing.xs))
                         Text(if (isExporting) "导出中…" else "导出")
                     }
-                    BiliOutlinedButton(
+                    OutlinedButton(
                         onClick = { showClearConfirm = true },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(50),
@@ -380,7 +378,7 @@ fun DiagnosticsScreen(
             title = { Text("清空诊断日志？") },
             text = { Text("清空后无法恢复；如需保留日志请先「复制全部」或「导出」。") },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         showClearConfirm = false
                         Diag.clear()
@@ -392,7 +390,7 @@ fun DiagnosticsScreen(
                 }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showClearConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showClearConfirm = false }) { Text("取消") }
             },
         )
     }

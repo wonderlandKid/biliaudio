@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.61.2-demo）
+# 项目现状与交接（v0.62.0）
 
-> 最后更新：2026-11-15 · 版本 v0.61.2-demo · tag `v0.61.2-demo`（临时手感加强版，确认后回调参数发正式版）（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-15 · 版本 v0.62.0 · tag `v0.62.0`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -62,6 +62,7 @@
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.62.0** 移除 v0.60.0 的「iOS 肉感动画」全部改动（用户实测无感），恢复 Material 3 原动效；保留所有修复
 - **v0.61.1** 回撤 material3 1.5.0-rc01（Expressive 手感不明显）；底部抽屉统一去掉顶部拖拽提示条
 - **v0.61.0** material3 升级 1.5.0-rc01 并全局启用 MotionScheme.expressive（已在 v0.61.1 回撤）
 - **v0.60.0** iOS 式肉感动画第一批：弹簧 token、按压缩放回弹、页面转场视差弹簧、列表/播放条/分页弹簧

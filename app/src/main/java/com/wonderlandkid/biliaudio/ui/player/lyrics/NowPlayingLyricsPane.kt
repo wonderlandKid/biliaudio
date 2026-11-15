@@ -77,7 +77,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /** 用户手动滚动后暂停自动滚动的时长。 */
 private const val AUTO_SCROLL_PAUSE_MS = 3_000L
@@ -352,7 +351,7 @@ private fun LyricsEmptyState(
             },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            BiliTextButton(onClick = onSearch, enabled = !isSearching) {
+            TextButton(onClick = onSearch, enabled = !isSearching) {
                 if (isSearching) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
@@ -363,7 +362,7 @@ private fun LyricsEmptyState(
                 }
                 Text("重新搜索")
             }
-            BiliTextButton(onClick = onImportLocal) {
+            TextButton(onClick = onImportLocal) {
                 Text("导入本地歌词")
             }
         }

@@ -59,7 +59,6 @@ import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.ui.theme.entrance
 import kotlinx.coroutines.launch
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 音乐库页（v0.6.0 改版）：
@@ -282,7 +281,7 @@ private fun SongsTab(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    BiliTextButton(onClick = onPlayAll) {
+                    TextButton(onClick = onPlayAll) {
                         Icon(
                             imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = null,

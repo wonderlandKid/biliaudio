@@ -65,10 +65,6 @@ import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
-import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
-import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 /**
  * 分曲编辑页：把整段专辑音频按时间点切成歌曲。
@@ -116,7 +112,7 @@ fun SplitEditorScreen(
         modifier = modifier,
         snackbarHostState = snackbarHostState,
         actions = {
-            BiliTextButton(onClick = viewModel::saveSplit, enabled = state.canSave) {
+            TextButton(onClick = viewModel::saveSplit, enabled = state.canSave) {
                 if (state.isSaving) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
@@ -310,7 +306,7 @@ private fun AlbumSummaryCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            BiliTextButton(onClick = onPreviewAlbum) {
+            TextButton(onClick = onPreviewAlbum) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,
@@ -350,7 +346,7 @@ private fun AddSegmentPanel(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
-                BiliTextButton(
+                TextButton(
                     onClick = onOpenTextImport,
                     contentPadding = PaddingValues(horizontal = Spacing.sm),
                 ) {
@@ -395,7 +391,7 @@ private fun AddSegmentPanel(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                BiliOutlinedButton(
+                OutlinedButton(
                     onClick = onUseCurrentPosition,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(percent = 50),
@@ -409,7 +405,7 @@ private fun AddSegmentPanel(
                     Spacer(Modifier.width(Spacing.xxs))
                     Text("用当前位置", maxLines = 1)
                 }
-                BiliButton(
+                Button(
                     onClick = onAddSegment,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(percent = 50),
@@ -511,7 +507,7 @@ private fun SegmentRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            BiliIconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = "从此处试听",
@@ -519,7 +515,7 @@ private fun SegmentRow(
                     modifier = Modifier.size(22.dp),
                 )
             }
-            BiliIconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.DeleteOutline,
                     contentDescription = "删除",
@@ -576,7 +572,7 @@ private fun EditSegmentDialog(
             }
         },
         confirmButton = {
-            BiliTextButton(
+            TextButton(
                 onClick = {
                     val parsed = TimeUtils.parseTimeToMs(timeText)
                     when {
@@ -589,7 +585,7 @@ private fun EditSegmentDialog(
             ) { Text("确定") }
         },
         dismissButton = {
-            BiliTextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
 }
@@ -670,7 +666,7 @@ private fun TextImportDialog(
                 )
                 TextImportSummary(result = result, albumDurationMs = albumDurationMs)
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    BiliTextButton(
+                    TextButton(
                         onClick = {
                             if (existingSegmentCount > 0) {
                                 showReplaceConfirm = true
@@ -692,7 +688,7 @@ private fun TextImportDialog(
                             },
                         )
                     }
-                    BiliButton(
+                    Button(
                         onClick = { onImport(false) },
                         enabled = canImport,
                         modifier = Modifier.weight(1f),
@@ -702,7 +698,7 @@ private fun TextImportDialog(
                         Text("追加到末尾", maxLines = 1)
                     }
                 }
-                BiliTextButton(
+                TextButton(
                     onClick = onDismiss,
                     modifier = Modifier.align(Alignment.End),
                 ) {
@@ -723,7 +719,7 @@ private fun TextImportDialog(
                 )
             },
             confirmButton = {
-                BiliTextButton(
+                TextButton(
                     onClick = {
                         showReplaceConfirm = false
                         onImport(true)
@@ -733,7 +729,7 @@ private fun TextImportDialog(
                 }
             },
             dismissButton = {
-                BiliTextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showReplaceConfirm = false }) { Text("取消") }
             },
         )
     }

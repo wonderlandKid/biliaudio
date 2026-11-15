@@ -76,11 +76,6 @@ import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
-import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
-import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
-import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
-import com.wonderlandkid.biliaudio.ui.theme.biliClickable
-import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 /**
  * 专辑详情页：大封面 + 标题/艺术家/BVID 胶囊 + 总时长/曲目数 + 操作按钮 + 分曲列表。
@@ -283,7 +278,7 @@ private fun RowScope.AlbumDetailActions(
             strokeWidth = 2.dp,
         )
     }
-    BiliIconButton(onClick = onMenuClick) {
+    IconButton(onClick = onMenuClick) {
         Icon(Icons.Rounded.MoreVert, contentDescription = "更多操作")
     }
     DropdownMenu(expanded = menuExpanded, onDismissRequest = onMenuDismiss) {
@@ -450,7 +445,7 @@ private fun AlbumHero(
             modifier = Modifier
                 .fillMaxWidth(0.72f)
                 .aspectRatio(1f)
-                .biliClickable(onClick = onOpenCover, pressedScale = 0.93f),
+                .clickable(onClick = onOpenCover),
         ) {
             CoverImage(
                 // 支持用户自定义本地封面（album.coverModel() 优先本地 File，回退 B 站 URL）
@@ -531,7 +526,7 @@ private fun AlbumActionRow(
             .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        BiliButton(
+        Button(
             onClick = onPlayAll,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(percent = 50),
@@ -545,7 +540,7 @@ private fun AlbumActionRow(
             Spacer(Modifier.width(Spacing.xs))
             Text(if (isThisAlbumPlaying) "重新播放" else "播放全部")
         }
-        BiliOutlinedButton(
+        OutlinedButton(
             onClick = if (isMultiPage) onOpenTrackNameEditor else onOpenSplitEditor,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(percent = 50),
@@ -575,12 +570,12 @@ private fun DeleteAlbumDialog(
         title = { Text("删除专辑") },
         text = { Text("确定要删除《$albumTitle》吗？\n分曲信息会一并删除，此操作不可撤销。") },
         confirmButton = {
-            BiliTextButton(onClick = onConfirm, enabled = !deleting) {
+            TextButton(onClick = onConfirm, enabled = !deleting) {
                 Text("删除", color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
-            BiliTextButton(onClick = onDismiss, enabled = !deleting) { Text("取消") }
+            TextButton(onClick = onDismiss, enabled = !deleting) { Text("取消") }
         },
     )
 }
@@ -657,7 +652,7 @@ private fun CoverViewerDialog(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    BiliIconButton(onClick = onDismiss) {
+                    IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "关闭",
@@ -677,7 +672,7 @@ private fun CoverViewerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    BiliButton(
+                    Button(
                         onClick = onSaveCover,
                         modifier = Modifier.weight(1f),
                     ) {
@@ -685,7 +680,7 @@ private fun CoverViewerDialog(
                         Spacer(Modifier.width(Spacing.xs))
                         Text("保存封面")
                     }
-                    BiliButton(
+                    Button(
                         onClick = onChangeCover,
                         enabled = !isApplyingCover,
                         modifier = Modifier.weight(1f),
