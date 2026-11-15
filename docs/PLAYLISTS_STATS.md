@@ -77,6 +77,10 @@
 - 歌单/统计本身持久化在 **Room v4**（playlists / playlist_entries / track_stats），正常退出/重启不丢；
 - 与音乐库归档**分开导出**：设置 → **用户数据** →「歌单与听歌统计备份」；
   - 独立 JSON：`biliaudio-user-data-*.json`，不包含专辑/分曲/封面/缓存；
+  - 顶层字段：`format=biliaudio-user-data`、`version`、`minReaderVersion`、`exportedAt`；
+  - 歌单恢复按 **name** 合并（同名并入同一歌单，条目按 `(source,bvid,page,startMs)` 去重）；
+  - 统计恢复按 `(source,bvid,page,startMs,wholeAlbum)` 定位并与本地 **max 合并**；
+  - 旧备份没有 `minReaderVersion` 时按 1 处理；新备份的该字段旧 App 会忽略（`ignoreUnknownKeys`），双向兼容；
   - 导出条目用 `(source,bvid,page) + startMs` 定位，换机/恢复音乐库后仍能重新关联歌曲；
   - 恢复时按名称合并已有歌单，统计按 `max(playCount, listenedMs)` 合并，避免重复导入导致翻倍；
   - 音乐库归档（Archive v3 bundle）不包含歌单/统计；归档中的 playlists.json 仍只是预留 schema。

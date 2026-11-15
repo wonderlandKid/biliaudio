@@ -1,5 +1,22 @@
 # 版本记录
 
+## v0.62.2（2026-11-15 · tag `v0.62.2`）
+
+**归档/备份 JSON 冻结前收尾（对在用数据零破坏）**
+
+- **歌单域 schema 统一**（`playlists.json` v1，此前从未导出/导入过，无存量文件）：
+  定位主键改为 `albumKey + startMs`，`trackId/title` 降为可选辅助——跨设备重新导入同一专辑后仍能定位；
+- **用户数据备份**加 `minReaderVersion`（旧备份缺字段按 1 处理，新备份旧 App 忽略，双向兼容）；
+- **文档/样例修正**：`albumKey` 示例 `#p1`→`#1`（旧示例会被严格校验拒绝）；补充
+  `archiveId/exportedAt/app`、统计字段与多 P 字段说明；`docs/samples/` 新增 playlists/userdata 样例；
+- **冻结策略落地**：`docs/LIBRARY_ARCHIVE.md` 新增 §10 兼容规则 + §11 字段速查表（冻结版），
+  明确 additive-only、升版本条件、时间格式约定；DECISIONS D89 记录冻结决策；
+- **黄金样例测试**：新增 `ArchiveGoldenSamplesTest`（9 个）锁定 library/segments/manifest/settings/playlists/
+  userdata 样例的解析与回写结构、未知字段兼容、旧备份兼容；`validateAndNormalize` 对整库按 `albumKey`
+  canonical 排序（多次导出字节一致、便于 diff）。
+
+兼容性：library v3 字段零变化，旧整库备份可直接导入；user-data 新旧备份双向兼容；
+playlists 域此前未使用，无迁移成本。验证：216 单测全绿；Debug/Release 构建成功；模拟器冒烟。
 ## v0.62.1（2026-11-15 · tag `v0.62.1`）
 
 **可维护性整理（无功能变更）**

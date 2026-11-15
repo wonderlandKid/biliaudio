@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.62.1）
+# 项目现状与交接（v0.62.2）
 
-> 最后更新：2026-11-15 · 版本 v0.62.1 · tag `v0.62.1`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-15 · 版本 v0.62.2 · tag `v0.62.2`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -62,6 +62,8 @@
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.62.2** 归档/备份 JSON 冻结前收尾：歌单域 schema 统一、user-data 补 minReaderVersion、
+  样例/字段表/冻结策略文档、9 个黄金样例单测（216 测）
 - **v0.62.1** 代码/文档可维护性整理：删除死代码与未使用 token、精简长篇 KDoc、更新 README/AGENTS/TODO
 - **v0.62.0** 移除 v0.60.0 的「iOS 肉感动画」全部改动（用户实测无感），恢复 Material 3 原动效；保留所有修复
 - **v0.61.1** 回撤 material3 1.5.0-rc01（Expressive 手感不明显）；底部抽屉统一去掉顶部拖拽提示条

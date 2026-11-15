@@ -1,0 +1,41 @@
+{
+  "format": "biliaudio-user-data",
+  "version": 1,
+  "minReaderVersion": 1,
+  "exportedAt": 1794051200000,
+  "playlists": [
+    {
+      "name": "通勤",
+      "createdAt": 1794000000000,
+      "updatedAt": 1794051200000,
+      "entries": [
+        {
+          "source": "bilibili",
+          "bvid": "BV1GJ411x7h7",
+          "page": 1,
+          "startMs": 0,
+          "trackTitle": "Never Gonna Give You Up"
+        },
+        {
+          "source": "bilibili",
+          "bvid": "BV1GJ411x7h7",
+          "page": 1,
+          "startMs": 120000,
+          "trackTitle": "Together Forever"
+        }
+      ]
+    }
+  ],
+  "stats": [
+    {
+      "source": "bilibili",
+      "bvid": "BV1GJ411x7h7",
+      "page": 1,
+      "startMs": 0,
+      "wholeAlbum": false,
+      "playCount": 12,
+      "listenedMs": 180000,
+      "lastPlayedAt": 1794051200000
+    }
+  ]
+}

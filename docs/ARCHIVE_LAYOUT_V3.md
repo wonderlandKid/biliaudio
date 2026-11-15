@@ -87,7 +87,7 @@
   "kind": "library",
   "albums": [
     {
-      "albumKey": "bilibili:BV1GJ411x7h7#p1",
+      "albumKey": "bilibili:BV1GJ411x7h7#1",
       "source": "bilibili",
       "bvid": "BV1GJ411x7h7",
       "page": 1,
@@ -134,14 +134,14 @@
       "createdAt": 1794051200000,
       "updatedAt": 1794051200000,
       "items": [
-        { "albumKey": "bilibili:BV1GJ411x7h7#p1", "trackId": "trk_...", "startMs": 0, "title": "Come Together" }
+        { "albumKey": "bilibili:BV1GJ411x7h7#1", "startMs": 0, "trackId": "00000000-0000-4000-8000-000000000001", "title": "Come Together" }
       ]
     }
   ]
 }
 ```
 
-- 引用规则：`trackId`（uid）是主键；`albumKey + startMs` 作为回退定位；`title` 仅展示快照。
+- 引用规则：**`albumKey + startMs` 是定位主键**（跨设备重新导入专辑后仍有效）；`trackId`（uid）仅辅助，`title` 仅展示快照。
 - 导入时找不到 track → 跳过并报告，不自动创建专辑、不猜时间点。
 - 歌单本身独立可分享：`playlist.json`（单歌单）与 bundle 的 playlists 域同 schema。
 - 本地持久化：将来加 Room `playlists` / `playlist_items` 表；不把歌单塞进 library 表。

@@ -4,7 +4,7 @@
 
 B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整张专辑），但用 B 站本身听歌很麻烦：收藏的视频不能当歌曲搜、分曲只能翻评论区分割点、想要「歌词」只能看视频。
 
-> 当前版本 **v0.62.1**（2026-11-15）· 207 个单元测试 · 页面/动效/决策文档见下方「文档索引」。
+> 当前版本 **v0.62.2**（2026-11-15）· 216 个单元测试 · 页面/动效/决策文档见下方「文档索引」。
 
 **哔哩专辑** 把这些视频导入成「专辑 → 歌曲」：
 
@@ -60,7 +60,7 @@ export JAVA_HOME=/opt/android-studio/jbr
 
 ./gradlew :app:assembleRelease    # release（日常安装/性能测试）
 ./gradlew :app:assembleDebug      # debug（仅开发调试）
-./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.62.1: 207 个）
+./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.62.2: 216 个）
 
 # 产物：
 # app/build/outputs/apk/release/app-release.apk（debug 签名，可直接安装）
@@ -150,7 +150,7 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.62.1 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.62.2 版本记录
 - [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)：页面清单/分类/默认壳/例外登记（新增页面前必读）
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记

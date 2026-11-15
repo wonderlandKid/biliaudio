@@ -172,9 +172,12 @@ data class ArchivePlaylist(
 
 @Serializable
 data class ArchivePlaylistItem(
+    /** 专辑稳定键：source:bvid#page */
     val albumKey: String,
-    val trackId: String,
-    val startMs: Long? = null,
+    /** 曲目在专辑时间轴上的起点；与 albumKey 一起作为定位主键（跨设备重导入专辑后仍有效） */
+    val startMs: Long,
+    /** 曲目 UUID（可选辅助；专辑被重新导入后可能变化，不能作为主键） */
+    val trackId: String? = null,
     /** 仅展示快照，不用于定位 */
     val title: String? = null,
 )

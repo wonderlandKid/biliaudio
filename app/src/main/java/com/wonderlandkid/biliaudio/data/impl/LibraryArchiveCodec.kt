@@ -140,10 +140,16 @@ class LibraryArchiveCodec(
             }
             normalized
         }
+        // 整库导出/解析使用 canonical 顺序（albumKey 升序），保证同库多次导出字节级一致、便于 diff
+        val canonicalAlbums = if (archive.kind == ArchiveKind.LIBRARY) {
+            albums.sortedBy { it.albumKey ?: "${it.source}:${it.bvid ?: it.url}#${it.page}" }
+        } else {
+            albums
+        }
         return archive.copy(
             version = LIBRARY_ARCHIVE_VERSION,
             minReaderVersion = LIBRARY_ARCHIVE_MIN_READER_VERSION,
-            albums = albums,
+            albums = canonicalAlbums,
         )
     }
 

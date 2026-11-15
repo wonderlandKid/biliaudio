@@ -1447,3 +1447,19 @@
   按用户要求不做；继续维护这层包装只会增加复杂度。
 - **影响**：代码回到 v0.59.3 动效基线；AGENTS/MOTION.md 增加「不要再引入 iOS 肉感改动」的否决记录；
   207 单测；release v0.62.0。
+
+
+## D89 归档/备份 JSON 冻结（v0.62.2）
+
+- **背景**：整库归档 v3、用户数据备份 v1、单分享 album/segments 已稳定使用，后续不打算大改结构；
+  趁用户量少（个位数）做一次冻结前收尾，避免以后改名/改语义造成备份互不兼容。
+- **冻结对象**：manifest v1 / library v3 / settings v1 / playlists v1 / album+segments 单分享 / user-data v1。
+- **规则**：additive-only——只允许新增可选字段、新增 optional 域文件/未知 type（旧读者忽略）；
+  改字段名/类型/单位/必填性/`albumKey` 规则/时间格式/空值语义必须升 `version` 与 `minReaderVersion`，
+  旧 App 拒绝并提示升级；时间约定：归档元数据用 ISO-8601 字符串，业务时间戳用 epoch 毫秒 Long。
+- **同批修正**：歌单域主键统一为 `albumKey + startMs`（trackId 仅辅助，此前歌单域从未导出）；
+  user-data 补 `minReaderVersion`；修正文档/样例里 `#p1` 的错误示例；新增 playlists/userdata 黄金样例；
+  整库导出按 `albumKey` canonical 排序。
+- **守护**：`ArchiveGoldenSamplesTest` 锁定 docs/samples 结构；文档字段表见 LIBRARY_ARCHIVE.md §10/§11。
+- **影响**：已存在 v3 整库备份可直接导入（字段未变）；用户数据新旧备份双向兼容；
+  模拟器/单测验证 216 个测试全绿。

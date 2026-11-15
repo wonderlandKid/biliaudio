@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 data class UserDataBackup(
     val format: String = FORMAT,
     val version: Int = VERSION,
+    val minReaderVersion: Int = MIN_READER_VERSION,
     val exportedAt: Long = 0L,
     val playlists: List<BackupPlaylist> = emptyList(),
     val stats: List<BackupStat> = emptyList(),
@@ -19,6 +20,7 @@ data class UserDataBackup(
     companion object {
         const val FORMAT = "biliaudio-user-data"
         const val VERSION = 1
+        const val MIN_READER_VERSION = 1
     }
 }
 

@@ -110,6 +110,9 @@ class UserDataBackupRepositoryImpl(
         }
         require(backup.format == UserDataBackup.FORMAT) { "不是 BiliAudio 用户数据备份" }
         require(backup.version <= UserDataBackup.VERSION) { "备份版本高于当前 App，请升级后再导入" }
+        require(backup.minReaderVersion <= UserDataBackup.VERSION) {
+            "备份要求最低读取版本 v${backup.minReaderVersion}，请升级 App 后再导入"
+        }
 
         val albums = albumRepository.albums.first()
         val songs = albumRepository.songs.first()

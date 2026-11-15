@@ -1,8 +1,10 @@
-# 音乐库归档 v3：分域 bundle + 单分享文件（已实现）
+# 音乐库归档 v3：分域 bundle + 单分享文件（已实现 · v0.62.2 起冻结）
 
-> **v3 已实现（v0.10.0）**。整库备份不再是单个 JSON，而是目录 bundle：
-> `manifest.json + library.json + settings.json(可选) + covers/`。
+> **v3 已实现（v0.10.0），v0.62.2 起冻结**：此后只允许「加可选字段/加可选文件」，
+> 改字段/语义必须升 version 并在 §10 记录。整库备份是目录 bundle：
+> `manifest.json + library.json + settings.json(可选) + playlists.json(预留) + covers/`。
 > 设计取舍见 [ARCHIVE_LAYOUT_V3.md](ARCHIVE_LAYOUT_V3.md)；v2 单文件整库格式已废弃，不兼容。
+> `docs/samples/` 下的样例由单测 `ArchiveGoldenSamplesTest` 锁定，改 schema 必须同步样例。
 
 ## 1. 两种形态
 
@@ -63,6 +65,9 @@
   "version": 3,
   "minReaderVersion": 3,
   "kind": "library",
+  "archiveId": "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+  "exportedAt": "2026-11-15T18:00:00+08:00",
+  "app": { "name": "BiliAudio", "version": "0.62.2" },
   "albums": [
     {
       "albumKey": "bilibili:BV1GJ411x7h7#1",
@@ -77,14 +82,14 @@
       "updatedAt": 1794051200000,
       "cover": { "hash": "9f3c...", "mime": "image/jpeg", "byteLength": 183421 },
       "segments": [
-        { "id": "trk_...", "startMs": 0, "endMs": 45000, "title": "Come Together" }
+        { "id": "00000000-0000-4000-8000-000000000001", "startMs": 0, "endMs": 45000, "title": "Come Together" }
       ]
     }
   ]
 }
 ```
 
-- 身份：`albumKey = source:bvid#page`；分曲 `id` 为 UUID；
+- 身份：`albumKey = source:bvid#page`（**严格格式，示例中的 `#p1` 写法已废弃**）；分曲 `id` 为 UUID（track.uid）；
 - `page` 必填 ≥1；有 `pageCount` 时校验 `page ≤ pageCount`；
 - `cidHint` 不可信，导入时重新解析流；
 - 封面对象：bundle 中只有 `hash/mime/byteLength`；单 album 分享可额外带 `dataBase64`（解码后必须与 hash/byteLength 一致；原始字节 ≤2MB）；
@@ -178,3 +183,46 @@
 - `startMs/endMs`：专辑累计时间轴（进度条/歌词）；
 - `sourceOffsetMs`：该曲目在分 P 流内的起点（多 P 通常为 0）；
 - 旧归档字段缺失时按单流专辑恢复，不影响兼容性。
+
+## 10. 冻结与兼容策略（v0.62.2 起）
+
+> **冻结对象**：manifest v1 / library v3 / settings v1 / playlists v1 / 单分享 album+segments / user-data v1。
+> 冻结后按以下规则演进，禁止随意改字段。
+
+允许（不升版本）：
+- 新增**可选**字段（旧读者 `ignoreUnknownKeys` 忽略、缺省值回退）；
+- 新增 `manifest.files[].type`（旧读者忽略未知 type 文件）；
+- 新增域文件（`optional: true`，旧读者忽略）。
+
+必须升版本（`version` + `minReaderVersion`，旧 App 拒绝并提示升级）：
+- 改已有字段名 / 类型 / 单位 / 必填性；
+- 改 `albumKey` 规则、`segments` 空值语义、时间格式；
+- 删除字段（旧读者仍可读，但语义丢失，需升版本说明）。
+
+写作约定（已冻结）：
+- 归档元数据时间：ISO-8601 字符串（`exportedAt` / `manifest.createdAt`）；
+- 业务时间戳：epoch 毫秒 `Long`（`createdAt/updatedAt/lastPlayedAt`、user-data `exportedAt`、playlist 时间）；
+- 导出 JSON 固定 `prettyPrint + 2 空格 + explicitNulls=false`；新增字段按模型声明顺序追加；
+- 导出 albums 按 `albumKey` 升序（diff 友好，实现侧保证）。
+
+## 11. 字段速查（冻结版）
+
+| 域 | 字段 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| 所有域 | `format` / `version` / `minReaderVersion` | ✅ | 版本校验；旧读者遇到更高 version 直接拒绝 |
+| library | `kind` | ✅ | `library` / `album` / `segments`（单分享） |
+| library | `archiveId` / `exportedAt` / `app` | ❌ | 导出会话元数据，仅用于诊断/展示 |
+| album | `albumKey` | ❌* | `source:bvid#page`；有 bvid 时导出必写，导入会校验一致（*仅 `url` 手写场景可缺省） |
+| album | `source` / `bvid` / `url` / `page` | 部分 | `source` 目前只支持 `bilibili`；`bvid` 与 `url` 至少一个 |
+| album | `pageCount` / `cidHint` | ❌ | 提示字段；`cidHint` 导入时重新解析流，不可信 |
+| album | `title/artist/durationMs` | ❌ | 展示/兜底元数据 |
+| album | `createdAt/updatedAt/lastPlayedAt/playCount` | ❌ | 本地时间与统计快照；导入按 max 合并（权威统计以 user-data 备份为准） |
+| album | `cover` | ❌ | `hash + mime + byteLength`；bundle 中禁止 `dataBase64` |
+| segments | `id/startMs/endMs/title` | `startMs` ✅ | `id` = 曲目 UUID；`endMs` 缺省由下一段/专辑时长推导 |
+| segments | `sourceCid/sourcePage/sourceOffsetMs` | ❌ | 多 P 字段；缺省按单流专辑处理 |
+| segments | 整个数组 | ❌ | 缺省/null = 更新时保留原分曲；`[]` = 清空；数组 = 替换 |
+| settings | `audioQuality/darkTheme/diagnosticLogsEnabled` | ❌ | 白名单；默认不覆盖本地，仅 REPLACE 恢复时应用 |
+| playlists | item `albumKey + startMs` | ✅ | 定位主键；`trackId/title` 可选辅助 |
+| user-data | `format/version/minReaderVersion/exportedAt` | ✅* | *`minReaderVersion` 旧备份缺失时按 1 处理 |
+| user-data | playlist `name` | ✅ | 恢复时按 name 合并（重名会并入同一歌单） |
+| user-data | stats `(source,bvid,page,startMs,wholeAlbum)` | ✅ | 恢复时 max 合并；`wholeAlbum=true` 表示未分割虚拟曲目 |

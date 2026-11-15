@@ -3,9 +3,15 @@
   "version": 3,
   "minReaderVersion": 3,
   "kind": "library",
+  "archiveId": "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+  "exportedAt": "2026-11-15T18:00:00+08:00",
+  "app": {
+    "name": "BiliAudio",
+    "version": "0.62.2"
+  },
   "albums": [
     {
-      "albumKey": "bilibili:BV1GJ411x7h7#p1",
+      "albumKey": "bilibili:BV1GJ411x7h7#1",
       "source": "bilibili",
       "bvid": "BV1GJ411x7h7",
       "page": 1,
@@ -19,9 +25,24 @@
       "lastPlayedAt": 1794051200000,
       "playCount": 12,
       "segments": [
-        { "id": "trk_00000000-0000-0000-0000-000000000001", "startMs": 0, "endMs": 45000, "title": "Never Gonna Give You Up" },
-        { "id": "trk_00000000-0000-0000-0000-000000000002", "startMs": 45000, "endMs": 120000, "title": "Whenever You Need Somebody" },
-        { "id": "trk_00000000-0000-0000-0000-000000000003", "startMs": 120000, "endMs": 213000, "title": "Together Forever" }
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "startMs": 0,
+          "endMs": 45000,
+          "title": "Never Gonna Give You Up"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "startMs": 45000,
+          "endMs": 120000,
+          "title": "Whenever You Need Somebody"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "startMs": 120000,
+          "endMs": 213000,
+          "title": "Together Forever"
+        }
       ]
     }
   ]
