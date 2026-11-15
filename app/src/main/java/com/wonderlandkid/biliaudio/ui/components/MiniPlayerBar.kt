@@ -58,6 +58,7 @@ import dev.chrisbanes.haze.blur.hazeBlur
  * 底部悬浮迷你播放条（v0.8.0）。
  *
  * - **Haze 毛玻璃**：backdrop blur + 半透明 tint + 细边框（API31+；低版本/软件渲染 fallback 高不透明度）；
+ *   展开/收起过渡中保持同一材质（v0.59.3 起不再中途切成不透明底）；
  * - **无拖拽提示条**；点击打开正在播放页；
  * - 上滑展开由外层 [com.wonderlandkid.biliaudio.ui.navigation.AppNavHost] 的拖拽逻辑驱动（整条跟手，
  *   连续拉出播放页），本组件只负责视觉；
@@ -74,8 +75,6 @@ fun MiniPlayerBar(
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
-    /** 展开/收起 transitions 中强制不透明，避免半透明迷你条透出下方播放页残影。 */
-    surfaceOpaque: Boolean = false,
     /** 只让内部文字/按钮淡出，卡片背景（Haze/边框）保留到被 PlayerSurface 覆盖。 */
     contentAlpha: Float = 1f,
     dragModifier: Modifier = Modifier,
@@ -141,10 +140,11 @@ fun MiniPlayerBar(
                 alpha(1f)
             }
         }
+        // v0.59.3：材质统一为毛玻璃（展开/收起过渡中不再切成不透明底），
+        // 否则从播放页收回到迷你条时会在最后一刻出现「不透明 → 模糊」的突变。
+        // 过渡中迷你条始终位于播放页表面之下或被同形状的表面背景覆盖，毛玻璃不会透出残影。
         val glassModifier =
-            if (surfaceOpaque) {
-                Modifier.background(containerColor)
-            } else if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Modifier.hazeBlur(
                     input = HazeInput.Sources(hazeState),
                     style = blurStyle,

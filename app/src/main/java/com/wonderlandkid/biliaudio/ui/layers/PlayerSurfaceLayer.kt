@@ -181,7 +181,9 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 .graphicsLayer {
                     // 静止迷你条（p=0）时不画表面背景：胶囊自身是 Haze 玻璃，外接矩形应保持透明。
                     // 开始拖动后表面背景才淡入，和迷你条内容淡出/胶囊转为不透明同步，作为展开中的卡片底。
-                    alpha = appear.value * smoothStep(0f, 0.01f, playerProgress)
+                    // v0.59.3：表面背景淡入/淡出区间从 1% 放宽到 6%，和迷你条材质切换错开，
+                    // 收起最后一段是「表面卡片渐隐 + 毛玻璃逐渐透出页面内容」的渐变，而不是不透明→模糊突变。
+                    alpha = appear.value * smoothStep(0f, 0.06f, playerProgress)
                     this.shape = shape
                     clip = true
                 }
@@ -295,7 +297,6 @@ internal fun BoxScope.PlayerSurfaceLayer(
         onPrevious = { playbackController.previous() },
         onNext = { playbackController.next() },
         hazeState = hazeState,
-        surfaceOpaque = playerProgress > 0.001f,
         contentAlpha = 1f - smoothStep(0f, 0.10f, playerProgress),
         dragModifier = dragModifier,
         onBarBounds = onBarBounds,
