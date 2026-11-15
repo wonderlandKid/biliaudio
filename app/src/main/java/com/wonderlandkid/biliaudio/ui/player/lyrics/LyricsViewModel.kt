@@ -75,19 +75,8 @@ data class LyricsPlaybackState(
 )
 
 /**
- * 全屏歌词页 ViewModel（移植自 SPICaMusic_Android 的 LyricsViewModel 机制，按 BiliAudio 契约收敛）。
- *
- * 数据流：
- * 1. 播放曲目变化（[com.wonderlandkid.biliaudio.data.model.Track.uid]）→ 读本机快照；
- * 2. 有快照 → 直接解析展示（[LyricsUiState.delayMs] 来自快照）；快照被关闭 → 显示「已关闭歌词」；
- * 3. 无快照 → 用 [LyricsText.cleanTitle] 清洗分曲标题后在线搜索，[LyricsMatcher.bestMatch]
- *    按时长/标题挑最匹配候选，命中后保存（`isManual=false`，不覆盖用户手动选择）并解析展示；
- * 4. 展示时间 = 播放进度 + 偏移（正数 = 歌词提前），由 UI 侧按帧插值；本类只提供原始播放状态。
- *
- * 竞态处理：每次切歌/重载都递增 [generation]，异步结果回来时校验 generation，避免旧歌的
- * 搜索结果/解析结果覆盖新歌（对齐参考项目的 generation 机制）。
- *
- * 用 `appViewModel { c -> LyricsViewModel(c.playbackController, c.lyricsRepository, c.appContext) }` 创建。
+ * 歌词页 ViewModel：切歌后先读本机快照，否则在线搜索并自动匹配；用 generation 防止旧结果覆盖新歌。
+ * 数据流与匹配规则见 docs/LYRICS.md。
  */
 class LyricsViewModel(
     private val playbackController: PlaybackController,

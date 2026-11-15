@@ -2,18 +2,7 @@ package com.wonderlandkid.biliaudio.data.net
 
 import java.security.MessageDigest
 
-/**
- * B 站 wbi 请求签名（算法见 docs/API_NOTES.md §1）。
- *
- * 流程：
- * 1. 从 `/x/web-interface/nav` 的 `data.wbi_img.img_url` / `sub_url` 取文件名（去扩展名）作为 imgKey / subKey；
- * 2. 拼成 64 字符串后按 [BiliConstants.MIXIN_KEY_ENC_TAB] 取前 32 位得到 mixinKey；
- * 3. 参数追加 `wts`（秒级时间戳）、按 key 字典序排序、URL 编码后拼 query；
- * 4. `w_rid = md5(query + mixinKey)`，最终 URL 追加 `w_rid`。
- *
- * 编码规则：仅保留 RFC 3986 unreserved 字符（`A-Za-z0-9-._~`），其余按 UTF-8 百分号编码（空格编码为 `%20`）。
- * 该规则已用真实接口验证（含中文/空格关键字）。
- */
+/** B 站 wbi 请求签名；签名流程与 URL 编码规则见 docs/API_NOTES.md §1。 */
 object WbiSigner {
 
     /** 百分号编码用大写 hex（与标准 URL 编码一致，B 站签名校验依赖该规范）。 */

@@ -39,21 +39,7 @@ internal const val EMPTY_LINE_PLACEHOLDER = "· · ·"
 private const val PAST_ALPHA = 0.50f
 private const val FUTURE_ALPHA = 0.28f
 
-/**
- * 单行歌词渲染（全屏歌词页的列表项）。
- *
- * - [isActive]：当前演唱行 → 最深的 onSurface 色 + Bold（比浅色主题背景更深，清楚看出播放位置）；
- * - [isPast]：已唱行 → onSurfaceVariant 较高透明度；未唱行更低透明度（拉开层次）；
- * - `WordsLyric` 且当前行时按帧做逐字卡拉 OK 上色：已唱词 onSurface、未唱词 onSurfaceVariant、
- *   当前词用 `(time - start) / (end - start)` 在两种颜色间 [lerp]（纯 SpanStyle，不画 mask）；
- * - 翻译（`NormalLyric.translation` / `WordsLyric.translation` 第一条）在主行下方小一号展示；
- * - [isSynced] 为 false（无时间轴歌词）时不响应点击。
- *
- * 注意：只有当前逐字行读取 [currentTimeState]，其余行不订阅帧级时间，避免整列表每帧重组。
- *
- * @param currentTimeState 已叠加歌词偏移的当前时间（由歌词页按帧驱动）
- * @param onClick 点击该行 → 跳转到该行时间
- */
+/** 单行歌词：当前行加粗着色、当前逐字行做卡拉 OK 上色、翻译作副行；只有当前逐字行订阅帧级时间。 */
 @Composable
 internal fun LyricLineRow(
     line: LyricItem,

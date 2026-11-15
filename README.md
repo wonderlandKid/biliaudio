@@ -4,7 +4,7 @@
 
 B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整张专辑），但用 B 站本身听歌很麻烦：收藏的视频不能当歌曲搜、分曲只能翻评论区分割点、想要「歌词」只能看视频。
 
-> 当前版本 **v0.56.0**（2026-11-13）· 204 个单元测试 · 页面/动效/决策文档见下方「文档索引」。
+> 当前版本 **v0.62.1**（2026-11-15）· 207 个单元测试 · 页面/动效/决策文档见下方「文档索引」。
 
 **哔哩专辑** 把这些视频导入成「专辑 → 歌曲」：
 
@@ -31,59 +31,16 @@ B 站有很多 UP 主发布整张专辑的完整视频（一个视频 = 一整�
 - 🔎 **可搜索的音乐库**：歌曲 / 专辑搜索，按艺术家、专辑名检索
 - 💾 **音乐库归档（v3 分域 bundle）**：整库备份 = `manifest.json + library.json + settings.json + covers/`，
   单专辑/分割点仍可单 JSON 分享；合并/覆盖前自动备份；旧 CSV/文本块导入继续支持
-- 🎨 **Material 3 扁平设计**：封面大图、大圆角卡片、动态色板，无液态玻璃；颜色主题从当前封面取色，全局同步；颜色主题从当前封面取色，全局同步
+- 🎨 **Material 3 扁平设计**：封面大图、大圆角卡片、动态色板，无液态玻璃；颜色主题从当前封面取色，全局同步；
+- 🔁 **恢复上次播放会话**：冷启动自动恢复上次队列/曲目/进度（暂停态），点播放即续播
 
 ## 界面截图
 
-| 发现（Light） | 播放页（v0.53：全局封面主题 + 普通进度条 + 共享元素展开） | 歌词页（v0.41：跟随封面主题 / 左对齐 / 右下角来源偏移） |
+| 发现（Light） | 播放页（全局封面主题 + 普通进度条 + 共享元素展开） | 歌词页（左对齐 / 右下角来源偏移） |
 | --- | --- | --- |
 | ![home](docs/screenshots/v033_home_light.png) | ![player](docs/screenshots/v049_surface_mid.png) | ![lyrics](docs/screenshots/v041_lyrics_light.png) |
 
-| 播放页（Dark） | 音乐库（无字母分隔头） | 设置（无「关于」分区） |
-| --- | --- | --- |
-| ![player-dark](docs/screenshots/v039_player_dark.png) | ![library](docs/screenshots/v042_library_themed.png) | ![settings](docs/screenshots/v033_settings_light.png) |
-
-| 迷你条→播放页连续展开（上滑中） | 普通进度条 | 歌词页 |
-| --- | --- | --- |
-| ![stretch](docs/screenshots/v034_morph_mid.png) | ![volume](docs/screenshots/v038_volume_reveal.png) | ![drag](docs/screenshots/v038_seek_drag.png) |
-
-| 分曲编辑 | 搜索导入 | 深色主题 |
-| --- | --- | --- |
-| ![split](docs/screenshots/real_19_split_editor.png) | ![search](docs/screenshots/final_02_search.png) | ![dark](docs/screenshots/real_35_home_dark.png) |
-
-| 备份与恢复 | 归档导入预览 | 覆盖全库报告 |
-| --- | --- | --- |
-| ![backup](docs/screenshots/archive_01_settings.png) | ![preview](docs/screenshots/archive_04_preview.png) | ![report](docs/screenshots/archive_09_replace_report.png) |
-
-| 专辑详情（底部迷你播放条） | 歌词来源面板 | 批量导入 |
-| --- | --- | --- |
-| ![album](docs/screenshots/final_04_album_mini.png) | ![source](docs/screenshots/v028_02_lyrics_source_sheet.png) | ![batch](docs/screenshots/real_31_batch_result.png) |
-
-| 分割点文本识别（导入预览） | 文本导入弹窗 | 长专辑 14 首 |
-| --- | --- | --- |
-| ![textimport](docs/screenshots/v03_09_import_text_preview.png) | ![dialog](docs/screenshots/v03_06_text_import_dialog.png) | ![longalbum](docs/screenshots/v03_11_long_album_detail.png) |
-
-| 点歌只播该专辑（播放列表 14 首） | 歌词偏移面板 | 诊断日志 |
-| --- | --- | --- |
-| ![albumqueue](docs/screenshots/v04_playlist_album_only.png) | ![offset](docs/screenshots/v028_03_lyrics_offset_sheet.png) | ![diag](docs/screenshots/v04_diagnostics.png) |
-
-| 自定义封面（专辑详情） | 首页卡片同步 | 导入预览换封面 |
-| --- | --- | --- |
-| ![coversheet](docs/screenshots/v05_cover_custom.png) | ![coverdetail](docs/screenshots/v05_cover_home_sync.png) | ![importcover](docs/screenshots/v05_import_cover.png) |
-
-| 三主页面统一页头（音乐库） | 音乐库三分栏 + A-Z 索引 | 艺术家详情 |
-| --- | --- | --- |
-| ![library](docs/screenshots/v06_library_songs.png) | ![artists](docs/screenshots/v06_library_artists.png) | ![artist](docs/screenshots/v06_artist_detail.png) |
-
-| 迷你播放条收起态 | 目录归档导入结果 | 统一页头（设置） |
-| --- | --- | --- |
-| ![mini](docs/screenshots/v06_mini_collapsed.png) | ![dirimport](docs/screenshots/v06_dir_import_result.png) | ![settings](docs/screenshots/v06_settings.png) |
-
-| 搜索框统一（发现/音乐库一致） | 维测日志开关 |
-| --- | --- |
-| ![search](docs/screenshots/v061_search_unified.png) | ![diag](docs/screenshots/v061_diag_toggle.png) |
-
-更多截图见 [`docs/screenshots/`](docs/screenshots/)。
+> 更多历史截图见 [docs/screenshots/](docs/screenshots/)。
 
 ## 技术栈
 
@@ -103,7 +60,7 @@ export JAVA_HOME=/opt/android-studio/jbr
 
 ./gradlew :app:assembleRelease    # release（日常安装/性能测试）
 ./gradlew :app:assembleDebug      # debug（仅开发调试）
-./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.56.0: 204 个）
+./gradlew :app:testDebugUnitTest  # JVM 单元测试（v0.62.1: 207 个）
 
 # 产物：
 # app/build/outputs/apk/release/app-release.apk（debug 签名，可直接安装）
@@ -193,7 +150,7 @@ docs/           # 设计文档、B站接口笔记、导入/归档格式、截图
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)：当前版本、功能矩阵、验证状态、待办与交接
 - [docs/DECISIONS.md](docs/DECISIONS.md)：关键设计决策（虚拟歌曲/队列语义/归档格式/缓存/歌词等）
 - [docs/DEBUGGING.md](docs/DEBUGGING.md)：诊断日志与排障（转圈、导入、Studio、网络）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.56.0 版本记录
+- [docs/CHANGELOG.md](docs/CHANGELOG.md)：v0.1.0 → v0.62.1 版本记录
 - [docs/PAGE_INVENTORY.md](docs/PAGE_INVENTORY.md)：页面清单/分类/默认壳/例外登记（新增页面前必读）
 - [docs/DESIGN.md](docs/DESIGN.md)：架构设计（含当前状态说明）
 - [docs/API_NOTES.md](docs/API_NOTES.md)：B 站接口实测笔记

@@ -16,32 +16,23 @@ import androidx.compose.foundation.layout.safeDrawing
 
 import com.wonderlandkid.biliaudio.ui.layers.PlayerSurfaceLayer
 
-import com.wonderlandkid.biliaudio.ui.layers.AppLayer
 import com.wonderlandkid.biliaudio.ui.layers.AppLayerHost
-import com.wonderlandkid.biliaudio.ui.layers.layer
 
 import androidx.compose.runtime.LaunchedEffect
 
-import androidx.compose.foundation.shape.RoundedCornerShape
 
-import androidx.compose.ui.zIndex
 
 import android.app.Activity
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -80,7 +71,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -96,7 +86,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.wonderlandkid.biliaudio.player.PlaybackController
 import com.wonderlandkid.biliaudio.ui.album.AlbumDetailScreen
 import com.wonderlandkid.biliaudio.ui.album.MultiPageTrackEditorScreen
 import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
@@ -132,18 +121,8 @@ import kotlinx.coroutines.launch
 internal val LocalMiniPlayerContentInset = compositionLocalOf { 0.dp }
 
 /**
- * 应用导航壳（v0.8.0）。
- *
- * 动画（用户明确要求）：
- * - **全部页面导航使用左右滑动结构**，不再用淡入淡出：
- *   进入 = 从右侧滑入、返回 = 向右滑出，方向严格「从哪来回哪去」；
- *   三个 Tab 之间按 Tab 顺序决定左右方向（发现→音乐库→设置 向右推进）。
- * - **迷你播放条 → 正在播放页 = 上下关系**：迷你条跟手上滑，播放页以底部卡片形式连续展开
- *   （进度 0→1 由拖拽距离连续控制，松手弹簧收敛；下滑/返回键收起），不是跳转淡入。
- * - **歌词页 = 播放页上方覆盖层**（非导航目的地）：从右整页盖在播放页上/向右滑出，
- *   底层始终是播放页；打开时隐藏迷你条与播放页拖拽手势。
- *
- * 布局：NavHost 作为 Haze source；悬浮迷你条 + 播放页卡片覆盖在内容层上；底部导航在播放页展开时隐藏。
+ * 应用导航壳：NavHost + 播放器图层 + 迷你条 inset。
+ * 页面转场/手势/insets 约定见 docs/MOTION.md 与 docs/UI_ARCHITECTURE.md。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -862,7 +841,7 @@ private fun RootTabPage(
 // 对称转场：进入/退出用完全相同的时长与曲线，只改变方向；
 // 不能一个 Decelerate 一个 Accelerate，否则同一对手势会觉得两侧速度不一致。
 private val PageSlideSpec = tween<androidx.compose.ui.unit.IntOffset>(
-    durationMillis = BiliMotion.AxisTotalMs,
+    durationMillis = BiliMotion.PageTransitionMs,
     easing = BiliMotion.Emphasized,
 )
 

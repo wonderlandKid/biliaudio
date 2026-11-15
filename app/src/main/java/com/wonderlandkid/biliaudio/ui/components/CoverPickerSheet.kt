@@ -87,25 +87,16 @@ sealed interface CoverPick {
 }
 
 /**
- * 共享封面选择弹层（导入页 / 专辑详情 / 分曲编辑等复用）。
+ * 共享封面选择弹层（导入/专辑详情/分曲编辑复用）：预览当前封面，支持相册选图 / 网易云搜索 / 恢复 B 站封面。
+ * 只负责选择不写库，结果经 [onPick] 交给调用方保存并关闭。
  *
- * 功能：
- * - 展示当前封面预览；
- * - 「从相册选择」：PickVisualMedia 选图后读取字节，回调 [CoverPick.LocalImage]；
- * - 「网易云搜索封面」：搜索网易云专辑，3 列网格选图，回调 [CoverPick.NetEase]；
- * - [allowRestoreBilibili] 为 true 时可回调 [CoverPick.RestoreBilibili]；
- * - 取消 / 下滑关闭回调 [onDismiss]。
- *
- * 组件内不写库、不修改任何数据，选择结果通过 [onPick] 交给调用方。
- * 搜索状态由 [CoverPickerViewModel]（appViewModel 创建）维护。
- *
- * @param visible 是否展示；为 false 时直接不参与组合
- * @param title 弹层标题（如「更换专辑封面」）
- * @param defaultQuery 网易云搜索框默认关键词（通常是「专辑名 + 艺术家」）
- * @param currentCoverModel 当前封面的 Coil 数据（URL / File / Uri / null），用于预览
- * @param allowRestoreBilibili 是否展示「恢复 B 站封面」（专辑已有自定义封面时传 true）
+ * @param visible 是否展示
+ * @param title 弹层标题
+ * @param defaultQuery 网易云搜索默认关键词
+ * @param currentCoverModel 当前封面 Coil 数据（URL / File / Uri / null）
+ * @param allowRestoreBilibili 是否展示「恢复 B 站封面」
  * @param onDismiss 取消 / 关闭
- * @param onPick 选中封面（调用方保存后自行关闭弹层）
+ * @param onPick 选中结果
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

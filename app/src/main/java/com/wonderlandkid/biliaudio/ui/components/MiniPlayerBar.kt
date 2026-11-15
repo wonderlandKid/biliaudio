@@ -55,14 +55,7 @@ import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
 
 /**
- * 底部悬浮迷你播放条（v0.8.0）。
- *
- * - **Haze 毛玻璃**：backdrop blur + 半透明 tint + 细边框（API31+；低版本/软件渲染 fallback 高不透明度）；
- *   展开/收起过渡中保持同一材质（v0.59.3 起不再中途切成不透明底）；
- * - **无拖拽提示条**；点击打开正在播放页；
- * - 上滑展开由外层 [com.wonderlandkid.biliaudio.ui.navigation.AppNavHost] 的拖拽逻辑驱动（整条跟手，
- *   连续拉出播放页），本组件只负责视觉；
- * - 底部进度线为低对比度 2dp。
+ * 底部悬浮迷你播放条：Haze 毛玻璃 + 点击打开播放页；上滑展开由 AppNavHost 的拖拽逻辑驱动。
  *
  * @param dragModifier 外层的垂直拖拽 Modifier（驱动播放页展开进度）
  */

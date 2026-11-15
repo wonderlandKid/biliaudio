@@ -33,9 +33,6 @@ object BiliTextUtils {
         }
     }
 
-    /** 解析 JSON 里的数字/数字字符串（如播放量、分 P 数），失败返回 0。 */
-    fun parseIntOrZero(raw: String?): Int = raw?.trim()?.toIntOrNull() ?: 0
-
     /**
      * 解 HTML 实体（`&amp;`、`&lt;`、`&#39;`、`&nbsp;`、十进制 `&#119815;`、十六进制 `&#x1D407;` 等）。
      *

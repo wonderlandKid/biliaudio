@@ -63,12 +63,6 @@ data class HomeUiState(
     val isLoggedIn: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    val statsText: String
-        get() = when {
-            isLoading -> "正在加载音乐库…"
-            songCount == 0 && albumCount == 0 -> "音乐库还是空的，导入第一张专辑吧"
-            else -> "$songCount 首歌曲 · $albumCount 张专辑"
-        }
 }
 
 /** 发现页 ViewModel：组合专辑/歌曲/最近/歌单/统计/登录态。 */

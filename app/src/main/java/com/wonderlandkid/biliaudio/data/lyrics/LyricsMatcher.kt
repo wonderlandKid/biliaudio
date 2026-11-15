@@ -2,20 +2,7 @@ package com.wonderlandkid.biliaudio.data.lyrics
 
 import com.wonderlandkid.biliaudio.data.model.OnlineLyricCandidate
 
-/**
- * 在线歌词候选自动匹配。
- *
- * BiliAudio 的曲名来自用户对 B 站视频的分曲标题（先经 [LyricsText.cleanTitle] 清洗），
- * 专辑艺术家是 UP 主、不可靠，因此在线搜索只用「曲名」；候选来自歌词 API 的多来源结果，
- * 需要从中挑出最可能是同一首歌的一条：
- *
- * 1. 标题归一化：全角转半角、小写、去 feat./ft.、去括号后缀（Live/伴奏/版等）、
- *    去常见噪音词、去所有标点与空白，只保留字母/数字/CJK；
- * 2. 标题得分：完全相等（100）> 包含（按长度比 50~90）> 字符/二元组相似度（0~55）；
- * 3. 时长得分：候选时长与曲目时长差 ≤3s 加 40 分，3~20s 线性衰减到 0，>20s 扣 35 分
- *    （防止「晴天」匹配到时长完全不同的无关歌）；
- * 4. 总分低于 [THRESHOLD] 返回 null（宁缺毋滥，UI 显示「暂无歌词」让用户手动选）。
- */
+/** 在线歌词候选自动匹配：标题归一化 + 标题得分 + 时长得分，低于阈值返回 null；评分细节见 docs/LYRICS.md。 */
 object LyricsMatcher {
 
     /** 匹配总分门槛；低于该分数视为没有可信候选。 */

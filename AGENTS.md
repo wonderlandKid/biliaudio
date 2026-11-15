@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.62.0**（tag `v0.62.0`，2026-11-15；release commit 以 `git rev-parse v0.62.0` 为准）
+- **版本：v0.62.1**（tag `v0.62.1`，2026-11-15；release commit 以 `git rev-parse v0.62.1` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**207 个**（v0.62.0；含 7 个 UI 架构守卫）
+- 单元测试：**207 个**（v0.62.1；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.62.0: 207 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.62.1: 207 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -173,6 +173,19 @@ scripts/screenshot.sh home 8
     - `ui/layers/AppLayer.kt` 是唯一深度来源；新增长期覆盖层必须在这里登记。
     - 系统 Window（Dialog/Popup/IME/状态栏）不受应用内层控制，产品要求「某层永远高于弹层」时必须用应用内弹层。
 
+## 可维护性约定（v0.62.1 起）
+
+1. **行内注释只写“为什么/约束”**，1~3 行为宜；历史背景、格式规范、评分算法等长篇内容放 docs/，
+   并在注释里给文档路径（如 `见 docs/LYRICS.md`）。已按此标准精简 17 处超长 KDoc。
+2. **不要留死代码**：未使用的组件/工具函数/token 及时删除（v0.62.1 清理了 AlbumShelf/AlbumCompactRow、
+   CoverGlowBackground/SquareCover、NowPlayingBadge、rememberPageEntrancePlay、未使用的 BiliMotion token、
+   Dimens token、Diag.exportToFile、若干 data 层 helper）；新增后 6 个月无人引用的代码优先怀疑是死代码。
+3. **token 与公共组件从实际使用反推**：`BiliMotion` 只保留在用 token；新增前先确认引用点，
+   改完 `./gradlew :app:compileDebugKotlin` 检查。
+4. **文档与代码同 PR/同版本更新**：改行为/接口/约定时同步更新 CHANGELOG、PROJECT_STATUS、
+   DECISIONS（重大决策）与相关专题文档；README 只放“能干什么 + 怎么跑 + 文档索引”，不写版本细节。
+5. **发版前检查**：`git status` 无遗漏文件、无临时调试代码（`TEMP`/`TODO` 调试打印）、文档链接有效。
+
 ## 文档索引
 
 | 文档 | 内容 |
@@ -180,7 +193,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.62.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.62.1 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

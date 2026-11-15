@@ -2,20 +2,7 @@ package com.wonderlandkid.biliaudio.data.lyrics
 
 import com.wonderlandkid.biliaudio.data.model.LyricItem
 
-/**
- * YRC 格式歌词解析器（移植自 SPICaMusic_Android `feature-lyrics-data` 的 YrcParser）。
- *
- * YRC 是逐字时间轴格式：每个字符都有独立的时间戳，支持卡拉 OK 式逐字高亮。
- * 行格式：`[行开始时间,行持续时间](字1开始偏移,字1持续,字1空格)文1(字2...)...`
- *
- * 示例：
- * ```
- * [0,268](0,23,0)作(23,23,0)词(46,11,0)：(57,346,0)A(403,11,0)-(414,450,0)L(864,11,0)I
- * ```
- *
- * 说明：参考项目用 Timber 记录解析异常；本项目不引入该依赖，解析失败的行静默跳过
- * （整体解析异常时返回空列表，由上层 `LyricsParser` 给出中文错误提示）。
- */
+/** YRC 逐字歌词解析器；格式与容错规则见 docs/LYRICS.md。 */
 object YrcParser {
 
     /** 单行 YRC 行头：`[行开始时间,行持续时间]` 后紧跟逐字标记 `(...)`。 */

@@ -5,31 +5,8 @@ import com.wonderlandkid.biliaudio.util.Diag
 import kotlin.math.roundToLong
 
 /**
- * 分割点文本解析器。
- *
- * 把用户从评论区/专辑信息里粘贴的「歌名 + 时间点」列表识别为 [SegmentSpec]。
- * 支持（可混用、每行独立判断）：
- *
- * ### A. 编号 + 歌名 + 时间（时间在后）
- * ```text
- * 1.Breakaway00:00
- * 2.Since U Been Gone03:57
- * ```
- * ### B. 时间 + 歌名（时间在前）
- * ```text
- * 00:00 Tap Out
- * 03:42 All The Time
- * ```
- * ### C. 歌名 + 时间（时间在后，允许前导空格/无空格）
- * ```text
- *  Come Together00:00
- * Something04:20
- * Oh! Darling 10:50
- * ```
- *
- * 容错：全角数字/冒号、`h:mm:ss`、毫秒、编号分隔符（`.`/`、`/`)`/`）`）、
- * 前后分隔符（`-`/`·`）会被规范化；无法识别的行放入 skippedLines 由 UI 提示。
- * 时间点按升序排序，重复时间只保留第一条；标题为空时自动命名「曲目 N」。
+ * 分割点文本解析器：把「歌名 + 时间点」列表识别为 SegmentSpec。
+ * 支持（可混用）编号+歌名+时间 / 时间+歌名 / 歌名+时间；格式细节见 docs/IMPORT_FORMATS.md。
  */
 object SplitTextParser {
 

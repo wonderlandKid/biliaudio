@@ -28,10 +28,3 @@ internal fun JsonObject.stringOrNull(key: String): String? {
 
 internal fun JsonObject.intOrNull(key: String): Int? = stringOrNull(key)?.trim()?.toIntOrNull()
 
-internal fun JsonObject.longOrNull(key: String): Long? = stringOrNull(key)?.trim()?.toLongOrNull()
-
-internal fun JsonObject.boolOrNull(key: String): Boolean? = when (stringOrNull(key)?.trim()?.lowercase()) {
-    "true", "1" -> true
-    "false", "0" -> false
-    else -> null
-}

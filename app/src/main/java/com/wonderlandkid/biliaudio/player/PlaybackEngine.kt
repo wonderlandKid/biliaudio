@@ -45,17 +45,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * 单例播放引擎：全局唯一的 [ExoPlayer] + 专辑分曲队列 + [PlaybackState] 状态流。
- *
- * 关键决策（见 docs/DESIGN.md）：
- * - 队列元素 = 一首歌：`MediaItem(audioUrl)` + `ClippingConfiguration(track.startMs, track.endMs)`；
- * - 拉流数据源 = OkHttp（B 站必须带 UA/Referer/Cookie），请求头按 URL 从解析结果动态追加；
- * - 进度：曲内进度 = `player.currentPosition`（裁剪后从 0 开始），专辑绝对进度 = `track.startMs + 曲内进度`；
- * - 播放出错：强制刷新当前专辑的流并恢复本次曲内位置，**只重试一次**；
- * - 音频焦点 / 耳机拔出由 ExoPlayer 自身处理（`handleAudioFocus = true` + `handleAudioBecomingNoisy`）。
- *
- * 生命周期：由 `AppContainer` 通过 [getOrCreate] 单例懒加载；[PlaybackService] 用同一个 ExoPlayer
- * 构建 MediaSession。UI 只依赖 [PlaybackController] 接口，不直接接触 ExoPlayer。
+ * 单例播放引擎：唯一 ExoPlayer + 专辑分曲队列 + PlaybackState。
+ * 队列语义/裁剪/进度映射/错误重试见 docs/DESIGN.md 与 docs/DECISIONS.md。
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 class PlaybackEngine private constructor(

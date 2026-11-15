@@ -73,14 +73,6 @@ data class LibraryUiState(
 ) {
     val isSearchActive: Boolean get() = query.isNotBlank()
 
-    /** 页头副标题：搜索时显示「找到」数量。 */
-    val headerSubtitle: String
-        get() = when {
-            // 首次加载/切页瞬间避免显示「0 首歌曲」的空态错觉
-            isLoading -> "正在加载音乐库…"
-            isSearchActive -> "找到 ${songs.size} 首歌曲 · ${albums.size} 张专辑"
-            else -> "${songs.size} 首歌曲 · ${albums.size} 张专辑"
-        }
 }
 
 /**

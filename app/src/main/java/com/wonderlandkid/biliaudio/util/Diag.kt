@@ -3,21 +3,13 @@ package com.wonderlandkid.biliaudio.util
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * 维护/测试诊断日志。
- *
- * 用途：方便用户反馈问题时直接复制/导出最近日志，定位播放、视频缓冲、导入、网络等链路问题。
- *
- * 特点：
- * - 内存环形缓冲（最近 [MAX_LINES] 行），不占用存储、不影响性能；
- * - 同时输出到 Logcat（tag = `BiliDiag`），开发期可用 `adb logcat -s BiliDiag` 查看；
- * - 支持复制 / 清空 / 导出到文件（设置 → 诊断日志）；
- * - 仅记录技术链路信息，不记录 Cookie / 账号敏感信息（调用方注意不要传入）。
+ * 诊断日志：内存环形缓冲 + Logcat（tag `BiliDiag`），支持复制/清空/导出（设置 → 诊断日志）。
+ * 只记录技术链路，禁止写入 Cookie/账号等敏感信息；tag 规范见 docs/DEBUGGING.md。
  */
 object Diag {
 
@@ -83,20 +75,6 @@ object Diag {
     fun lineCount(): Int = synchronized(lock) { buffer.size }
 
     fun clear() = synchronized(lock) { buffer.clear() }
-
-    /** 导出最近日志到应用私有目录 `files/logs/`，返回文件。 */
-    fun exportToFile(context: Context): File {
-        val dir = File(context.applicationContext.filesDir, "logs").apply { mkdirs() }
-        val file = File(dir, "bili-diag-${fileClock.get().format(Date())}.log")
-        val header = buildString {
-            appendLine("BiliAudio 诊断日志")
-            appendLine(deviceInfo(context))
-            appendLine("导出于: ${wallClock.get().format(Date())}")
-            appendLine("-----------------------------")
-        }
-        file.writeText(header + snapshot())
-        return file
-    }
 
     fun deviceInfo(context: Context): String {
         val versionName = runCatching {

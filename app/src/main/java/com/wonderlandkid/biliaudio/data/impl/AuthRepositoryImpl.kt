@@ -21,19 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * B 站账号仓库：扫码登录 + Cookie 持久化 + nav 登录态校验。
- *
- * 装配（AppContainer，注意先创建 streamResolver 再注入回调）：
- * ```
- * val authRepository = AuthRepositoryImpl(
- *     context = appContext,
- *     api = biliApi,
- *     cookieStore = cookieStore,
- *     scope = appScope,
- *     onSessionChanged = { streamResolverImpl.invalidateAll() },  // 登录/退出后清媒体流缓存
- * )
- * ```
- * 冷启动时用本地缓存的账号信息立即显示登录态，再调 [refresh] 向 B 站校验。
+ * B 站账号仓库：扫码登录、Cookie 持久化、冷启动登录态校验。
+ * 装配顺序（先 streamResolver 再注入回调）见 AppContainer，日志见 docs/DEBUGGING.md。
  */
 class AuthRepositoryImpl(
     context: Context,

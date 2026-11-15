@@ -171,9 +171,7 @@ sealed interface ImportResult {
 data class BatchImportReport(
     val results: List<ImportResult>,
 ) {
-    val successCount: Int get() = results.count { it is ImportResult.Success }
-    val failureCount: Int get() = results.count { it is ImportResult.Failure }
-}
+    val successCount: Int get() = results.count { it is ImportResult.Success }}
 
 /** B 站相关接口错误。 */
 class BiliApiException(
@@ -211,9 +209,7 @@ data class CoverCandidate(
     val thumbnailUrl: String,
     /** 原图（用于下载保存） */
     val fullUrl: String,
-) {
-    val displaySubtitle: String get() = if (artist.isBlank()) title else "$artist · $title"
-}
+) {}
 
 /** 用户自建歌单（歌曲通过稳定 trackUid 关联）。 */
 @Immutable

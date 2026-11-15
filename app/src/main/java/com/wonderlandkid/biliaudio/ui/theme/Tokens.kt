@@ -62,11 +62,7 @@ object Spacing {
 }
 
 object Dimens {
-    val screenPadding = 16.dp
     val cardCorner = 22.dp
-    val coverCorner = 16.dp
-    val bottomBarHeight = 64.dp
-    val miniPlayerHeight = 64.dp
 }
 
 /**

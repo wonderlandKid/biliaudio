@@ -189,32 +189,3 @@ private fun agentIds(value: String): List<String> =
     value.split(Regex("[\\s,]+"))
         .filter { it.isNotBlank() }
         .distinct()
-
-fun LyricItem.toNormal(): LyricItem.NormalLyric? {
-    if (this is LyricItem.NormalLyric) return this
-    if (this is LyricItem.WordsLyric) {
-        apply {
-            val translationText = translation.firstOrNull { it.content.isNotBlank() }?.content
-            val sentence =
-                getSentenceContent()
-                    .takeIf { it.isNotBlank() }
-                    ?: return null
-
-            return LyricItem.NormalLyric(
-                content = sentence,
-                translation = translationText,
-                time = this.time,
-                key = this.key,
-                phonetic = phonetic,
-                agent = agent,
-                agents = agents,
-                translationVariants = this.translation,
-                transliterations = transliterations,
-                songPart = songPart,
-                blockIndex = blockIndex,
-            )
-        }
-    }
-
-    return null
-}

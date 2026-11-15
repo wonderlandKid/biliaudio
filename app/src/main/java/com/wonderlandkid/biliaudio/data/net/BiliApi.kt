@@ -21,21 +21,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * B 站 API 客户端（真实接口，已用 curl 验证）。
- *
- * 职责：
- * - 统一限速（≥300ms/次，避免风控）、失败重试 1 次、Set-Cookie 自动落盘；
- * - 视频信息 / 搜索 / DASH 播放流（wbi 签名，失败自动降级非 wbi 端点）；
- * - 扫码登录 generate/poll；
- * - wbi 密钥缓存（30 分钟）；
- * - 提供媒体播放请求头 [mediaHeaders] 和 Cookie 快照 [cookieSnapshot]。
- *
- * 构造方式（AppContainer 装配）：
- * ```
- * val cookieStore = CookieStore(context)
- * val api = BiliApi(BiliHttp.createClient(cookieStore), cookieStore)   // 推荐
- * // 或 BiliApi(cookieStore) 内部自动创建 OkHttpClient
- * ```
+ * B 站 API 客户端：统一限速/重试/Cookie 落盘，提供视频信息、搜索、播放流、扫码登录等接口。
+ * 接口与实测记录见 docs/API_NOTES.md；由 AppContainer 装配。
  */
 class BiliApi(
     private val client: OkHttpClient,
@@ -74,9 +61,6 @@ class BiliApi(
 
     /** 当前 Cookie 快照，用于媒体流缓存判断登录态是否变化。 */
     fun cookieSnapshot(): String = cookieStore.allCookieHeader()
-
-    /** 是否已登录（本地有登录 Cookie）。 */
-    fun hasLoginCookie(): Boolean = cookieStore.hasSession()
 
     /**
      * 未登录时也建议携带 buvid 等基础 Cookie，减少风控；失败不阻断主流程。

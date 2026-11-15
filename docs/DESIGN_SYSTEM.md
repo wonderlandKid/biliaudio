@@ -73,7 +73,6 @@
 | `BiliGroupItem` | 分组内标准条目（leading/title/subtitle/trailing） | `onClick=null` = 纯展示；有回调 = 整行可点击 |
 | `BiliAlbumRow` | 专辑行（封面 48dp + 标题/艺术家 + trailing） | 打开专辑详情 |
 | `TrackRow` / `SongRow` | 歌曲行 | 必须真正播放；当前曲高亮 |
-| `AlbumCompactRow` | 旧版紧凑专辑行 | 仅历史场景；新页面优先 `BiliAlbumRow` |
 
 ### 2.4 状态 / 搜索 / 媒体
 

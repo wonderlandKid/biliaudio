@@ -41,45 +41,8 @@ data class BatchParseResult(
 )
 
 /**
- * 批量导入文本解析器。
- *
- * **格式规范以 docs/IMPORT_FORMATS.md 为唯一依据，本类严格实现该文档**，支持三种格式：
- *
- * ### A. JSON 数组
- * ```json
- * [
- *   { "bvid": "BV1GJ411x7h7", "title": "专辑名", "artist": "艺术家",
- *     "mode": "single", "segments": [ { "start": "00:00", "name": "曲目一" } ] }
- * ]
- * ```
- * - `bvid` 也可写成 `url`（B 站视频链接）；
- * - `title` / `artist` / `mode` / `segments` 均可省略；`mode` 取 `single`（默认）或 `multipage`；
- * - `start` 支持秒数、`mm:ss`、`mm:ss.SSS`、`hh:mm:ss`；
- * - 标题/歌名为空时自动命名，分曲名规则为 `曲目 N`。
- *
- * ### B. CSV（5 列，每行一首歌，同一 BV 自动合并为一张专辑）
- * ```text
- * BV号,专辑名,艺术家,时间点,歌名
- * BV1GJ411x7h7,专辑名,艺术家,00:00,曲目一
- * ```
- * - 专辑名 / 艺术家可留空（写成 `,,`），时间点必填，歌名可空（自动 `曲目 N`）；
- * - 支持带表头（首行含 bvid / BV号 / 专辑+时间 等关键字时跳过）。
- *
- * ### C. 文本块（贴评论区分割点）
- * ```text
- * BV1GJ411x7h7 专辑名
- *   00:00 曲目一
- *   03:21 曲目二
- *
- * BV1uv411q7Mv 另一张专辑
- *   00:00 第一首
- * ```
- * - 以 BV/av/链接开头的非缩进行开始一张新专辑，行内剩余文本为专辑名（可空）；
- * - 其后的缩进行（行首空白）为分曲：`时间点 歌名`；
- * - 专辑块之间用空行分隔。
- *
- * 自动识别顺序：JSON → CSV → 文本块；全部失败时逐行按「无分曲的单专辑」兜底再试一次。
- * 单个条目解析失败不影响其他条目，错误以 [BatchParseError] 返回（中文，可直接展示）。
+ * 批量导入文本解析器：支持 JSON / CSV / 文本块三种格式，自动识别顺序 JSON → CSV → 文本块。
+ * 格式规范与容错规则见 docs/IMPORT_FORMATS.md；单条解析失败不影响其它条目。
  */
 class BatchImportParser(private val json: Json = BiliJson.instance) {
 

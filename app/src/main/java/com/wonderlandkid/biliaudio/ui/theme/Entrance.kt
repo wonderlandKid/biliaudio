@@ -2,10 +2,8 @@ package com.wonderlandkid.biliaudio.ui.theme
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -57,15 +55,4 @@ fun Modifier.entrance(
         alpha = p
         translationY = (1f - p) * EntranceTranslationDp.dp.toPx()
     }
-}
-
-/**
- * 页面首次进入时把 [play] 从 false 切到 true（触发入场动画）。
- * 用普通 remember：切走再切回来时组件重新进入组合，会再次播放。
- */
-@Composable
-fun rememberPageEntrancePlay(): Boolean {
-    var play by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { play = true }
-    return play
 }

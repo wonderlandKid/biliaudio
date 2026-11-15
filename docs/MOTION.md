@@ -47,7 +47,7 @@
 
 ## 4. 调参入口
 
-- 页面/局部时长：`BiliMotion.PageTransitionMs / BottomBarEnterMs / MiniPlayerEnterMs / ...`
+- 页面/局部时长：`BiliMotion.PageTransitionMs / MiniPlayerEnterMs / MiniPlayerExitMs / ...`
 - 列表入场：`EntranceBaseMs / EntranceStepMs / EntranceMaxMs / EntranceStaggerMs`
 - 播放页弹簧：`AppNavHost` 内 `animatePlayerTo`（交互特殊，保留在调用处）
 - 任何新增动画必须在本表补一行。

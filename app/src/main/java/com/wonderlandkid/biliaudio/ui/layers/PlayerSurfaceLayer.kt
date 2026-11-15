@@ -50,23 +50,8 @@ import dev.chrisbanes.haze.HazeState
 import kotlin.math.roundToInt
 
 /**
- * 播放器唯一表面（v0.48）。
- *
- * 迷你条和播放页不再是两个互相遮挡的层，而是**同一个 PlayerSurface**：
- * - p=0：surface 边界等于迷你条 rect；
- * - p=1：surface 边界铺满屏幕；
- * - 中间：surface 的 top/bottom/圆角连续插值，播放页内容在 surface 内被裁剪；
- * - 迷你条内容只在前 5% 淡出，surface 本身始终是一个圆角卡片。
- *
- * v0.57.0 修复：
- * 1. 进场动画（v0.56 及以前）绑定在「本层首次组合」上，而专辑页等路由上本层在点播放前
- *    就已经处于组合中，动画早早跑完，导致迷你条**突然出现**。现在改为按「是否正在播放」
- *    驱动，并且迷你条只保留**一个稳定的调用点**（以前 rect 未测量时走 early-return 分支
- *    再渲染一个 MiniPlayerBar，测到 rect 后换成主分支实例，会中断 AnimatedVisibility 进场动画）。
- * 2. 顶部下拉关闭热区从「播放页内容」里提出来单独常驻组合：以前它随 `p>=0.06` 的播放页内容
- *    一起被销毁，如果手指还在拖动，draggable 节点在 detach 状态下会丢弃 onDragStopped，
- *    玩家进度就卡死在 0.06 附近，迷你条看起来「完全卡住」。现在热区跟随 surface 平移、
- *    收起态放到屏幕外，不会在拖拽中途消失。
+ * 播放器唯一表面：迷你条与播放页是同一个 surface，progress（0..1）连续控制边界与收放动画。
+ * 原理见 docs/MOTION.md；v0.57.0 的进场/手势修复见 docs/DECISIONS.md。
  */
 @Composable
 internal fun BoxScope.PlayerSurfaceLayer(

@@ -1,5 +1,25 @@
 # 版本记录
 
+## v0.62.1（2026-11-15 · tag `v0.62.1`）
+
+**可维护性整理（无功能变更）**
+
+- 删除死代码与未使用资源：
+  - UI 组件：`AlbumShelf`、`AlbumCompactRow`、`CoverGlowBackground`、`SquareCover`、
+    `NowPlayingBadge`、`rememberPageEntrancePlay`、`DetailContentTopPadding`；
+  - `BiliMotion` 未使用 token（Standard/Fade/TopLevel/SharedAxis/BottomBar 等）与 3 个未使用 spring 函数；
+    `Dimens` 未使用 token（screenPadding/coverCorner/bottomBarHeight/miniPlayerHeight）；
+  - `HomeUiState.statsText`、`LibraryUiState.headerSubtitle`（未使用计算属性）；
+  - `Diag.exportToFile`（诊断页已有 SAF 导出实现）、未使用的 data 层 helper
+    （`longOrNull/boolOrNull/parseIntOrZero/hasLoginCookie/hasAny/displaySubtitle/failureCount/LyricItem.toNormal`）。
+- 精简 17 处超长 KDoc（导入格式、wbi、歌词、播放器表面、导航壳等）：代码内只留 1~3 行结论，
+  细节统一指向 docs/IMPORT_FORMATS.md、docs/API_NOTES.md、docs/LYRICS.md、docs/MOTION.md、docs/DECISIONS.md。
+- 清理 28 处无用的 import；`PageSlideSpec` 改用 `BiliMotion.PageTransitionMs`（语义更清晰）。
+- 文档整理：README 更新到 v0.62.1（207 测、补会话恢复、截图区精简并链到 docs/screenshots）；
+  AGENTS 新增「可维护性约定」（注释标准/禁止死代码/文档同步/发版检查）；
+  TODO.md 精简为待办 + 维护 backlog；DESIGN_SYSTEM/MOTION 移除已删除组件与 token 的引用。
+
+验证：207 单测全绿；Debug/Release 构建成功；模拟器冒烟（发现/音乐库/设置/播放页/抽屉）。
 ## v0.62.0（2026-11-15 · tag `v0.62.0`）
 
 **移除 v0.60.0 引入的「肉感动画」全部改动（用户实测无感），恢复 Material 3 原动效；保留所有修复**

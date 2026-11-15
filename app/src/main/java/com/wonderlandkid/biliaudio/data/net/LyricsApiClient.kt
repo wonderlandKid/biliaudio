@@ -11,21 +11,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-/**
- * 在线歌词 API 客户端（参考 SPICaMusic_Android `feature-lyrics-data` 的 LyricsApi/ApiClient，
- * 用本项目已有的 OkHttp + kotlinx.serialization 实现，不额外引入 Retrofit/Moshi/Sandwich）。
- *
- * 接口（实测可用，返回多来源歌词）：
- * ```
- * GET http://106.54.25.152:4141/api/lyrics?title=<曲名>&artist=<歌手>
- * → { "code": 200, "message": "...", "data": [
- *       { "id": 1, "name": "...", "artist": "...", "album": "...",
- *         "albumArt": "...", "duration": 269, "lyrics": "..." } ] }
- * ```
- * - `duration` 单位是秒；`artist` 为空时省略该参数（BiliAudio 的艺术家是 UP 主，不可靠，
- *   自动匹配只按曲名搜索，见 [com.wonderlandkid.biliaudio.data.lyrics.LyricsMatcher]）；
- * - 网络失败 / 非 200 / JSON 解析异常统一返回空列表并记录 [Diag] 日志，不向调用方抛异常。
- */
+/** 在线歌词 API 客户端（OkHttp + kotlinx.serialization）；接口与降级规则见 docs/LYRICS.md，失败返回空列表。 */
 class LyricsApiClient(
     private val client: OkHttpClient = defaultClient(),
 ) {

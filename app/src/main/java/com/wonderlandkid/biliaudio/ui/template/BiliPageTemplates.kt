@@ -19,7 +19,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.wonderlandkid.biliaudio.ui.theme.Spacing
 
 /**
  * 页面模板（docs/UI_ARCHITECTURE.md）：
@@ -106,5 +105,3 @@ fun BiliDetailScaffold(
     }
 }
 
-/** 层级页面顶栏内容区统一顶部间距（需要展示页内大标题时使用）。 */
-val DetailContentTopPadding = Spacing.sm
