@@ -1345,3 +1345,21 @@
 - **影响**：`PlayerSurfaceLayer`（交接逻辑）、`CoverImage`（可选参数，普通封面不受影响）；
   207 单测；release v0.59.1。以后调整播放页封面尺寸/圆角时，必须同步 overlay 的 cornerRadius 与 morph，
   否则会在 p=1 切换时露馅；overlay 一律固定解码尺寸。
+
+
+## D84 根 Tab 内容从迷你条后面滚过（v0.59.2）
+
+- **日期**：2026-11-15
+- **背景**：用户反馈静止迷你条「像一个外接矩形色块」：胶囊四角处看不到下面的内容，
+  页面上方标题/卡片在胶囊上沿被裁出一条平线，看起来像被矩形遮挡。
+- **原因**：页面内容区（`Page`/`RootTabPage`）为迷你条预留了整条高度，内容视口在**胶囊上沿结束**；
+  平线以下只剩页面背景色，胶囊玻璃又与页面背景色接近，于是整个外接矩形看上去是一块浅色矩形。
+  不是迷你条绘制了矩形。
+- **决策**：
+  1. 根 Tab（发现/音乐库/设置）页面内容改为**从迷你条后面滚过去**：`tabBottomExtra` 只保留底部导航高度，
+     迷你条高度不再裁内容视口；滚到底时通过列表 `contentPadding` 加 `LocalMiniPlayerContentInset`
+     保证最后一项停在迷你条上方；
+  2. 详情页、登录/导入/编辑等带底部表单按钮的页面保持原样（`Page(applyMiniInset=true)` 仍预留迷你条空间），
+     避免悬浮条遮挡按钮；以后若要统一成「全页面滚过」，需要逐页把留白改成列表 contentPadding 后再切。
+- **影响**：AppNavHost（`tabBottomExtra`/Local 可见性）、HomeScreen/LibraryScreen/SettingsScreen 列表 padding；
+  207 单测；release v0.59.2。改页面底部布局时注意：内容必须能滚到迷你条上方，别让最后一项被玻璃盖住。

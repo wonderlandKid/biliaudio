@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.settings
 
+import com.wonderlandkid.biliaudio.ui.navigation.LocalMiniPlayerContentInset
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -173,7 +174,7 @@ fun SettingsScreen(
             contentPadding = PaddingValues(
                 // 与发现/音乐库一致：页头由 BiliPageHeader 自带水平 Spacing.lg
                 top = Spacing.md,
-                bottom = Spacing.xxxl,
+                bottom = Spacing.xxxl + LocalMiniPlayerContentInset.current,
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {

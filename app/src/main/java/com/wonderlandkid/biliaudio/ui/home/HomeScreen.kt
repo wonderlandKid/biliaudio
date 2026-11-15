@@ -112,10 +112,12 @@ private fun HomeContent(
     listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
+    val miniPlayerInset = com.wonderlandkid.biliaudio.ui.navigation.LocalMiniPlayerContentInset.current
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg),
+        // 迷你条可见时页面内容从其后面滚过，底部留出迷你条高度，滚到底最后一项不会被挡住。
+        contentPadding = PaddingValues(top = Spacing.md, bottom = Spacing.lg + miniPlayerInset),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         item(key = "header") { HomeHeader() }

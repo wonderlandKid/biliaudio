@@ -129,7 +129,7 @@ import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.launch
 
 /** 当前迷你条需要让出的底部内容高度；由 AppNavHost 供给，Page 自行消费。 */
-private val LocalMiniPlayerContentInset = compositionLocalOf { 0.dp }
+internal val LocalMiniPlayerContentInset = compositionLocalOf { 0.dp }
 
 /**
  * 应用导航壳（v0.8.0）。
@@ -479,8 +479,11 @@ fun AppNavHost() {
     // 全局 Content 只预留系统导航 inset；根 Tab 的底栏空间由 Tab 页面自己预留。
     // 这样底栏在详情页收起时不会改变底层根 Tab 的布局。
     val contentBottom = if (imeVisible) maxOf(imeBottom, systemBottomInset) else systemBottomInset
-    // 根 Tab 内容 = 底栏高度 + 迷你条内容 inset；底栏本身在页面内锚定在系统导航上方。
-    val tabBottomExtra = barHeightDp + miniPlayerContentInset
+    // 根 Tab 内容只预留底栏高度（不额外预留迷你条）：页面内容要能从迷你条后面滚过去，
+    // 胶囊四角才能透出下面的内容（否则内容会在胶囊上沿被裁出一条平线，看起来像矩形色块）。
+    // 迷你条高度改由各根页面列表的 contentPadding 处理（见 HomeScreen/LibraryScreen/SettingsScreen），
+    // 保证滚到底时最后一项仍能停在迷你条上方。
+    val tabBottomExtra = barHeightDp
 
     AppLayerHost(modifier = pointerWatcher) {
         CompositionLocalProvider(LocalMiniPlayerContentInset provides miniPlayerContentInset) {

@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.59.1**（tag `v0.59.1`，2026-11-15；release commit 以 `git rev-parse v0.59.1` 为准）
+- **版本：v0.59.2**（tag `v0.59.2`，2026-11-15；release commit 以 `git rev-parse v0.59.2` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**207 个**（v0.59.1；含 7 个 UI 架构守卫）
+- 单元测试：**207 个**（v0.59.2；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.59.1: 207 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.59.2: 207 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -147,7 +147,11 @@ scripts/screenshot.sh home 8
    要 map 成 `(trackId,isPlaying)` 后 distinctUntilChanged；重计算（分组/排序）放数据变化阶段；
    Lazy 列表加 contentType + 稳定 key；索引栏高亮用 provider 在组件内部读取，父级不要读滚动派生状态。
 
-12. **页面底部安全区**：迷你条可见时由 `AppNavHost` 全局抬升 NavHost 内容区，页面最后一项不会被 Haze 遮住；
+12. **页面底部安全区（v0.59.2 起）**：根 Tab（发现/音乐库/设置）页面内容**从迷你条后面滚过去**
+    （`RootTabPage` 只预留底栏高度），迷你条高度由各根页面列表的 `contentPadding` 加上
+    `LocalMiniPlayerContentInset` 保证，滚到底最后一项仍完整可见；
+    详情页 / 登录 / 导入 / 编辑等带底部表单按钮的页面仍用 `Page(applyMiniInset=true)` 预留迷你条空间，
+    避免悬浮条遮挡按钮；
     键盘打开时全局 `imePadding()` 接管，并撤销迷你条 inset，避免重复叠加；页面不要再单独写 Snackbar 迷你条避让。
 
 13. **图层架构（v0.53.0）**：不再使用 App 级 Scaffold；insets 由 AppNavHost 统一计算。
@@ -168,7 +172,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.59.1 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.59.2 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

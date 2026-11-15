@@ -1,5 +1,6 @@
 package com.wonderlandkid.biliaudio.ui.library
 
+import com.wonderlandkid.biliaudio.ui.navigation.LocalMiniPlayerContentInset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -263,7 +264,7 @@ private fun SongsTab(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(bottom = Spacing.lg),
+            contentPadding = PaddingValues(bottom = Spacing.lg + LocalMiniPlayerContentInset.current),
         ) {
             item(key = "songsHeader") {
                 Row(
@@ -373,7 +374,7 @@ private fun AlbumsTab(
                 start = Spacing.lg,
                 end = Spacing.sm,
                 top = Spacing.md,
-                bottom = Spacing.lg,
+                bottom = Spacing.lg + LocalMiniPlayerContentInset.current,
             ),
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
@@ -452,7 +453,7 @@ private fun ArtistsTab(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            contentPadding = PaddingValues(bottom = Spacing.lg),
+            contentPadding = PaddingValues(bottom = Spacing.lg + LocalMiniPlayerContentInset.current),
         ) {
             sections.forEach { section ->
                 items(
