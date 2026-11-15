@@ -316,48 +316,51 @@ internal fun BoxScope.PlayerSurfaceLayer(
             )
         }
     }
-    if (sharingCover) {
+    // 关键：只要在播放且当前是封面页，共享封面 overlay 就保持组合（透明度由共享进度控制）。
+    // 以前 overlay 只在开始拖动/展开时才进入组合，此时 Coil 才发起加载，第一帧会先画
+    // surfaceVariant 占位方块，而迷你条自己的封面正在淡出 → 拖动开始时「封面先消失、再出现
+    // 一个新的取代」，中间闪一下。提前组合后图片在拖动前就加载完成，跟手第一帧即连续。
+    val sourceCover = miniCoverRect
+    if (hasTrack && playerPage == 0 && sourceCover != null) {
         val targetCover = playerCoverMeasured
             ?.takeIf { it.rect.width > 1f && it.rect.height > 1f }
             ?.let { it.rect.translate(0f, -it.topOffset) }
-        val sourceCover = miniCoverRect
-        if (playerPage == 0 && sourceCover != null) {
-            val morph = ((playerProgress - 0.06f) / 0.94f).coerceIn(0f, 1f)
-            val coverRect = lerpRect(sourceCover, targetCover ?: sourceCover, morph)
-            val cornerPx = with(density) { 24.dp.toPx() } * (1f - playerProgress)
-            val overlayShape = GenericShape { size, _ ->
-                addRoundRect(
-                    RoundRect(
-                        left = 0f,
-                        top = topPx,
-                        right = size.width,
-                        bottom = bottomPx,
-                        radiusX = cornerPx,
-                        radiusY = cornerPx,
-                    ),
-                )
-            }
-            Box(
+        val morph = ((playerProgress - 0.06f) / 0.94f).coerceIn(0f, 1f)
+        val coverRect = lerpRect(sourceCover, targetCover ?: sourceCover, morph)
+        val cornerPx = with(density) { 24.dp.toPx() } * (1f - playerProgress)
+        val overlayShape = GenericShape { size, _ ->
+            addRoundRect(
+                RoundRect(
+                    left = 0f,
+                    top = topPx,
+                    right = size.width,
+                    bottom = bottomPx,
+                    radiusX = cornerPx,
+                    radiusY = cornerPx,
+                ),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layer(AppLayer.Player + 1f)
+                .graphicsLayer {
+                    // 不在共享过程中时 alpha=0：overlay 仍然留在组合里预热 Coil 图片。
+                    alpha = if (sharingCover) 1f - realAlpha else 0f
+                    this.shape = overlayShape
+                    clip = true
+                },
+        ) {
+            CoverImage(
+                url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
                 modifier = Modifier
-                    .fillMaxSize()
-                    .layer(AppLayer.Player + 1f)
-                    .graphicsLayer {
-                        alpha = 1f - realAlpha
-                        this.shape = overlayShape
-                        clip = true
-                    },
-            ) {
-                CoverImage(
-                    url = state.queue.getOrNull(state.currentIndex)?.coverModel(),
-                    modifier = Modifier
-                        .offset { IntOffset(coverRect.left.roundToInt(), coverRect.top.roundToInt()) }
-                        .size(
-                            with(density) { coverRect.width.toDp() },
-                            with(density) { coverRect.height.toDp() },
-                        ),
-                    cornerRadius = (14f + 8f * morph).dp,
-                )
-            }
+                    .offset { IntOffset(coverRect.left.roundToInt(), coverRect.top.roundToInt()) }
+                    .size(
+                        with(density) { coverRect.width.toDp() },
+                        with(density) { coverRect.height.toDp() },
+                    ),
+                cornerRadius = (14f + 8f * morph).dp,
+            )
         }
     }
 }
