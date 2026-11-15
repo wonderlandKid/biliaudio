@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -136,8 +137,15 @@ internal fun BoxScope.PlayerSurfaceLayer(
         )
     }
 
-    val screenHeightPx = with(density) { screenHeight.toPx() }
-    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    // v0.59.0：必须用「真实窗口像素尺寸」而不是 LocalConfiguration.screenWidthDp（整数 dp 取整后
+    // 会差 1~2px）。表面背景比迷你条胶囊宽 1~2px 时，圆角处会露出 surfaceContainer 色块
+    // （浅色主题下看起来就是胶囊外接矩形有一层白底）。容器未测量时回退旧值。
+    val windowSize = LocalWindowInfo.current.containerSize
+    val screenHeightPx =
+        if (windowSize.height > 0) windowSize.height.toFloat() else with(density) { screenHeight.toPx() }
+    val screenWidthPx =
+        if (windowSize.width > 0) windowSize.width.toFloat()
+        else with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     val statusBarInsetPx = with(density) { statusBarInset.toPx() }
     val rect = miniRect
 
@@ -171,7 +179,9 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 .height(with(density) { heightPx.toDp() })
                 .padding(horizontal = with(density) { sideInsetPx.toDp() })
                 .graphicsLayer {
-                    alpha = appear.value
+                    // 静止迷你条（p=0）时不画表面背景：胶囊自身是 Haze 玻璃，外接矩形应保持透明。
+                    // 开始拖动后表面背景才淡入，和迷你条内容淡出/胶囊转为不透明同步，作为展开中的卡片底。
+                    alpha = appear.value * smoothStep(0f, 0.01f, playerProgress)
                     this.shape = shape
                     clip = true
                 }

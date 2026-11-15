@@ -85,6 +85,9 @@ class PlaybackEngine private constructor(
         /** 跨专辑队列解析流时的最大并发数，避免触发 B 站风控。 */
         private const val MAX_CONCURRENT_RESOLVES = 4
 
+        /** 播放中保存「上次会话」的节流间隔（暂停/切歌/seek 会立即保存）。 */
+        private const val SESSION_SAVE_INTERVAL_MS = 5_000L
+
         @Volatile
         private var instance: PlaybackEngine? = null
 
@@ -122,6 +125,15 @@ class PlaybackEngine private constructor(
     }
 
     private val appContext: Context = context.applicationContext
+
+    // ---- 上次播放会话（v0.59.0：冷启动恢复队列/曲目/进度，恢复为暂停态） ----
+    private val sessionStore = PlaybackSessionStore(appContext)
+
+    /** 已恢复但尚未真正 prepare 的会话；用户播放/跳转/seek 时才解析音频流。 */
+    private var pendingRestore: PendingRestore? = null
+
+    /** 上次保存会话的时间（5 秒节流）。 */
+    private var lastSessionSavedAtMs = 0L
 
     /** 拉流 / 预取封面共用的 OkHttp。 */
     internal val httpClient: OkHttpClient = MediaHttp.createClient()
@@ -225,6 +237,7 @@ class PlaybackEngine private constructor(
         player.volume = 1f
         _state.update { it.copy(volume = 1f) }
         startProgressTicker()
+        restoreLastSession()
     }
 
     // ------------------------------------------------------------------ 对外控制
@@ -310,6 +323,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun togglePlayPause() {
+        if (pendingRestore != null) {
+            resumeRestoredSession()
+            return
+        }
         if (player.playbackState == Player.STATE_ENDED) {
             Diag.log(TAG, "cmd togglePlayPause → replay from start index=${player.currentMediaItemIndex}")
             player.seekToDefaultPosition(0)
@@ -327,6 +344,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun play() {
+        if (pendingRestore != null) {
+            resumeRestoredSession()
+            return
+        }
         if (queueEntries.isEmpty()) return
         if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition(0)
         player.play()
@@ -334,10 +355,15 @@ class PlaybackEngine private constructor(
     }
 
     override fun pause() {
+        if (pendingRestore != null) return
         player.pause()
     }
 
     override fun next() {
+        if (pendingRestore != null) {
+            resumeRestoredSession { next() }
+            return
+        }
         Diag.log(
             TAG,
             "cmd next index=${player.currentMediaItemIndex} pos=${player.currentPosition}ms " +
@@ -364,6 +390,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun previous() {
+        if (pendingRestore != null) {
+            resumeRestoredSession { previous() }
+            return
+        }
         Diag.log(
             TAG,
             "cmd previous index=${player.currentMediaItemIndex} pos=${player.currentPosition}ms",
@@ -392,6 +422,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun seekToTrackPosition(positionMs: Long) {
+        if (pendingRestore != null) {
+            resumeRestoredSession(autoPlay = false) { seekToTrackPosition(positionMs) }
+            return
+        }
         val entry = queueEntries.getOrNull(player.currentMediaItemIndex) ?: return
         val target = positionMs.coerceIn(0L, entry.durationMs.coerceAtLeast(0L))
         Diag.log(
@@ -401,9 +435,14 @@ class PlaybackEngine private constructor(
         )
         player.seekTo(target)
         publishProgress()
+        persistSession()
     }
 
     override fun seekToAlbumPosition(albumPositionMs: Long) {
+        if (pendingRestore != null) {
+            resumeRestoredSession(autoPlay = false) { seekToAlbumPosition(albumPositionMs) }
+            return
+        }
         Diag.log(TAG, "cmd seek album position=${albumPositionMs}ms")
         val currentEntry = queueEntries.getOrNull(player.currentMediaItemIndex) ?: return
         val albumDuration = currentEntry.albumDurationMs.coerceAtLeast(currentEntry.durationMs)
@@ -436,6 +475,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun jumpToQueueIndex(index: Int) {
+        if (pendingRestore != null) {
+            resumeRestoredSession { jumpToQueueIndex(index) }
+            return
+        }
         Diag.log(
             TAG,
             "cmd jump queueIndex=$index size=${queueEntries.size} " +
@@ -705,6 +748,7 @@ class PlaybackEngine private constructor(
         artworkByAlbumId: Map<Long, ByteArray?>,
         startIndex: Int,
         startPositionMs: Long,
+        autoPlay: Boolean = true,
     ) {
         require(specs.size == entries.size) { "队列构建失败，请重试" }
         val items = specs.map { spec ->
@@ -719,6 +763,7 @@ class PlaybackEngine private constructor(
         statsPendingMs = 0L
         statsLastTickMs = 0L
         queueEntries = entries
+        pendingRestore = null
         retriedForCurrentItem = false
         lastRecordedTrackId = null
         itemStartedAtMs = System.currentTimeMillis()
@@ -726,7 +771,7 @@ class PlaybackEngine private constructor(
         itemBufferingLogged = false
         player.setMediaItems(items, safeIndex, safePosition)
         player.prepare()
-        player.play()
+        if (autoPlay) player.play()
 
         val entry = entries[safeIndex]
         _state.value = PlaybackState(
@@ -734,7 +779,7 @@ class PlaybackEngine private constructor(
             currentAlbumId = entry.albumId,
             queue = entries,
             currentIndex = safeIndex,
-            isPlaying = true,
+            isPlaying = autoPlay,
             isLoading = true,
             positionMs = safePosition,
             trackDurationMs = entry.durationMs,
@@ -751,7 +796,155 @@ class PlaybackEngine private constructor(
                 "startPos=${safePosition}ms albumMs=${entry.albumDurationMs} clips=${clipSummary(specs)}",
         )
         recordPlayed(entry)
-        ensureServiceStarted()
+        if (autoPlay) ensureServiceStarted()
+        persistSession()
+    }
+
+    // ------------------------------------------------------------------ 上次会话恢复
+
+    /**
+     * 冷启动恢复上次播放会话（v0.59.0）。
+     *
+     * 只恢复「状态」（队列/曲目/曲内进度/播放模式，暂停态）并显示在迷你条上；
+     * 不在这里解析音频流，避免启动即发网络请求。用户点播放/切歌/seek 时再走
+     * [resumeRestoredSession] 真正 prepare 队列。
+     */
+    private fun restoreLastSession() {
+        val session = sessionStore.load() ?: return
+        scope.launch {
+            try {
+                val album = albumRepository.getAlbum(session.albumId)
+                if (album == null) {
+                    Diag.log(TAG, "session restore SKIP: album missing album=${session.albumId}")
+                    sessionStore.clear()
+                    return@launch
+                }
+                val storedTracks = albumRepository.getTracks(session.albumId).sortedBy { it.index }
+                val tracks = storedTracks.ifEmpty { listOf(wholeAlbumTrack(album)) }
+                val entries = PlaybackMapping.buildQueueEntries(album, tracks)
+                val index = resolveRestoredIndex(entries, session)
+                val entry = entries.getOrNull(index) ?: run {
+                    sessionStore.clear()
+                    return@launch
+                }
+                val duration = entry.durationMs.coerceAtLeast(0L)
+                // 上次停在结尾附近时从头开始，避免一恢复就是播放结束状态。
+                val position = if (duration > 0L && session.positionMs >= duration - 500L) {
+                    0L
+                } else {
+                    session.positionMs.coerceIn(0L, duration)
+                }
+                queueEntries = entries
+                lastRecordedTrackId = entry.track.id
+                pendingRestore = PendingRestore(
+                    albumId = album.id,
+                    entries = entries,
+                    index = index,
+                    positionMs = position,
+                    repeatMode = session.repeatMode,
+                    shuffle = session.shuffle,
+                )
+                _state.value = PlaybackState(
+                    currentTrack = entry.track,
+                    currentAlbumId = album.id,
+                    queue = entries,
+                    currentIndex = index,
+                    isPlaying = false,
+                    isLoading = false,
+                    positionMs = position,
+                    trackDurationMs = entry.durationMs,
+                    albumPositionMs = entry.track.startMs + position,
+                    albumDurationMs = entry.albumDurationMs,
+                    repeatMode = session.repeatMode,
+                    shuffle = session.shuffle,
+                    volume = player.volume,
+                    audioSessionId = player.audioSessionId,
+                )
+                Diag.log(
+                    TAG,
+                    "session RESTORE album=${album.id} track=${entry.track.id} " +
+                        "index=$index pos=${position}ms queue=${entries.size} " +
+                        "mode=${session.repeatMode} shuffle=${session.shuffle}",
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Diag.log(
+                    TAG,
+                    "session restore FAILED: ${error.javaClass.simpleName}: ${error.message}",
+                    error,
+                )
+            }
+        }
+    }
+
+    /** 恢复会话里匹配曲目：优先 trackId，其次 startMs（重新分割后 id 会变），最后 index。 */
+    private fun resolveRestoredIndex(entries: List<QueueEntry>, session: PlaybackSession): Int {
+        entries.indexOfFirst { it.track.id == session.trackId }
+            .takeIf { it >= 0 }?.let { return it }
+        entries.indexOfFirst { it.track.startMs == session.trackStartMs }
+            .takeIf { it >= 0 }?.let { return it }
+        entries.indexOfFirst { it.track.index == session.trackIndex }
+            .takeIf { it >= 0 }?.let { return it }
+        return 0
+    }
+
+    /**
+     * 真正 prepare 恢复出来的队列。
+     *
+     * @param autoPlay false 时只准备队列并定位（例如用户只是在播放页拖动进度条），保持暂停。
+     * @param after 准备完成后执行的动作（next/previous/seek/jump 在恢复态下先恢复再执行）。
+     */
+    private fun resumeRestoredSession(autoPlay: Boolean = true, after: (() -> Unit)? = null) {
+        val pending = pendingRestore
+        if (pending == null) {
+            after?.invoke()
+            return
+        }
+        pendingRestore = null
+        Diag.log(
+            TAG,
+            "session RESUME album=${pending.albumId} index=${pending.index} " +
+                "pos=${pending.positionMs}ms autoPlay=$autoPlay",
+        )
+        launchOperation {
+            albumCache.remove(pending.albumId)
+            val album = requireAlbum(pending.albumId)
+            player.repeatMode = pending.repeatMode.toPlayerRepeatMode()
+            player.shuffleModeEnabled = pending.shuffle
+            val audioUrls = resolveAudioUrls(entries = pending.entries, forceRefresh = false)
+            val specs = PlaybackMapping.buildPlaySpecsForTracks(pending.entries, audioUrls)
+            startQueue(
+                entries = pending.entries,
+                specs = specs,
+                artworkByAlbumId = mapOf(album.id to loadArtwork(album)),
+                startIndex = pending.index,
+                startPositionMs = pending.positionMs,
+                autoPlay = autoPlay,
+            )
+            after?.invoke()
+        }
+    }
+
+    /** 保存当前播放会话（轻量 JSON，5 秒节流；暂停/切歌/seek/播完会立即保存）。 */
+    private fun persistSession() {
+        val snapshot = _state.value
+        val track = snapshot.currentTrack ?: return
+        val albumId = snapshot.currentAlbumId ?: return
+        if (snapshot.queue.isEmpty()) return
+        lastSessionSavedAtMs = SystemClock.elapsedRealtime()
+        sessionStore.save(
+            PlaybackSession(
+                albumId = albumId,
+                trackId = track.id,
+                trackStartMs = track.startMs,
+                trackIndex = track.index,
+                positionMs = snapshot.positionMs.coerceAtLeast(0L),
+                repeatMode = snapshot.repeatMode,
+                shuffle = snapshot.shuffle,
+                savedAtEpochMs = System.currentTimeMillis(),
+            ),
+        )
     }
 
     // ------------------------------------------------------------------ 状态同步
@@ -763,6 +956,9 @@ class PlaybackEngine private constructor(
                 if (player.isPlaying) {
                     publishProgress()
                     accumulateListeningStats()
+                    if (SystemClock.elapsedRealtime() - lastSessionSavedAtMs >= SESSION_SAVE_INTERVAL_MS) {
+                        persistSession()
+                    }
                 } else {
                     flushListeningStats()
                     statsLastTickMs = 0L
@@ -979,6 +1175,7 @@ class PlaybackEngine private constructor(
             itemReadyLogged = false
             itemBufferingLogged = false
             publishCurrentItem()
+            persistSession()
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
                 recordPlayed(queueEntries.getOrNull(player.currentMediaItemIndex))
                 // 播放列表首次装载已由 startQueue 记录，这里只记录真正的切歌（自动/手动/跳转）
@@ -1011,6 +1208,7 @@ class PlaybackEngine private constructor(
                     "pos=${player.currentPosition}ms",
             )
             _state.update { it.copy(isPlaying = isPlaying) }
+            if (!isPlaying) persistSession()
             if (isPlaying) {
                 ensureServiceStarted()
                 statsLastTickMs = 0L
@@ -1046,6 +1244,7 @@ class PlaybackEngine private constructor(
                         "queue ENDED index=${player.currentMediaItemIndex} " +
                             "size=${player.mediaItemCount}",
                     )
+                    persistSession()
                 }
                 Player.STATE_READY -> {
                     publishProgress()
@@ -1089,6 +1288,16 @@ class PlaybackEngine private constructor(
             publishProgress()
         }
     }
+
+    /** 冷启动恢复出来、尚未 prepare 的播放会话。 */
+    private data class PendingRestore(
+        val albumId: Long,
+        val entries: List<QueueEntry>,
+        val index: Int,
+        val positionMs: Long,
+        val repeatMode: RepeatMode,
+        val shuffle: Boolean,
+    )
 
     /** 一张专辑的播放准备数据。 */
     private data class AlbumPlaybackData(

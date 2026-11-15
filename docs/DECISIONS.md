@@ -1299,3 +1299,28 @@
   AuthRepositoryImpl/SettingsViewModel/BiliApi/MediaStreamResolverImpl/MainActivity/MiniPlayerBar/
   PlayerSurfaceLayer/AppNavHost/NowPlayingScreen/AppCompositionLocals/CoverAccent；204 单测；
   release v0.58.0。以后新增状态机/手势/网络/后台链路需同步补 Diag 日志并遵守上述频率/隐私规范。
+
+
+## D82 恢复上次播放会话 + 静止迷你条不绘制表面背景（v0.59.0）
+
+- **日期**：2026-11-15
+- **背景**：用户希望「下次打开还是上次的播放列表和曲目」，并讨论过「迷你条永远常驻 + 无播放时空填充」。
+  另反馈静止迷你条（胶囊）外接矩形似乎有一层色块（浅色主题下是白边/白块）。
+- **决策**：
+  1. **不做「空迷你条常驻」**：空条会在所有页面底部永久占位、没有主操作目标，还要处理空态点击/无障碍/inset，
+     反而更复杂；改为**恢复上次播放会话**：
+     - `PlaybackSessionStore`（应用私有 SharedPreferences + kotlinx JSON）持久化最小状态：
+       专辑 id、曲目 id/startMs/index、曲内进度、随机/循环模式；5 秒节流，暂停/切歌/seek/播完立即保存；
+     - 冷启动静默重建队列并恢复为**暂停态**（迷你条显示上次曲目，点播放续播）；启动不解析音频流；
+     - 首次播放/切歌/seek/跳队列时才 `session RESUME` 真正 prepare 队列；
+     - 兜底：专辑删除则清空会话；曲目 id 变化按 startMs → index 匹配；进度在结尾附近回 0；损坏 JSON 丢弃；
+     - 迷你条显示规则保持不变（内容页显示，不在登录/导入/编辑等页面常驻遮控件）。
+  2. **静止迷你条（p=0）不绘制 PlayerSurface 背景层**：胶囊自身是 Haze 玻璃，外接矩形必须保持透明；
+     表面背景只随展开进度（0→1%）淡入，与迷你条内容淡出、胶囊转为不透明同步。
+  3. **表面背景尺寸用真实窗口像素**（`LocalWindowInfo.containerSize`）而不是
+     `LocalConfiguration.screenWidthDp`（整数 dp 取整会差 1~2px），否则圆角处会露出 surfaceContainer 色块。
+- **原因**：会话恢复用「上次内容」提供连续性，比空迷你条更符合「点一下就能听」的轻量体验；
+  表面背景层本来只是展开过程中的卡片底，静止时属于多余图层，是白边/色块的来源。
+- **影响**：PlaybackEngine/PlaybackSessionStore（新增）/PlayerSurfaceLayer；207 单测（新增 3 个会话序列化测试）；
+  release v0.59.0。以后改迷你条表面/底色时须守住「p=0 无背景层、真实窗口像素对齐」的约束；
+  会话持久化不得写入 Cookie/账号等敏感信息，也不进入归档/备份。

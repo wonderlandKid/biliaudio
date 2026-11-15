@@ -19,11 +19,11 @@
 | `App` | 启动（版本/设备）、前后台切换、通知权限结果、旧数据清理 |
 | `Api` | B 站接口请求（path、HTTP、耗时、重试）；搜索 WBI 失败降级 / 疑似风控结论 |
 | `Resolver` | 播放流解析：缓存命中、音频清晰度/码率、CDN host、耗时；登录态变化清缓存 |
-| `Play` | 播放引擎（原 tag `PlaybackEngine` 已统一为 `Play`）：播放/暂停/上下首/seek/跳队列/播放模式、队列与裁剪映射、BUFFERING/READY/ENDED、playWhenReady（音频焦点丢失/耳机拔出）、错误重试、准备失败 |
+| `Play` | 播放引擎（原 tag `PlaybackEngine` 已统一为 `Play`）：播放/暂停/上下首/seek/跳队列/播放模式、队列与裁剪映射、BUFFERING/READY/ENDED、playWhenReady（音频焦点丢失/耳机拔出）、错误重试、准备失败；**上次会话恢复**（`session RESTORE/RESUME/SKIP/FAILED`） |
 | `Service` | 后台播放服务：onCreate/MediaSession 建立/taskRemoved/onDestroy/拉起失败 |
 | `Auth` | 启动登录态、refresh 结果（含网络失败保留缓存）、扫码阶段（WAITING/SCANNED/EXPIRED/SUCCESS）、退出登录；只记状态与布尔值 |
 | `Shell` | 导航壳：路由/Tab 切换、迷你条 rect、底栏高度、IME/mini inset、返回键、播放器展开/收起（settle/drag）、**progress 卡死告警** |
-| `Surface` | 播放器表面：层进入/退出、迷你条进场/退场动画、播放页内容 `progress>=0.06` 组合/销毁、共享封面目标测量（正方形校验）、共享封面 overlay 显隐、迷你条毛玻璃/降级模式 |
+| `Surface` | 播放器表面：层进入/退出、迷你条进场/退场动画、播放页内容 `progress>=0.06` 组合/销毁、共享封面目标测量（正方形校验）、共享封面 overlay 显隐、迷你条毛玻璃/降级模式；静止迷你条不绘制表面背景（p=0） |
 | `NowPlaying` | 播放页：封面页 ↔ 歌词页、歌词页返回、播放列表面板开关、空态 |
 | `Theme` | 全局主题种子色（封面取色/取色失败） |
 | `Settings` | 设置持久化失败、归档/用户数据导入导出失败 |
@@ -53,7 +53,17 @@
      没有归位动画，这就是「卡住」的现场（v0.57.0 修复的手势节点销毁问题会留下这类日志）。
 4. **迷你条位置/宽度不对**：看 `[Shell] miniBar rect=…` 与 `screen=…`，正常 mini 条左右各内缩
    12dp、底部由 `bottomPad` 决定；`[Surface] miniBar glass=blur|translucent(…)` 可确认毛玻璃是否降级。
-5. **字段含义**：`progress` 0=迷你条、1=全屏；`v` 为松手速度（px/s）；`rule=velocity|projected`
+5. **迷你条外接矩形出现白边/色块**：静止迷你条（p=0）**不应**绘制 PlayerSurface 背景层
+   （v0.59.0 前的 bug：背景层比胶囊宽 1~2px 且用 surfaceContainer 色，浅色主题下圆角外露出白边）。
+   如果再次出现，看 `[Surface] miniBar glass=…` 与 `[Shell] miniBar rect=…`；v0.59.0 起
+   `PlayerSurfaceLayer` 用 `LocalWindowInfo.containerSize` 做像素对齐，p=0 时背景 alpha=0。
+6. **冷启动没有恢复上次播放**：看 `[Play] session RESTORE …` / `session restore SKIP/FAILED`：
+   - 没有 `session RESTORE` → 本地没有会话（首次安装/之前从未播放/被清除数据）；
+   - `SKIP: album missing` → 上次专辑已被删除，会话自动清空（符合预期）；
+   - 有 `RESTORE` 但点播放不续播 → 看 `session RESUME` 与随后 `startQueue … startPos=…ms`；
+     若 `RESUME` 后报错，多为音频流解析失败（看 `Resolver`/`Api` 日志）；
+   - 会话保存是 5 秒节流 + 暂停/切歌/seek/播完立即保存；强杀前最后几秒进度可能丢失属预期。
+7. **字段含义**：`progress` 0=迷你条、1=全屏；`v` 为松手速度（px/s）；`rule=velocity|projected`
    表示展开/收起是按速度还是按预测位置判定；`source=click|drag|back|switchTab|trackCleared`
    表示这次收敛由谁发起；`settle END 的 reached/forced` 可看出 spring 是否真正跑到目标。
 
