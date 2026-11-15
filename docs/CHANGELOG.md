@@ -1,5 +1,17 @@
 # 版本记录
 
+## v0.61.1（2026-11-15 · tag `v0.61.1`）
+
+**回撤 material3 1.5.0-rc01 升级；底部抽屉去掉顶部拖拽提示条**
+
+- **回撤 v0.61.0 的 material3 升级**：1.5.0-rc01 + `MotionScheme.expressive()` 实际手感提升不明显，
+  不值得为它单独钉版本；material3 回到跟随 Compose BOM（1.5.0-alpha22），移除 `motionScheme` 配置。
+  v0.60.0 的弹簧 token / 按压回弹 / 页面转场等自定义肉感动画不受影响。
+- **去掉 ModalBottomSheet 顶部拖拽提示条**（6 处：播放列表、歌词来源、歌词偏移、封面选择、
+  歌单加歌、导入方式）：`dragHandle = null`，保留下滑关闭手势；不再用条状提示告诉用户可下滑。
+- 文档同步：DECISIONS D87 标注回撤原因、MOTION.md/AGENTS 更新约定。
+
+验证：207 单测全绿；Debug/Release 构建成功；模拟器验证播放列表抽屉无提示条、内容布局正常。
 ## v0.61.0（2026-11-15 · tag `v0.61.0`）
 
 **material3 升级到 1.5.0-rc01，全局启用 MotionScheme.expressive（M3 弹簧物理）**

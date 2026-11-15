@@ -31,7 +31,6 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -220,7 +219,7 @@ fun ImportScreen(
             onDismissRequest = viewModel::dismissSearchPreview,
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = { BottomSheetDefaults.DragHandle() },
+            dragHandle = null,
         ) {
             Column(
                 modifier = Modifier

@@ -1420,3 +1420,13 @@
 - **影响**：M3 组件内置动画（抽屉开关/吸附、导航栏 indicator、开关、勾选、菜单、波纹等）
   全部弹簧化；AlertDialog/Slider 在 rc01 尚未消费 motionScheme，弹窗肉感需后续自研包装。
   注意 material3 不再跟随 BOM，升级 Compose BOM 时必须同步核对 material3 版本兼容性。
+
+### D87 补充：已回撤（v0.61.1）
+
+- v0.61.0 升级 material3 1.5.0-rc01 并启用 `MotionScheme.expressive()` 后，实际手感提升不明显，
+  用户决定不为此单独维护一个钉死的 material3 版本，v0.61.1 已回撤：
+  material3 恢复跟随 Compose BOM，移除 `MaterialTheme(motionScheme=)` 配置。
+- 保留经验：1.5.0-rc01 确实公开了 MotionScheme（可全局开 M3 Expressive 弹簧），
+  但当前 M3 组件（抽屉/导航/开关等）的默认动画本来就不差，升级收益低于预期；
+  后续 Compose BOM 自然升级到公开版本时可以再评估（届时无额外版本维护成本）。
+- 另：v0.61.1 起所有 ModalBottomSheet 统一 `dragHandle = null`（去掉顶部提示条，保留下滑手势）。

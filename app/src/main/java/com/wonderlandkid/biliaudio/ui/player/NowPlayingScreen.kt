@@ -219,6 +219,7 @@ fun NowPlayingScreen(
         ModalBottomSheet(
             onDismissRequest = { showPlaylist = false },
             sheetState = sheetState,
+                dragHandle = null,
         ) {
             PlaylistPanel(
                 state = state,

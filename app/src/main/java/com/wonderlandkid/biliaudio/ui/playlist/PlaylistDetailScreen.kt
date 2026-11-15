@@ -338,6 +338,7 @@ private fun AddSongsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            dragHandle = null,
     ) {
         Column(
             modifier = Modifier

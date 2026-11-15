@@ -70,6 +70,7 @@ internal fun LyricsSourceSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+            dragHandle = null,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             LyricsSourceHeader(state = state)
