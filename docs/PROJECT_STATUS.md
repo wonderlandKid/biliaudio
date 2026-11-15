@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.61.1）
+# 项目现状与交接（v0.61.2-demo）
 
-> 最后更新：2026-11-15 · 版本 v0.61.1 · tag `v0.61.1`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-15 · 版本 v0.61.2-demo · tag `v0.61.2-demo`（临时手感加强版，确认后回调参数发正式版）（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话

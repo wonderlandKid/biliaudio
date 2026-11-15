@@ -26,13 +26,13 @@ import androidx.compose.ui.semantics.Role
  */
 fun Modifier.biliPressScale(
     interactionSource: InteractionSource,
-    pressedScale: Float = 0.96f,
+    pressedScale: Float = 0.92f,
 ): Modifier = composed {
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
         animationSpec = if (pressed) {
-            tween(durationMillis = 90, easing = FastOutSlowInEasing)
+            tween(durationMillis = 120, easing = FastOutSlowInEasing)
         } else {
             BiliMotion.springBouncy()
         },
@@ -53,7 +53,7 @@ fun Modifier.biliPressScale(
 @Composable
 fun Modifier.biliClickable(
     enabled: Boolean = true,
-    pressedScale: Float = 0.96f,
+    pressedScale: Float = 0.92f,
     role: Role? = null,
     onClickLabel: String? = null,
     onClick: () -> Unit,

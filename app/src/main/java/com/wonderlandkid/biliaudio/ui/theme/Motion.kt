@@ -113,13 +113,16 @@ object BiliMotion {
 
     /** 交互归位（面板/抽屉/播放页）：轻微回弹。 */
     fun <T> springSettle(): SpringSpec<T> =
-        spring(dampingRatio = 0.9f, stiffness = 360f)
+        // v0.61.2-demo：临时加强，用户确认手感后再回调
+        spring(dampingRatio = 0.82f, stiffness = 320f)
 
     /** 小控件按压回弹：明显一点点的肉感。 */
     fun <T> springSnappy(): SpringSpec<T> =
-        spring(dampingRatio = 0.85f, stiffness = 500f)
+        // v0.61.2-demo：临时加强（入场/迷你条出现可见回弹）
+        spring(dampingRatio = 0.68f, stiffness = 320f)
 
     /** 弹性最大的按钮/弹层：微弱过冲（ζ=0.75）。 */
     fun <T> springBouncy(): SpringSpec<T> =
-        spring(dampingRatio = 0.75f, stiffness = 340f)
+        // v0.61.2-demo：临时加强（按压松手明显回弹）
+        spring(dampingRatio = 0.55f, stiffness = 300f)
 }

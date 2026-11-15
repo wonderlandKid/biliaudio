@@ -299,8 +299,8 @@ fun AppNavHost() {
                 animationSpec = spring(
                     // v0.60.0：接近临界阻尼 + 轻微回弹（0.92），有 iOS 抽屉的落位肉感；
                     // progress 全程 coerce 在 0..1，端部不会真的甩出边界。
-                    dampingRatio = 0.92f,
-                    stiffness = 360f,
+                    dampingRatio = 0.82f,
+                    stiffness = 300f,
                     visibilityThreshold = 0.001f,
                 ),
                 initialVelocity = velocity.coerceIn(-2.5f, 2.5f),
@@ -871,7 +871,7 @@ private fun RootTabPage(
 // 同时旧页只退 1/3 屏宽（iOS 视差），新页整页覆盖进来。
 private val PageSlideSpec = spring<androidx.compose.ui.unit.IntOffset>(
     dampingRatio = 1f,
-    stiffness = 320f,
+    stiffness = 300f,
     visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold,
 )
 
@@ -882,7 +882,7 @@ private fun slideInFromLeft(): EnterTransition =
     slideInHorizontally(animationSpec = PageSlideSpec) { -it }
 
 private fun slideOutToLeft(): ExitTransition =
-    slideOutHorizontally(animationSpec = PageSlideSpec) { -it / 3 }
+    slideOutHorizontally(animationSpec = PageSlideSpec) { -it / 2 }
 
 // 一级 Tab 的转场只在「Tab ↔ 详情页」时生效：
 // - 从 Tab 进入详情：Tab 整页向左退出（新页从右进入）；
@@ -898,7 +898,7 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabPopEnterTransit
     if (initialState.destination.route in TAB_ROUTE_SET) {
         EnterTransition.None
     } else {
-        slideInHorizontally(animationSpec = PopSlideSpec) { -it / 3 }
+        slideInHorizontally(animationSpec = PopSlideSpec) { -it / 2 }
     }
 
 private val TAB_ROUTE_SET = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)

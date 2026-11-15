@@ -38,7 +38,7 @@ fun BiliIconButton(
     val interaction = remember { MutableInteractionSource() }
     IconButton(
         onClick = onClick,
-        modifier = modifier.biliPressScale(interaction, pressedScale = 0.90f),
+        modifier = modifier.biliPressScale(interaction, pressedScale = 0.86f),
         enabled = enabled,
         colors = colors,
         interactionSource = interaction,
@@ -57,7 +57,7 @@ fun BiliFilledIconButton(
     val interaction = remember { MutableInteractionSource() }
     FilledIconButton(
         onClick = onClick,
-        modifier = modifier.biliPressScale(interaction, pressedScale = 0.90f),
+        modifier = modifier.biliPressScale(interaction, pressedScale = 0.86f),
         enabled = enabled,
         colors = colors,
         interactionSource = interaction,
@@ -78,7 +78,7 @@ fun BiliTextButton(
     val interaction = remember { MutableInteractionSource() }
     TextButton(
         onClick = onClick,
-        modifier = modifier.biliPressScale(interaction, pressedScale = 0.96f),
+        modifier = modifier.biliPressScale(interaction, pressedScale = 0.91f),
         enabled = enabled,
         shape = shape,
         colors = colors,
@@ -103,7 +103,7 @@ fun BiliOutlinedButton(
     val interaction = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.biliPressScale(interaction, pressedScale = 0.96f),
+        modifier = modifier.biliPressScale(interaction, pressedScale = 0.91f),
         enabled = enabled,
         shape = shape,
         colors = colors,
@@ -131,7 +131,7 @@ fun BiliButton(
     val interaction = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
-        modifier = modifier.biliPressScale(interaction, pressedScale = 0.96f),
+        modifier = modifier.biliPressScale(interaction, pressedScale = 0.91f),
         enabled = enabled,
         shape = shape,
         colors = colors,

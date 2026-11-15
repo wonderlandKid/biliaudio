@@ -450,7 +450,7 @@ private fun AlbumHero(
             modifier = Modifier
                 .fillMaxWidth(0.72f)
                 .aspectRatio(1f)
-                .biliClickable(onClick = onOpenCover, pressedScale = 0.97f),
+                .biliClickable(onClick = onOpenCover, pressedScale = 0.93f),
         ) {
             CoverImage(
                 // 支持用户自定义本地封面（album.coverModel() 优先本地 File，回退 B 站 URL）

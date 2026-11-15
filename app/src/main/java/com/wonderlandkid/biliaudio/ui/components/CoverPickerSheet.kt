@@ -417,7 +417,7 @@ private fun CoverCandidateCell(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .biliClickable(onClick = onClick, pressedScale = 0.95f)
+            .biliClickable(onClick = onClick, pressedScale = 0.92f)
             .padding(2.dp),
     ) {
         CoverImage(

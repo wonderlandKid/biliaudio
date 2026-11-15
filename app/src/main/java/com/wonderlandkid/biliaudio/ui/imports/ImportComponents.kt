@@ -258,7 +258,7 @@ fun VideoPreviewCard(
                     modifier = Modifier
                         .size(92.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .biliClickable(onClick = onChangeCover, pressedScale = 0.96f),
+                        .biliClickable(onClick = onChangeCover, pressedScale = 0.92f),
                 ) {
                     CoverImage(
                         url = state.pendingCoverModel,

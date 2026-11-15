@@ -169,7 +169,7 @@ fun MiniPlayerBar(
                 .then(glassModifier)
                 .border(1.dp, onContainer.copy(alpha = 0.06f), shape)
                 .then(dragModifier)
-                .biliClickable(onClick = onClick, pressedScale = 0.985f)
+                .biliClickable(onClick = onClick, pressedScale = 0.96f)
                 .onGloballyPositioned { onBarBounds(it.boundsInWindow()) },
             shape = shape,
             color = Color.Transparent,

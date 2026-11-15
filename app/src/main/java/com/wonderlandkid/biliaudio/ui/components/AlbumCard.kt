@@ -32,7 +32,7 @@ fun AlbumCard(
 ) {
     Column(
         modifier = modifier
-            .biliClickable(onClick = onClick, pressedScale = 0.97f)
+            .biliClickable(onClick = onClick, pressedScale = 0.93f)
             .padding(bottom = Spacing.xs),
     ) {
         CoverImage(
@@ -97,7 +97,7 @@ fun AlbumCompactRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .biliClickable(onClick = onClick, pressedScale = 0.97f)
+            .biliClickable(onClick = onClick, pressedScale = 0.93f)
             .padding(vertical = Spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
