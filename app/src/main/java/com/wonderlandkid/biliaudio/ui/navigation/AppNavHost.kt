@@ -117,8 +117,15 @@ import kotlinx.coroutines.delay
 import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.launch
 
-/** 当前迷你条需要让出的底部内容高度；由 AppNavHost 供给，Page 自行消费。 */
+/**
+ * 根 Tab 列表的迷你条留白（稳定值）：只要当前有播放曲目就保持固定高度，
+ * 不随「目标路由是否显示迷你条」变化——否则离开根 Tab 的瞬间旧页 inset 归零，
+ * 列表在底部会 clamp 向下跳（设置→缓存管理等页面切换的「拽一下」根因）。
+ */
 internal val LocalMiniPlayerContentInset = compositionLocalOf { 0.dp }
+
+/** 详情页 Page 的迷你条留白（路由相关）：只有当前目的地会显示迷你条时才预留。 */
+internal val LocalPageMiniInset = compositionLocalOf { 0.dp }
 
 /**
  * 应用导航壳：NavHost + 播放器图层 + 迷你条 inset。
@@ -431,7 +438,18 @@ fun AppNavHost() {
     // 不要跟随展开进度移除 mini 内容 inset：如果拖到 16% 突然少一块底部 padding，
     // 正在拖动的设置/音乐库会重新布局，正是底栏区域「按钮没了/遮罩还在」抖动的来源。
     // inset 在播放页完全铺满前保持不变（被 player 覆盖时不可见），关闭时也不会跳。
+    // 根 Tab 列表的留白只看「有没有曲目 + 键盘」，不随目标路由变化：
+    // 路由变化时若立刻归零，正在滑出的根 Tab 列表会在底部 clamp，产生向下跳一下的观感。
     val miniPlayerContentInset = if (
+        playbackState.currentTrack != null &&
+        !imeVisible
+    ) {
+        BiliLayout.miniPlayerContentInset
+    } else {
+        0.dp
+    }
+    // 详情页 Page 的留白仍跟路由走：不显示迷你条的详情页（缓存管理/诊断/登录等）不预留。
+    val pageMiniInset = if (
         showMiniPlayer &&
         playbackState.currentTrack != null &&
         !imeVisible
@@ -445,7 +463,8 @@ fun AppNavHost() {
         Diag.log(
             DiagTag.SHELL,
             "chrome ime=$imeVisible showMiniPlayer=$showMiniPlayer " +
-                "miniInset=${miniPlayerContentInset.value}dp progress=${diagProgress(playerProgress)}",
+                "rootInset=${miniPlayerContentInset.value}dp pageInset=${pageMiniInset.value}dp " +
+                "progress=${diagProgress(playerProgress)}",
         )
     }
 
@@ -465,7 +484,10 @@ fun AppNavHost() {
     val tabBottomExtra = barHeightDp
 
     AppLayerHost(modifier = pointerWatcher) {
-        CompositionLocalProvider(LocalMiniPlayerContentInset provides miniPlayerContentInset) {
+        CompositionLocalProvider(
+            LocalMiniPlayerContentInset provides miniPlayerContentInset,
+            LocalPageMiniInset provides pageMiniInset,
+        ) {
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
@@ -788,7 +810,7 @@ private fun Page(
                 .fillMaxSize()
                 .then(
                     if (applyMiniInset) {
-                        Modifier.padding(bottom = LocalMiniPlayerContentInset.current)
+                        Modifier.padding(bottom = LocalPageMiniInset.current)
                     } else {
                         Modifier
                     },
