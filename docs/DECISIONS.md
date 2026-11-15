@@ -1245,3 +1245,28 @@
   4. 播放按钮目标 bounds 早期不稳定时使用全屏布局兜底位置；
   5. 外层 AppLayerHost/PlayerSurface 层不变。
 - **影响**：MiniPlayerBar/NowPlayingScreen/PlaybackControls/PlayerSurfaceLayer；204 单测；release v0.53.0。
+
+
+## D80 播放器表面生命周期：进场动画按「是否有曲目」触发，拖拽热区常驻（v0.57.0）
+
+- **日期**：2026-11-15
+- **背景**：用户反馈两点——(1) 专辑页点播放时迷你条突然弹出没有过渡；(2) 慢速拖动时共享封面
+  被拉成长方形，之后有概率整条卡在半展开状态（surface 卡高 309px、迷你条内容 alpha≈0.35，
+  反推 progress≈0.059）。
+- **决策**：
+  1. `PlayerSurfaceLayer` 的进场/退场动画 key 改为「当前是否有曲目」（`Animatable` 初值也随
+     `hasTrack`），不再用 `LaunchedEffect(Unit)`（专辑页/根 Tab 上图层一直 visible，动画会在点播放前跑完）；
+  2. 迷你条只保留**单一稳定调用点**：删除 `rect == null` 时 early-return 的第二个 `MiniPlayerBar`
+     实例（实例切换会打断 `AnimatedVisibility` 进场动画）；
+  3. 共享封面的目标 rect 用 `boundsInWindow(clipBounds = false)` 测量：播放页内容整体
+     `graphicsLayer{translationY = topPx}` 平移，默认裁剪会把屏幕外的封面裁成动态扁矩形，
+     宽高独立插值 → 长方形；不裁剪后 target 恒为 896×896（1080×1920 @2.625）；
+  4. 顶部下拉热区从 `progress >= 0.06` 的播放页内容中提出来常驻组合：手势进行中节点被 dispose 时
+     draggable 在 detach 状态会丢弃 `onDragStopped`，没有 spring 收敛 → progress 冻在 ≈0.06。
+     热区随 surface 平移（`topPx + statusBarInset`），收起态移到屏幕外避免拦截迷你条；
+  5. 曲目清空时若 progress 仍在中间值，强制收敛回迷你条（兜底手势节点被销毁的极端情况）；
+  6. surface 背景 p=0 时左右按迷你条内边距内缩（此前比迷你条宽 12dp，露出「翅膀」）。
+- **原因**：这些都是「生命周期/坐标系」问题，不是视觉设计问题；遵循既有「单一 surface + 封面-only
+  共享元素 + 跟手」架构，不引入新动画或新视觉语言。
+- **影响**：PlayerSurfaceLayer/MiniPlayerBar 调用点/NowPlayingScreen 封面测量/AppNavHost 兜底；
+  204 单测；release v0.57.0。以后改共享元素测量或拖拽热区时必须遵守上述约束。

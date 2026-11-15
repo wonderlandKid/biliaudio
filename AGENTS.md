@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.56.0**（tag `v0.56.0`，2026-11-13；release commit 以 `git rev-parse v0.56.0` 为准）
+- **版本：v0.57.0**（tag `v0.57.0`，2026-11-15；release commit 以 `git rev-parse v0.57.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**204 个**（v0.56.0；含 7 个 UI 架构守卫）
+- 单元测试：**204 个**（v0.57.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.56.0: 204 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.57.0: 204 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -109,6 +109,10 @@ scripts/screenshot.sh home 8
      迷你条 ↔ 播放页为上下关系：v0.48 起是单一 PlayerSurface，从迷你条 rect 连续长到全屏；
      v0.55 起只保留**封面**作为连续共享元素；标题/艺术家/控件由迷你条侧淡出、播放页侧淡入；
      歌词页没有封面，卡片先空白再淡入歌词；顶部下拉热区从状态栏下方开始（112dp，封面/歌词页均可下拉）；
+     **v0.57.0 约束**：共享元素的 bounds 必须用 `boundsInWindow(clipBounds = false)`（默认会裁到窗口，
+     展开早期播放页封面在屏幕外时会把目标量成扁矩形 → 封面形变）；顶部下拉热区必须独立于
+     `progress >= 0.06` 的播放页内容常驻组合（否则向下拖过该阈值时手势节点被销毁，`onDragStopped`
+     丢失 → progress 卡在中间值，迷你条卡死）；
      歌词页歌词左对齐；
      播放模式为单按钮四态（随机/顺序/列表循环/单曲循环），底部第五个按钮为播放列表；
      曲名/艺术家在页面顶部（headlineLarge 30sp）共用；**全局主题从当前播放封面取种子色**（AppTheme 级别，
@@ -154,7 +158,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.56.0 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.57.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

@@ -23,8 +23,8 @@
 | Tab ↔ 详情页 push/pop | **500ms** | **进出都用 Emphasized（同一条曲线，仅方向相反）** | 完整宽度：详情从右进/向右出，旧页整页向左/上一页从左回位；完全对称 |
 | 详情页 ↔ 详情页 | **500ms** | 同上，进出对称 | 同一套层级页转场 |
 | 预测式返回预演 | 0ms | - | Manifest 关闭 predictive back；不预演 |
-| 迷你播放条显示 | 280ms | EmphasizedDecelerate | 上滑 + 淡入 |
-| 迷你播放条隐藏 | 220ms | EmphasizedAccelerate | 下滑 + 淡出 |
+| 迷你播放条显示 | 280ms | EmphasizedDecelerate | 上滑 + 淡入；触发条件 = 当前曲目从无到有（v0.57.0 起，不再是图层首次组合） |
+| 迷你播放条隐藏 | 220ms | EmphasizedAccelerate | 下滑 + 淡出；曲目被清空时反向播放 |
 | 迷你条底部避让 | spring | damping 1.0 / stiffness 400 | 无过冲，padding 非负兜底 |
 | 底部导航出现 | 300ms | EmphasizedDecelerate | 高度扩展 + 淡入；Scaffold 高度同步 |
 | 底部导航消失 | 250ms | EmphasizedAccelerate | 高度收缩 + 淡出；迷你条避让同步 |

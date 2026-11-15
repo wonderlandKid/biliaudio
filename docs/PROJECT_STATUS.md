@@ -1,6 +1,6 @@
-# 项目现状与交接（v0.53.0）
+# 项目现状与交接（v0.57.0）
 
-> 最后更新：2026-11-13 · 版本 v0.53.0 · tag `v0.53.0`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
+> 最后更新：2026-11-15 · 版本 v0.57.0 · tag `v0.57.0`（release commit 以 `git rev-parse v0.53.0` 为准）；文档维护提交见 `git log docs/`
 > 新会话/上下文清空后，先读本文件，再按需看 [DECISIONS.md](DECISIONS.md) / [DEBUGGING.md](DEBUGGING.md)。
 
 ## 1. 一句话
@@ -18,7 +18,7 @@
 | 技术栈 | Kotlin 2.3.21 / Compose BOM 2026.09 / AGP 9.5.0 / Gradle 9.6（腾讯镜像）/ Media3 1.11.1 / Room / OkHttp / Coil / zxing |
 | 最低支持 | Android 7.0（API 24），targetSdk 37 |
 | 构建 | 交付/性能验收：`./gradlew :app:assembleRelease`（R8，debug 签名可安装）；开发调试用 `assembleDebug` |
-| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 194 个全绿） |
+| 单测 | `JAVA_HOME=/opt/android-studio/jbr ./gradlew :app:testDebugUnitTest`（当前 204 个全绿） |
 | APK 产物 | `app/build/outputs/apk/release/app-release.apk`（性能验收/交付，发布放置 `dist/biliaudio-vX.Y.Z-release.apk`）；`app-debug.apk` 仅开发调试 |
 
 **环境注意**
@@ -48,7 +48,7 @@
 | 音乐库歌曲/专辑/艺术家搜索、最近播放 | ✅ | 分曲逐首显示、可搜索 |
 | **音乐库三分栏 + A-Z 快速索引** | ✅ | 歌曲/专辑/艺术家；拼音分组、索引拖动定位、拖动气泡 |
 | **艺术家详情页** | ✅ | 封面取第一张专辑、专辑网格 + 歌曲列表 |
-| **迷你播放条手势** | ✅ | 上滑打开播放页、下滑收起为细条、收起后点击/上滑展开 |
+| **迷你播放条手势** | ✅ | 上滑打开播放页、下滑收起为细条、收起后点击/上滑展开；v0.57.0 修复进场动画、拖动形变与进度卡死 |
 | **统一页头与导航转场** | ✅ | 三 Tab 标题位置一致；详情横向共享轴、播放页底部上滑、Tab 淡入淡出 |
 | **归档目录形态（艺术家/专辑/分割）** | ✅ | 设置页导出到文件夹/从文件夹导入；兼容单文件 JSON |
 | **维测日志开关** | ✅ | 设置→诊断与维护→「维测日志」Switch；关闭后不再记录/打印，持久化，历史日志可查看 |
@@ -62,6 +62,7 @@
 
 ## 4. 版本记录（详情见 CHANGELOG）
 
+- **v0.57.0** 播放器表面根因修复：迷你条进场动画、共享封面形变、拖动后进度卡死
 - **v0.56.0** 共享封面连续性修复：目标校验、Coil crossfade 关闭、迷你卡片背景不淡出
 - **v0.55.0** 展开动画改为椒盐式封面-only 共享元素；其他元素淡出/淡入，修复拖动文字抽动
 - **v0.54.0** 歌词整体加粗、当前行改深色 onSurface，提升浅色主题可读性

@@ -348,7 +348,11 @@ private fun NowPlayingCoverPage(
                         scaleY = coverScale
                     }
                     .clickable(onClick = onOpenLyrics)
-                    .onGloballyPositioned { onCoverBounds(it.boundsInWindow()) },
+                    // v0.57.0：必须用「不裁剪到窗口」的 bounds。默认 boundsInWindow() 会把
+                    // 超出窗口的矩形裁到窗口边缘；展开过程中播放页封面被 surface 平移到屏幕下方时，
+                    // 量到的是一个「宽而扁」的矩形（例如 896x50），共享封面会按这个错误目标插值，
+                    // 于是慢速拖动时封面被拉成长方形。
+                    .onGloballyPositioned { onCoverBounds(it.boundsInWindow(clipBounds = false)) },
                 cornerRadius = 22.dp,
             )
         }

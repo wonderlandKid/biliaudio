@@ -120,6 +120,7 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** 当前迷你条需要让出的底部内容高度；由 AppNavHost 供给，Page 自行消费。 */
@@ -298,6 +299,18 @@ fun AppNavHost() {
 
     // 迷你条实际 rect，作为 PlayerSurface 收起态边界。
     var miniBarRect by remember { mutableStateOf<Rect?>(null) }
+
+    // 兜底：曲目被清空（队列播完/停止）时如果进度还停在中间值——例如最后一个曲目恰好在
+    // 拖拽过程中结束，迷你条内容被移出组合会让进行中的拖拽节点被销毁、onDragStopped 丢失——
+    // 这里主动收敛回迷你条，避免播放器表面卡在半展开状态。
+    LaunchedEffect(playbackState.currentTrack == null) {
+        if (playbackState.currentTrack == null && playerProgress > 0.001f) {
+            delay(120)
+            if (playbackState.currentTrack == null && playerProgress > 0.001f) {
+                animatePlayerTo(false)
+            }
+        }
+    }
 
     val currentTab = when (currentRoute) {
         Routes.HOME -> MainTab.HOME
