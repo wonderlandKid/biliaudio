@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.player.PlaybackState
+import com.wonderlandkid.biliaudio.ui.DiagTag
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import dev.chrisbanes.haze.HazeInput
@@ -150,6 +153,16 @@ fun MiniPlayerBar(
             } else {
                 Modifier.background(containerColor.copy(alpha = 0.94f))
             }
+
+        // 维测：迷你条毛玻璃/降级模式（每次内容组合记一次，排查“模糊失效/变成半透明”）。
+        LaunchedEffect(Unit) {
+            val mode = when {
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "translucent(api<31)"
+                hazeState == null -> "translucent(no haze source)"
+                else -> "blur"
+            }
+            Diag.log(DiagTag.SURFACE, "miniBar glass=$mode api=${Build.VERSION.SDK_INT}")
+        }
 
         Surface(
             modifier = Modifier

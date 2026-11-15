@@ -192,8 +192,8 @@ data class AppSettings(
     val audioQuality: AudioQualityPreference = AudioQualityPreference.AUTO,
     /** null = 跟随系统 */
     val darkTheme: Boolean? = null,
-    /** 维测日志开关（关闭后 Diag 不再记录/打印） */
-    val diagnosticLogsEnabled: Boolean = false,
+    /** 维测日志开关（v0.58.0 起默认开启；关闭后 Diag 不再记录/打印） */
+    val diagnosticLogsEnabled: Boolean = true,
     /** 发现页「听歌统计」预览的默认口径（持久化，可在发现页切换） */
     val homeStatsMode: HomeStatsMode = HomeStatsMode.ALBUM_LISTEN_TIME,
 )

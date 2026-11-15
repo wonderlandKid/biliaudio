@@ -1270,3 +1270,32 @@
   共享元素 + 跟手」架构，不引入新动画或新视觉语言。
 - **影响**：PlayerSurfaceLayer/MiniPlayerBar 调用点/NowPlayingScreen 封面测量/AppNavHost 兜底；
   204 单测；release v0.57.0。以后改共享元素测量或拖拽热区时必须遵守上述约束。
+
+
+## D81 维测日志默认开启 + 日志规范（v0.58.0）
+
+- **日期**：2026-11-15
+- **背景**：用户反馈「日志太少不方便维测」。检查发现 `AppSettings.diagnosticLogsEnabled` 与
+  SharedPreferences 默认都是 false（v0.10.0 的「默认关闭」决策），而排障手册却写默认开启；
+  全新安装的用户反馈问题时导出的日志只有设备头，等于没有日志。同时播放器表面/手势、后台服务、
+  登录、设置等主链路几乎没有 Diag 日志，v0.57.0 的拖动卡死问题只能靠临时调试代码定位。
+- **决策**：
+  1. **维测日志默认开启**（老用户显式关闭过的保持关闭）；设置页文案同步；覆盖 v0.10.0「默认关闭」的决策；
+  2. 新增/统一 tag：`Shell`（导航壳/手势/展开收起）、`Surface`（播放器表面/共享元素/毛玻璃）、
+     `NowPlaying`（播放页内部）、`Play`（播放引擎，原 `PlaybackEngine`）、`Service`（后台播放服务）、
+     `Auth`（登录态/扫码）、`Settings`、`Stats`、`Theme`；tag 表以 docs/DEBUGGING.md 为准；
+  3. 日志频率规范：只记状态跃迁/阈值跨越/失败，禁止逐帧、禁止 position tick（环形缓冲 3000 行）；
+     高频回调一律去重/节流；拖拽相关日志按「每次手势几条」控制；
+  4. 隐私规范：禁止记录 Cookie/SESSDATA、二维码 key、mid/uname、完整签名 URL、SAF 绝对路径；
+     只记 hasSession 布尔、phase/code、albumId/trackId/index、route pattern 等；
+  5. `Diag` 自身必须线程安全且不抛异常：`SimpleDateFormat` → `ThreadLocal`，`log()` 整体 `runCatching`；
+  6. 关键异常必须进环形日志（准备播放失败、后台服务失败、登录刷新失败、统计/设置落库失败等），
+     不能只写 Logcat；
+  7. 回退/验证钩子：`[Surface] cover target ANOMALY`、`[Shell] WARN progress stranded` 是
+     v0.57.0 两个已修问题的回归探测器。
+- **原因**：日志是问题反馈的唯一现场；默认关闭会让「加日志」对用户无效；同时环形缓冲有限，
+  必须靠状态跃迁而不是高频采样控制噪音。
+- **影响**：AppSettings/SettingsRepositoryImpl/SettingsScreen/Diag/PlaybackEngine/PlaybackService/
+  AuthRepositoryImpl/SettingsViewModel/BiliApi/MediaStreamResolverImpl/MainActivity/MiniPlayerBar/
+  PlayerSurfaceLayer/AppNavHost/NowPlayingScreen/AppCompositionLocals/CoverAccent；204 单测；
+  release v0.58.0。以后新增状态机/手势/网络/后台链路需同步补 Diag 日志并遵守上述频率/隐私规范。

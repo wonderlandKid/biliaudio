@@ -16,10 +16,12 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,11 +35,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.player.PlaybackController
+import com.wonderlandkid.biliaudio.ui.DiagTag
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
 import com.wonderlandkid.biliaudio.ui.components.coverModel
+import com.wonderlandkid.biliaudio.ui.diagNumber
+import com.wonderlandkid.biliaudio.ui.diagProgress
+import com.wonderlandkid.biliaudio.ui.diagRect
 import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
+import com.wonderlandkid.biliaudio.util.Diag
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.roundToInt
 
@@ -80,9 +87,24 @@ internal fun BoxScope.PlayerSurfaceLayer(
     if (!visible) return
     val state by playbackController.state.collectAsStateWithLifecycle()
     val density = LocalDensity.current
+    // 维测：dispose 回调里读不到最新参数，用 rememberUpdatedState 取当帧 progress。
+    val latestProgress by rememberUpdatedState(playerProgress)
+
+    // 维测：播放器表面层进入/退出组合（排查「迷你条突然出现/消失、层被销毁导致手势丢失」）。
+    DisposableEffect(Unit) {
+        Diag.log(
+            DiagTag.SURFACE,
+            "layer ENTER hasTrack=${state.currentTrack != null} progress=${diagProgress(playerProgress)}",
+        )
+        onDispose {
+            Diag.log(DiagTag.SURFACE, "layer EXIT progress=${diagProgress(latestProgress)}")
+        }
+    }
 
     var miniCoverRect by remember { mutableStateOf<Rect?>(null) }
     var playerCoverMeasured by remember { mutableStateOf<MeasuredRect?>(null) }
+    var coverTargetEverMeasured by remember { mutableStateOf(false) }
+    var coverTargetAnomaly by remember { mutableStateOf(false) }
 
     val hasTrack = state.currentTrack != null
     // 从「无播放」进入迷你条时，整块 surface + 迷你条一起从下方淡入；停止播放时反向淡出。
@@ -90,12 +112,27 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // 若在层组合时播放进场动画，等真正开始播放时动画早已结束，迷你条就会突然出现。
     val appear = remember { Animatable(if (hasTrack) 1f else 0f) }
     LaunchedEffect(hasTrack) {
+        val target = if (hasTrack) 1f else 0f
+        // 已经是目标值（例如首次组合时会话本来就无播放）就不做无意义的动画/日志。
+        if (kotlin.math.abs(appear.value - target) < 0.001f) return@LaunchedEffect
+        val durationMs =
+            if (hasTrack) BiliMotion.MiniPlayerEnterMs else BiliMotion.MiniPlayerExitMs
+        // 维测：进场/退场动画起止（每次开始/停止播放各一条，不会刷屏）。
+        Diag.log(
+            DiagTag.SURFACE,
+            "appear ${if (hasTrack) "ENTER" else "EXIT"} from=${diagProgress(appear.value)} " +
+                "duration=${durationMs}ms",
+        )
         appear.animateTo(
             targetValue = if (hasTrack) 1f else 0f,
             animationSpec = tween(
-                durationMillis = if (hasTrack) BiliMotion.MiniPlayerEnterMs else BiliMotion.MiniPlayerExitMs,
+                durationMillis = durationMs,
                 easing = if (hasTrack) BiliMotion.EmphasizedDecelerate else BiliMotion.EmphasizedAccelerate,
             ),
+        )
+        Diag.log(
+            DiagTag.SURFACE,
+            "appear done value=${diagProgress(appear.value)} hasTrack=$hasTrack",
         )
     }
 
@@ -169,11 +206,50 @@ internal fun BoxScope.PlayerSurfaceLayer(
                 }
                 .layer(AppLayer.Player),
         ) {
+            // 维测：播放页内容按 progress>=0.06 组合/销毁（手势节点生命周期、卡死问题的关键阈值）。
+            DisposableEffect(Unit) {
+                Diag.log(
+                    DiagTag.SURFACE,
+                    "player content ENTER progress=${diagProgress(playerProgress)}",
+                )
+                onDispose {
+                    Diag.log(
+                        DiagTag.SURFACE,
+                        "player content EXIT progress=${diagProgress(latestProgress)}",
+                    )
+                }
+            }
             BackHandler(enabled = playerProgress > 0.01f) { onClose() }
             NowPlayingScreen(
                 initialPage = playerPage,
                 onPageChanged = onPageChanged,
-                onCoverBounds = { playerCoverMeasured = MeasuredRect(it, topPx) },
+                onCoverBounds = { bounds ->
+                    playerCoverMeasured = MeasuredRect(bounds, topPx)
+                    // 维测：共享封面目标必须是正方形。v0.57.0 修复的形变问题就是目标被窗口裁剪成
+                    // 896x50 这类扁矩形导致；这里在「健康↔异常」跃迁时记录，不会每帧刷屏。
+                    val w = bounds.width
+                    val h = bounds.height
+                    val pending = w <= 1f || h <= 1f
+                    val anomaly = !pending &&
+                        kotlin.math.abs(w - h) > (h * 0.02f).coerceAtLeast(2f)
+                    if (!coverTargetEverMeasured) {
+                        coverTargetEverMeasured = true
+                        Diag.log(
+                            DiagTag.SURFACE,
+                            "cover target first=${bounds.diagRect()} " +
+                                "progress=${diagProgress(playerProgress)}",
+                        )
+                    } else if (anomaly != coverTargetAnomaly) {
+                        Diag.log(
+                            DiagTag.SURFACE,
+                            "cover target ${if (anomaly) "ANOMALY" else "OK"} " +
+                                "rect=${bounds.diagRect()} " +
+                                "aspect=${if (h > 1f) diagNumber(w / h) else "?"} " +
+                                "progress=${diagProgress(playerProgress)}",
+                        )
+                    }
+                    coverTargetAnomaly = anomaly
+                },
                 sharedElementsAlpha = 1f,
                 coverAlpha = smoothStep(0.94f, 0.995f, playerProgress),
                 contentAlpha = smoothStep(0.55f, 0.92f, playerProgress),
@@ -222,7 +298,25 @@ internal fun BoxScope.PlayerSurfaceLayer(
     // 标题/艺术家/控件都不插值，避免字号、省略号和布局在拖动中抽动；
     // 迷你条自身元素先淡出，封面单独放大/移动到播放页封面位置。
     val realAlpha = smoothStep(0.94f, 0.995f, playerProgress)
-    if (hasTrack && playerProgress > 0.001f && realAlpha < 0.999f) {
+    val sharingCover = hasTrack && playerProgress > 0.001f && realAlpha < 0.999f
+    // 维测：共享封面 overlay 显隐（排查「封面飞错位置/没有共享元素」）。
+    // 首次组合时不记 HIDE（本来就没显示），避免每次进入播放器表面都多一条噪音。
+    var sharedCoverShown by remember { mutableStateOf(false) }
+    LaunchedEffect(sharingCover) {
+        if (sharingCover) {
+            sharedCoverShown = true
+            Diag.log(
+                DiagTag.SURFACE,
+                "shared cover SHOW progress=${diagProgress(playerProgress)} page=$playerPage",
+            )
+        } else if (sharedCoverShown) {
+            Diag.log(
+                DiagTag.SURFACE,
+                "shared cover HIDE progress=${diagProgress(playerProgress)} page=$playerPage",
+            )
+        }
+    }
+    if (sharingCover) {
         val targetCover = playerCoverMeasured
             ?.takeIf { it.rect.width > 1f && it.rect.height > 1f }
             ?.let { it.rect.translate(0f, -it.topOffset) }

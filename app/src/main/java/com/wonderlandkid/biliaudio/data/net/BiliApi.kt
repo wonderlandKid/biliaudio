@@ -198,6 +198,11 @@ class BiliApi(
         }
 
         // 2) 降级 all/v2
+        Diag.log(
+            TAG,
+            "search WBI FAILED keyword=$kw → fallback all/v2: " +
+                "${wbiError?.javaClass?.simpleName}: ${wbiError?.message}",
+        )
         Log.w(TAG, "wbi 搜索连续失败，降级 /search/all/v2 keyword=$kw，原因：${wbiError?.message}")
         val fallbackItems = try {
             val body = execute(
@@ -213,11 +218,17 @@ class BiliApi(
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "搜索降级接口失败 keyword=$kw: ${e.message}")
+            Diag.log(
+                TAG,
+                "search fallback FAILED keyword=$kw: ${e.javaClass.simpleName}: ${e.message}",
+                e,
+            )
             throw BiliApiException(SEARCH_UNAVAILABLE_MESSAGE, (e as? BiliApiException)?.code)
         }
         if (fallbackItems == null) {
             // all/v2 返回了正常响应但没有 video 分组：典型的风控/接口异常表现
             Log.w(TAG, "all/v2 未返回 video 分组（疑似风控），keyword=$kw")
+            Diag.log(TAG, "search fallback NO_VIDEO_GROUP keyword=$kw (疑似风控)")
             throw BiliApiException(SEARCH_UNAVAILABLE_MESSAGE)
         }
         Log.d(TAG, "搜索降级成功 keyword=$kw，结果 ${fallbackItems.size} 条")
@@ -465,6 +476,7 @@ class BiliApi(
             .firstOrNull { it.stringOrNull("result_type") == "video" }
         if (videoGroup == null) {
             Log.w(TAG, "all/v2 响应缺少 video 分组，groups=$groupTypes")
+            Diag.log(TAG, "all/v2 response missing video group types=$groupTypes")
             return null
         }
         val items = videoGroup.arrayOrNull("data") ?: return emptyList()

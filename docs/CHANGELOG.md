@@ -1,5 +1,46 @@
 # 版本记录
 
+## v0.58.0（2026-11-15 · tag `v0.58.0`）
+
+**纯维测日志版本：补齐播放器表面/手势/后台/登录/设置等链路日志（无功能需求）**
+
+本版不新增功能、不改 UI/交互，只提升「出问题时能从导出的诊断日志里自证现场」的能力。
+
+### 诊断设施
+
+- **维测日志默认开启**（`AppSettings.diagnosticLogsEnabled` / SharedPreferences 默认 true）：
+  之前默认关闭，全新安装的用户反馈问题导出日志是空的，等于没有日志；老用户显式关闭过的保持关闭，
+  设置页文案同步更新；
+- `Diag` 线程安全修复：`SimpleDateFormat` 改 `ThreadLocal`，`log()` 整体 `runCatching` 兜底
+  （日志量增大 + 多线程写日志时，原先可能乱序/抛异常冒泡到播放/UI 调用方）；
+- 不记录 Cookie / 账号 / 二维码 key / 完整签名 URL 等敏感信息。
+
+### 新增日志（tag）
+
+- `Shell`：路由切换、Tab 切换、播放器展开/收起（settle START/CANCEL/END、来源、耗时、reach/forced）、
+  拖拽 START/STOP（速度/预测位置/判定规则）、迷你条 rect 变化、底栏高度、IME/mini inset、
+  根 Tab 双击返回，以及 **progress 卡死告警**（无手指/无归位动画却停在中间值）；
+- `Surface`：表面层进入/退出组合、mini 条进场/退场动画起止、播放页内容 `progress>=0.06` 组合/销毁、
+  共享封面目标 rect 异常（非正方形/0 尺寸，v0.57 形变问题的回归探测器）、共享封面 overlay 显隐、
+  迷你条毛玻璃/降级模式；
+- `NowPlaying`：封面页↔歌词页切换、歌词页返回、播放列表面板开关、空态；
+- `Play`（原 `PlaybackEngine` tag 统一为文档里的 `Play`）：播放/暂停/上/下一首/seek/跳队列/模式切换、
+  准备失败、BUFFERING/READY/ENDED、`playWhenReady` 变化（音频焦点丢失/耳机拔出等）、错误重试；
+- `Service`：后台播放服务 onCreate/会话建立/taskRemoved/onDestroy/拉起失败；
+- `Auth`：启动登录态、refresh 结果与网络失败保留缓存、扫码阶段（WAITING/SCANNED/EXPIRED/SUCCESS）、
+  退出登录（只记状态与布尔值）；
+- `Settings`：归档/用户数据导入导出失败、设置持久化失败；
+- `Stats`：听歌统计落库失败；`Theme`：封面取色种子变化与取色失败；
+- `Api`：搜索 WBI 失败降级、降级失败、疑似风控（`all/v2` 无 video 分组）；
+- `Resolver`：登录态变化导致媒体流缓存被清空。
+
+### 验证
+
+204 单测全绿；Debug/Release 构建成功；模拟器实跑「播放→慢速展开（中途停顿）→收起→点击展开→
+歌词页/返回→切 Tab」，整段流程日志约几十行、无逐帧刷屏、无卡死误报（拖拽中途停顿未触发
+stranded WARN）；Release 包实跑同样确认默认开启与各 tag 日志正常；`docs/DEBUGGING.md` 已重写
+tag 表并新增「播放器表面 / 迷你条排障」章节。
+
 ## v0.57.0（2026-11-15 · tag `v0.57.0`）
 
 **播放器表面三处根因修复：迷你条进场动画、共享封面形变、拖动后卡死**

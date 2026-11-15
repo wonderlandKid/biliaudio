@@ -77,6 +77,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -100,7 +102,10 @@ import com.wonderlandkid.biliaudio.ui.album.MultiPageTrackEditorScreen
 import com.wonderlandkid.biliaudio.ui.album.SplitEditorScreen
 import com.wonderlandkid.biliaudio.ui.components.BiliBottomBar
 import com.wonderlandkid.biliaudio.ui.components.MainTab
-import com.wonderlandkid.biliaudio.ui.components.MiniPlayerBar
+import com.wonderlandkid.biliaudio.ui.DiagTag
+import com.wonderlandkid.biliaudio.ui.diagNumber
+import com.wonderlandkid.biliaudio.ui.diagProgress
+import com.wonderlandkid.biliaudio.ui.diagRect
 import com.wonderlandkid.biliaudio.ui.home.HomeScreen
 import com.wonderlandkid.biliaudio.ui.home.RecentAlbumsScreen
 import com.wonderlandkid.biliaudio.ui.imports.ImportScreen
@@ -108,7 +113,6 @@ import com.wonderlandkid.biliaudio.ui.imports.ImportTab
 import com.wonderlandkid.biliaudio.ui.library.ArtistDetailScreen
 import com.wonderlandkid.biliaudio.ui.library.LibraryScreen
 import com.wonderlandkid.biliaudio.ui.login.LoginScreen
-import com.wonderlandkid.biliaudio.ui.player.NowPlayingScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistDetailScreen
 import com.wonderlandkid.biliaudio.ui.playlist.PlaylistsScreen
 import com.wonderlandkid.biliaudio.ui.rememberAppContainer
@@ -121,6 +125,7 @@ import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.launch
 
 /** 当前迷你条需要让出的底部内容高度；由 AppNavHost 供给，Page 自行消费。 */
@@ -176,6 +181,18 @@ fun AppNavHost() {
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+    // 维测：底栏实测高度变化（只在真正变化时记一条，避免每帧刷屏）。
+    fun onBottomBarHeightMeasured(px: Int) {
+        if (px > bottomBarHeightPx) {
+            if (px - bottomBarHeightPx > 2) {
+                Diag.log(
+                    DiagTag.SHELL,
+                    "bottomBar height=${px}px (was ${bottomBarHeightPx}px)",
+                )
+            }
+            bottomBarHeightPx = px
+        }
+    }
     // 非 Tab 页面没有底部导航时，迷你条平滑下移到系统手势区上方，而不是瞬间掉落
     val systemBottomInset = WindowInsets.navigationBars
         .asPaddingValues()
@@ -257,9 +274,21 @@ fun AppNavHost() {
     var playerPage by rememberSaveable { mutableIntStateOf(0) }
     var settleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-    fun animatePlayerTo(open: Boolean, velocity: Float = 0f) {
+    fun animatePlayerTo(open: Boolean, velocity: Float = 0f, source: String = "click") {
+        if (settleJob?.isActive == true) {
+            Diag.log(
+                DiagTag.SHELL,
+                "settle CANCEL source=$source at=${diagProgress(playerProgress)}",
+            )
+        }
         settleJob?.cancel()
         playerOpenTarget = open
+        val startedAtMs = SystemClock.elapsedRealtime()
+        Diag.log(
+            DiagTag.SHELL,
+            "settle START source=$source open=$open from=${diagProgress(playerProgress)} " +
+                "v=${diagNumber(velocity)}",
+        )
         settleJob = scope.launch {
             Animatable(playerProgress).animateTo(
                 targetValue = if (open) 1f else 0f,
@@ -272,43 +301,111 @@ fun AppNavHost() {
                 ),
                 initialVelocity = velocity.coerceIn(-2.5f, 2.5f),
             ) { playerProgress = value.coerceIn(0f, 1f) }
+            val reached = playerProgress
             playerProgress = if (open) 1f else 0f
+            Diag.log(
+                DiagTag.SHELL,
+                "settle END source=$source open=$open reached=${diagProgress(reached)} " +
+                    "forced=${diagProgress(playerProgress)} " +
+                    "ms=${SystemClock.elapsedRealtime() - startedAtMs}",
+            )
         }
     }
 
     val playerDragState = rememberDraggableState { delta ->
+        if (settleJob?.isActive == true) {
+            Diag.log(
+                DiagTag.SHELL,
+                "settle CANCEL source=drag at=${diagProgress(playerProgress)}",
+            )
+        }
         settleJob?.cancel()
         playerProgress = (playerProgress - delta / screenHeightPx.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
     }
     val playerDragModifier = Modifier.draggable(
         state = playerDragState,
         orientation = Orientation.Vertical,
+        onDragStarted = {
+            Diag.log(
+                DiagTag.SHELL,
+                "drag START progress=${diagProgress(playerProgress)} page=$playerPage",
+            )
+        },
         onDragStopped = { velocity ->
             // 方向 + 速度 + 预测最终位置共同决定，保留松手瞬间的惯性：
             // 用 220ms 的位移预测，避免「慢慢拖到一半松手」时被硬阈值瞬间甩到顶/底。
             val progressVelocity = -velocity / screenHeightPx.coerceAtLeast(1).toFloat()
             val projected = (playerProgress + progressVelocity * 0.22f).coerceIn(0f, 1f)
+            val byVelocity = velocity < -600f || velocity > 600f
             val open = when {
                 velocity < -600f -> true
                 velocity > 600f -> false
                 else -> projected >= 0.5f
             }
-            animatePlayerTo(open, progressVelocity)
+            Diag.log(
+                DiagTag.SHELL,
+                "drag STOP progress=${diagProgress(playerProgress)} v=${diagNumber(velocity)} " +
+                    "projected=${diagProgress(projected)} " +
+                    "rule=${if (byVelocity) "velocity" else "projected"} open=$open",
+            )
+            animatePlayerTo(open, progressVelocity, source = "drag")
         },
     )
 
+    // 维测：路由切换时记录播放器表面状态（每次路由变化一条，便于还原现场）。
+    LaunchedEffect(currentRoute) {
+        Diag.log(
+            DiagTag.SHELL,
+            "route=${currentRoute ?: "?"} progress=${diagProgress(playerProgress)} " +
+                "hasTrack=${playbackState.currentTrack != null} " +
+                "miniVisible=${showMiniPlayer || playerProgress > 0.001f}",
+        )
+    }
+
     // 迷你条实际 rect，作为 PlayerSurface 收起态边界。
     var miniBarRect by remember { mutableStateOf<Rect?>(null) }
+    // 维测：迷你条 rect 只在首次测量或明显变化时记录（拖拽时 rect 不变，不会刷屏）。
+    var lastLoggedMiniBarRect by remember { mutableStateOf<Rect?>(null) }
 
     // 兜底：曲目被清空（队列播完/停止）时如果进度还停在中间值——例如最后一个曲目恰好在
     // 拖拽过程中结束，迷你条内容被移出组合会让进行中的拖拽节点被销毁、onDragStopped 丢失——
     // 这里主动收敛回迷你条，避免播放器表面卡在半展开状态。
     LaunchedEffect(playbackState.currentTrack == null) {
         if (playbackState.currentTrack == null && playerProgress > 0.001f) {
+            Diag.log(
+                DiagTag.SHELL,
+                "track cleared with progress=${diagProgress(playerProgress)} → force collapse",
+            )
             delay(120)
             if (playbackState.currentTrack == null && playerProgress > 0.001f) {
-                animatePlayerTo(false)
+                animatePlayerTo(false, source = "trackCleared")
             }
+        }
+    }
+
+    // 维测：全局观察「是否有手指按住」（只读不消费事件），用于识别 progress 卡在中间值、
+    // 既没有手指也没有归位动画的异常状态（v0.57.0 修过的手势节点被销毁问题会留下这种现场）。
+    var pointerDown by remember { mutableStateOf(false) }
+    val pointerWatcher = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val down = event.changes.any { it.pressed }
+                if (down != pointerDown) pointerDown = down
+            }
+        }
+    }
+    LaunchedEffect(pointerDown) {
+        if (pointerDown) return@LaunchedEffect
+        delay(600)
+        if (!pointerDown && playerProgress in 0.002f..0.998f && settleJob?.isActive != true) {
+            Diag.log(
+                DiagTag.SHELL,
+                "WARN progress stranded=${diagProgress(playerProgress)} " +
+                    "(no pointer / no settle) route=${currentRoute ?: "?"} " +
+                    "hasTrack=${playbackState.currentTrack != null} " +
+                    "visible=${showMiniPlayer || playerProgress > 0.001f}",
+            )
         }
     }
 
@@ -319,8 +416,12 @@ fun AppNavHost() {
     }
 
     fun switchTab(tab: MainTab) {
+        Diag.log(
+            DiagTag.SHELL,
+            "tab switch ${currentRoute ?: "?"} → $tab progress=${diagProgress(playerProgress)}",
+        )
         // 播放页正在展开/收起时切 Tab：先收起，避免留下半展开的 morph 覆盖层。
-        if (playerProgress > 0.001f) animatePlayerTo(false)
+        if (playerProgress > 0.001f) animatePlayerTo(false, source = "switchTab")
         val route = when (tab) {
             MainTab.HOME -> Routes.HOME
             MainTab.LIBRARY -> Routes.LIBRARY
@@ -337,6 +438,7 @@ fun AppNavHost() {
     /** 导入成功后直接进入专辑详情：用一次 navigate + popUpTo 收掉导入页，避免先 pop 再 push 的双转场。 */
     fun openImportedAlbum(albumId: Long) {
         val fromRoute = navController.currentDestination?.route ?: Routes.HOME
+        Diag.log(DiagTag.SHELL, "open imported album=$albumId from=$fromRoute")
         navController.navigate(Routes.album(albumId)) {
             popUpTo(fromRoute) { inclusive = true }
             launchSingleTop = true
@@ -359,6 +461,14 @@ fun AppNavHost() {
     } else {
         0.dp
     }
+    // 维测：键盘/迷你条 inset 状态变化（排查底部留白、页面跳动/被遮挡问题）。
+    LaunchedEffect(imeVisible, showMiniPlayer) {
+        Diag.log(
+            DiagTag.SHELL,
+            "chrome ime=$imeVisible showMiniPlayer=$showMiniPlayer " +
+                "miniInset=${miniPlayerContentInset.value}dp progress=${diagProgress(playerProgress)}",
+        )
+    }
 
     // 最终架构：不再使用 Scaffold。insets 由 AppNavHost 统一计算，
     // Content 只负责 NavHost，所有 chrome 都由 AppLayerHost 的图层绘制。
@@ -372,7 +482,7 @@ fun AppNavHost() {
     // 根 Tab 内容 = 底栏高度 + 迷你条内容 inset；底栏本身在页面内锚定在系统导航上方。
     val tabBottomExtra = barHeightDp + miniPlayerContentInset
 
-    AppLayerHost {
+    AppLayerHost(modifier = pointerWatcher) {
         CompositionLocalProvider(LocalMiniPlayerContentInset provides miniPlayerContentInset) {
         NavHost(
             navController = navController,
@@ -410,7 +520,7 @@ fun AppNavHost() {
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
                             onSelect = { switchTab(it) },
-                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                            onHeightMeasured = { px -> onBottomBarHeightMeasured(px) },
                         ) {
                         HomeScreen(
                             listState = homeListState,
@@ -439,7 +549,7 @@ fun AppNavHost() {
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
                             onSelect = { switchTab(it) },
-                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                            onHeightMeasured = { px -> onBottomBarHeightMeasured(px) },
                         ) {
                         LibraryScreen(
                             songsListState = librarySongsListState,
@@ -463,7 +573,7 @@ fun AppNavHost() {
                             contentBottom = tabBottomExtra,
                             currentTab = currentTab,
                             onSelect = { switchTab(it) },
-                            onHeightMeasured = { if (it > bottomBarHeightPx) bottomBarHeightPx = it },
+                            onHeightMeasured = { px -> onBottomBarHeightMeasured(px) },
                         ) {
                         SettingsScreen(
                             onOpenLogin = { navController.navigate(Routes.LOGIN) },
@@ -635,10 +745,26 @@ fun AppNavHost() {
                 screenHeight = with(density) { screenHeightPx.toDp() },
                 statusBarInset = statusBarInset,
                 dragModifier = playerDragModifier,
-                onClick = { animatePlayerTo(true) },
-                onBarBounds = { rect -> miniBarRect = rect },
+                onClick = { animatePlayerTo(true, source = "click") },
+                onBarBounds = { rect ->
+                    val last = lastLoggedMiniBarRect
+                    if (
+                        last == null ||
+                            kotlin.math.abs(rect.top - last.top) > 12f ||
+                            kotlin.math.abs(rect.bottom - last.bottom) > 12f ||
+                            kotlin.math.abs(rect.width - last.width) > 12f
+                    ) {
+                        Diag.log(
+                            DiagTag.SHELL,
+                            "miniBar rect=${rect.diagRect()} progress=${diagProgress(playerProgress)} " +
+                                "bottomPad=${diagNumber(miniBottomPadding.value)}dp",
+                        )
+                        lastLoggedMiniBarRect = rect
+                    }
+                    miniBarRect = rect
+                },
                 hazeState = hazeState,
-                onClose = { animatePlayerTo(false) },
+                onClose = { animatePlayerTo(false, source = "back") },
             )
 
             // 平级 Tab 的返回：第一次提示，2 秒内连续第二次才真正退出应用。
@@ -650,9 +776,11 @@ fun AppNavHost() {
             BackHandler(enabled = isTabRoot) {
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastBackAt in 1..2_000L) {
+                    Diag.log(DiagTag.SHELL, "back: root tab double-back → exit app")
                     (context as? Activity)?.finish()
                 } else {
                     lastBackAt = now
+                    Diag.log(DiagTag.SHELL, "back: root tab first press → exit hint")
                     Toast.makeText(context, "再返回一次退出应用", Toast.LENGTH_SHORT).show()
                 }
             }

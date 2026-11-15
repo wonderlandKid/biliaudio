@@ -862,7 +862,7 @@ private fun DiagnosticsToggleCard(
             icon = Icons.Rounded.BugReport,
             title = "维测日志",
             subtitle = if (enabled) {
-                "默认关闭；开启时记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
+                "已开启（默认）：记录播放/网络/导入等诊断日志（Logcat tag BiliDiag）"
             } else {
                 "已关闭：不再记录/打印诊断日志（历史日志仍可查看/导出）"
             },

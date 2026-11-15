@@ -51,12 +51,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wonderlandkid.biliaudio.player.PlaybackState
 import com.wonderlandkid.biliaudio.player.QueueEntry
+import com.wonderlandkid.biliaudio.ui.DiagTag
 import com.wonderlandkid.biliaudio.ui.appViewModel
 import com.wonderlandkid.biliaudio.ui.components.CoverImage
 import com.wonderlandkid.biliaudio.ui.components.EmptyState
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.player.lyrics.NowPlayingLyricsPane
 import com.wonderlandkid.biliaudio.ui.theme.BiliMotion
+import com.wonderlandkid.biliaudio.util.Diag
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
 import kotlinx.coroutines.launch
@@ -106,6 +108,27 @@ fun NowPlayingScreen(
 
     var showPlaylist by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // 维测：播放列表面板开关（排查“面板没弹出/播放列表和队列不一致”）。
+    // 只在真正打开/关闭时记录；播放页每次组合时的初始 false 不记，避免噪音。
+    var playlistPanelOpened by remember { mutableStateOf(false) }
+    LaunchedEffect(showPlaylist) {
+        if (showPlaylist) {
+            playlistPanelOpened = true
+            Diag.log(
+                DiagTag.NOW_PLAYING,
+                "playlist panel OPEN queue=${state.queue.size} index=${state.currentIndex}",
+            )
+        } else if (playlistPanelOpened) {
+            Diag.log(DiagTag.NOW_PLAYING, "playlist panel CLOSE")
+        }
+    }
+    // 维测：播放页打开但队列为空（空态）时记一条。
+    LaunchedEffect(state.currentTrack == null) {
+        if (state.currentTrack == null) {
+            Diag.log(DiagTag.NOW_PLAYING, "empty state: no current track")
+        }
+    }
 
     // 播放错误（含流地址过期重试失败）统一用 Snackbar 提示，展示后清空
     LaunchedEffect(state.error) {
@@ -239,10 +262,18 @@ private fun NowPlayingBody(
     val scope = rememberCoroutineScope()
 
     // 记录当前页，供 AppNavHost 在收起/重新打开时恢复（歌词页收起后再拉起来仍是歌词页）。
-    LaunchedEffect(pagerState.currentPage) { onPageChanged(pagerState.currentPage) }
+    LaunchedEffect(pagerState.currentPage) {
+        onPageChanged(pagerState.currentPage)
+        // 维测：封面页 / 歌词页切换。
+        Diag.log(
+            DiagTag.NOW_PLAYING,
+            "page=${if (pagerState.currentPage == LYRICS_PAGE) "lyrics" else "cover"}",
+        )
+    }
 
     // 歌词页按返回键：先滑回封面页，不直接关播放页。
     BackHandler(enabled = pagerState.currentPage == LYRICS_PAGE) {
+        Diag.log(DiagTag.NOW_PLAYING, "back lyrics → cover")
         scope.launch { pagerState.animateScrollToPage(COVER_PAGE) }
     }
 

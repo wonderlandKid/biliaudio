@@ -28,8 +28,13 @@ object Diag {
 
     private val lock = Any()
     private val buffer = ArrayDeque<String>(MAX_LINES)
-    private val wallClock = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
-    private val fileClock = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    // SimpleDateFormat 非线程安全：主线程/IO/播放线程都会写日志，用 ThreadLocal 隔离。
+    private val wallClock = ThreadLocal.withInitial {
+        SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
+    }
+    private val fileClock = ThreadLocal.withInitial {
+        SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    }
 
     /** 进程启动时间（用于日志里的相对耗时）。 */
     private val processStartMs = System.currentTimeMillis()
@@ -43,15 +48,19 @@ object Diag {
 
     fun log(tag: String, message: String, error: Throwable? = null) {
         if (!enabled) return
-        val line = buildLine(tag, message, error)
-        synchronized(lock) {
-            buffer.addLast(line)
-            while (buffer.size > MAX_LINES) buffer.removeFirst()
+        // 日志设施本身不允许抛异常：格式化/写环形缓冲/Logcat 全部兜底，
+        // 否则日志量增大（多线程）时可能把异常抛回播放/UI 调用方。
+        runCatching {
+            val line = buildLine(tag, message, error)
+            synchronized(lock) {
+                buffer.addLast(line)
+                while (buffer.size > MAX_LINES) buffer.removeFirst()
+            }
+            Log.i(TAG, line)
         }
-        runCatching { Log.i(TAG, line) }
     }
 
-    /** 业务事件（建议 tag 用域名：Api/Play/Video/Import/Archive…）。 */
+    /** 业务事件（建议 tag 用域名：Api/Play/Service/Import/Archive…）。 */
     fun event(tag: String, message: String) = log(tag, message)
 
     /** 便捷记录耗时：`Diag.span("Video") { ... }`。 */
@@ -78,11 +87,11 @@ object Diag {
     /** 导出最近日志到应用私有目录 `files/logs/`，返回文件。 */
     fun exportToFile(context: Context): File {
         val dir = File(context.applicationContext.filesDir, "logs").apply { mkdirs() }
-        val file = File(dir, "bili-diag-${fileClock.format(Date())}.log")
+        val file = File(dir, "bili-diag-${fileClock.get().format(Date())}.log")
         val header = buildString {
             appendLine("BiliAudio 诊断日志")
             appendLine(deviceInfo(context))
-            appendLine("导出于: ${wallClock.format(Date())}")
+            appendLine("导出于: ${wallClock.get().format(Date())}")
             appendLine("-----------------------------")
         }
         file.writeText(header + snapshot())
@@ -108,7 +117,7 @@ object Diag {
         val now = System.currentTimeMillis()
         val thread = Thread.currentThread().name
         return buildString {
-            append(wallClock.format(Date(now)))
+            append(wallClock.get().format(Date(now)))
             append(" +").append(now - processStartMs).append("ms")
             append(" [").append(tag).append(']')
             append(' ').append(message)

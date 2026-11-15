@@ -90,8 +90,11 @@ class MediaStreamResolverImpl(
     private fun dropCacheIfSessionChanged() {
         val snapshot = biliApi.cookieSnapshot()
         if (snapshot != lastCookieSnapshot) {
+            // 只记“会话变化清缓存”这件事，不记录 Cookie 内容。
+            val first = lastCookieSnapshot == null
             cache.clear()
             lastCookieSnapshot = snapshot
+            if (!first) Diag.log(TAG, "cache dropped: login/session changed")
         }
     }
 

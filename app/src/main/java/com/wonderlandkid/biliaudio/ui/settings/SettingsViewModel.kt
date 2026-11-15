@@ -126,6 +126,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "export archive FAILED", t)
                 _isExportingTree.value = false
                 _messages.tryEmit("导出归档 bundle 失败：${messageOf(t)}")
             }
@@ -159,6 +160,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "import archive FAILED", t)
                 _isImportingTree.value = false
                 _messages.tryEmit("从文件夹导入失败：${messageOf(t)}")
             }
@@ -193,6 +195,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "export user data FAILED", t)
                 _messages.tryEmit("导出用户数据失败：${messageOf(t)}")
             }
         }
@@ -222,6 +225,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "import user data FAILED", t)
                 _messages.tryEmit("导入用户数据失败：${messageOf(t)}")
             }
         }
@@ -318,6 +322,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "save diagnosticLogs FAILED", t)
                 _messages.tryEmit("保存维测日志设置失败：${t.message ?: "未知错误"}")
             }
         }
@@ -330,6 +335,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "save audioQuality FAILED", t)
                 _messages.tryEmit("保存音质设置失败：${t.message ?: "未知错误"}")
             }
         }
@@ -343,6 +349,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Settings", "save darkTheme FAILED", t)
                 _messages.tryEmit("保存外观设置失败：${t.message ?: "未知错误"}")
             }
         }
@@ -356,6 +363,7 @@ class SettingsViewModel(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
+                Diag.log("Auth", "logout FAILED", t)
                 _messages.tryEmit("退出登录失败：${t.message ?: "未知错误"}")
             }
         }

@@ -56,7 +56,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
             ?: AudioQualityPreference.AUTO
         // 未设置过 → null（跟随系统）
         val dark = if (prefs.contains(KEY_DARK_THEME)) prefs.getBoolean(KEY_DARK_THEME, false) else null
-        val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, false)
+        // v0.58.0：默认开启（用户反馈日志太少、问题反馈时导出为空）；老用户显式关闭过则保持关闭。
+        val diagnosticLogs = prefs.getBoolean(KEY_DIAGNOSTIC_LOGS, true)
         val homeStatsMode = prefs.getString(KEY_HOME_STATS_MODE, null)
             ?.let { name -> runCatching { HomeStatsMode.valueOf(name) }.getOrNull() }
             ?: HomeStatsMode.ALBUM_LISTEN_TIME

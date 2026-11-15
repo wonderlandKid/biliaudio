@@ -6,22 +6,56 @@
 ## 1. 诊断日志（Diag）说明
 
 - 实现：`util/Diag.kt`；内存环形（最近 3000 行）+ Logcat tag `BiliDiag`；设置页可查看/复制/导出/清空。
-- **开关**：设置 → 诊断与维护 →「维测日志」Switch（默认开启）。关闭后不记录/不打印（立即生效、持久化），
-  历史日志仍可查看/导出；排查问题前请确认开关为开启状态。
+- **开关**：设置 → 诊断与维护 →「维测日志」Switch，**v0.58.0 起默认开启**（关闭后不记录/不打印，
+  立即生效并持久化；历史日志仍可查看/导出）。反馈问题前请确认开关为开启状态。
 - 日志格式：`MM-dd HH:mm:ss.SSS +进程运行ms [Tag] 内容 (线程)`。
+- 预算：环形缓冲只有 3000 行，所以日志只记**状态跃迁/阈值跨越/失败**；拖拽、进度条等高频链路
+  一律去重（`settle`/`drag` 每次手势最多几条），禁止逐帧、禁止 position tick。
+- 隐私：不记录 Cookie / 账号 / 二维码 key / 完整签名 URL 等敏感信息。
 - Tag 含义：
 
 | Tag | 覆盖内容 |
 | --- | --- |
-| `App` | 启动、设备/版本信息、旧数据清理 |
-| `Api` | B 站接口请求（path、HTTP、耗时、重试/风控） |
-| `Resolver` | 播放流解析：缓存命中、音频清晰度/码率、CDN host、耗时 |
-| `Play` | 音频播放引擎：playAlbum/Track/Songs、队列与裁剪映射、READY、错误重试、前台服务 |
+| `App` | 启动（版本/设备）、前后台切换、通知权限结果、旧数据清理 |
+| `Api` | B 站接口请求（path、HTTP、耗时、重试）；搜索 WBI 失败降级 / 疑似风控结论 |
+| `Resolver` | 播放流解析：缓存命中、音频清晰度/码率、CDN host、耗时；登录态变化清缓存 |
+| `Play` | 播放引擎（原 tag `PlaybackEngine` 已统一为 `Play`）：播放/暂停/上下首/seek/跳队列/播放模式、队列与裁剪映射、BUFFERING/READY/ENDED、playWhenReady（音频焦点丢失/耳机拔出）、错误重试、准备失败 |
+| `Service` | 后台播放服务：onCreate/MediaSession 建立/taskRemoved/onDestroy/拉起失败 |
+| `Auth` | 启动登录态、refresh 结果（含网络失败保留缓存）、扫码阶段（WAITING/SCANNED/EXPIRED/SUCCESS）、退出登录；只记状态与布尔值 |
+| `Shell` | 导航壳：路由/Tab 切换、迷你条 rect、底栏高度、IME/mini inset、返回键、播放器展开/收起（settle/drag）、**progress 卡死告警** |
+| `Surface` | 播放器表面：层进入/退出、迷你条进场/退场动画、播放页内容 `progress>=0.06` 组合/销毁、共享封面目标测量（正方形校验）、共享封面 overlay 显隐、迷你条毛玻璃/降级模式 |
+| `NowPlaying` | 播放页：封面页 ↔ 歌词页、歌词页返回、播放列表面板开关、空态 |
+| `Theme` | 全局主题种子色（封面取色/取色失败） |
+| `Settings` | 设置持久化失败、归档/用户数据导入导出失败 |
+| `Stats` | 听歌统计落库失败 |
 | `Lyrics` | 歌词：自动匹配（`auto matched`）、在线搜索失败、解析失败、手动选源/本地导入、关闭/恢复 |
 | `LyricsApi` | 在线歌词接口请求（HTTP 失败/解析异常，失败静默返回空列表） |
 | `Cover` | 自定义封面：网易云搜索、图片下载/保存、DB 更新（albumId/path） |
 | `Import` | 专辑导入（BV/批量/文本）输入、条目数、耗时、失败原因；分割点文本解析统计 |
 | `Archive` | 归档导入/导出（模式、条目统计、自动备份路径） |
+| `AudioCache` | 离线缓存下载/跳过/失败、缓存管理删除 |
+
+### 1.1 播放器表面 / 迷你条排障（v0.57.0 起重点补充）
+
+先按下面顺序看日志（`Shell` + `Surface` 两组）：
+
+1. **点播放时迷你条「突然弹出」/没有过渡**：看 `[Surface] appear ENTER … duration=280ms` 与
+   `appear done value=1.000`。如果没有 `appear ENTER`（v0.57 前的问题），说明进场动画没有触发。
+2. **拖动时封面「变成长方形」**：看 `[Surface] cover target first=…` / `cover target ANOMALY …` /
+   `cover target OK …`。正常目标必须是正方形（`WxH` 接近相等，浮点取整允许 1~2px 误差），
+   出现 `896x50`、`896x4` 这类明显扁矩形且被标记 `ANOMALY` 说明测量被窗口裁剪
+   （v0.57.0 已修复；再出现即回归）。
+3. **拖动后迷你条卡死 / 半展开**：
+   - 看 `[Shell] drag START` 与 `drag STOP` 是否成对；`[Shell] settle START` 与 `settle END` 是否成对
+     （有 START 无 END，且之后没有新的 START/CANCEL → 收敛动画被打断，进度可能停在中间）；
+   - 看 `[Surface] player content ENTER/EXIT progress=…` 是否在拖动中途出现 EXIT；
+   - 最后出现 `[Shell] WARN progress stranded=… (no pointer / no settle)` = 进度停在中间值且没有手指/
+     没有归位动画，这就是「卡住」的现场（v0.57.0 修复的手势节点销毁问题会留下这类日志）。
+4. **迷你条位置/宽度不对**：看 `[Shell] miniBar rect=…` 与 `screen=…`，正常 mini 条左右各内缩
+   12dp、底部由 `bottomPad` 决定；`[Surface] miniBar glass=blur|translucent(…)` 可确认毛玻璃是否降级。
+5. **字段含义**：`progress` 0=迷你条、1=全屏；`v` 为松手速度（px/s）；`rule=velocity|projected`
+   表示展开/收起是按速度还是按预测位置判定；`source=click|drag|back|switchTab|trackCleared`
+   表示这次收敛由谁发起；`settle END 的 reached/forced` 可看出 spring 是否真正跑到目标。
 
 ## 2. 歌词相关（v0.27.0，SPICaMusic 方案）
 

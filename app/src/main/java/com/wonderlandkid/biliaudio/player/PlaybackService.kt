@@ -14,6 +14,7 @@ import androidx.media3.session.MediaSessionService
 import com.wonderlandkid.biliaudio.BiliAudioApp
 import com.wonderlandkid.biliaudio.MainActivity
 import com.wonderlandkid.biliaudio.R
+import com.wonderlandkid.biliaudio.util.Diag
 
 /**
  * 后台播放服务（Media3 MediaSessionService）。
@@ -31,6 +32,8 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TAG = "PlaybackService"
+        /** 维测日志 tag（后台播放链）。 */
+        private const val DIAG_TAG = "Service"
         private const val NOTIFICATION_CHANNEL_ID = "biliaudio_playback"
         private const val NOTIFICATION_ID = 0x1010
 
@@ -57,10 +60,12 @@ class PlaybackService : MediaSessionService() {
         if (playbackEngine == null) {
             // 理论上不会发生：服务只由播放引擎拉起；兜底避免空指针崩溃
             Log.w(TAG, "播放引擎尚未初始化，播放服务退出")
+            Diag.log(DIAG_TAG, "service onCreate FAILED: engine not initialized → stopSelf")
             stopSelf()
             return
         }
         engine = playbackEngine
+        Diag.log(DIAG_TAG, "service onCreate engine=ok")
 
         // 通知渠道（中文名用 App 名）+ 固定通知 id
         setMediaNotificationProvider(
@@ -91,6 +96,7 @@ class PlaybackService : MediaSessionService() {
         // 所以这里主动把 session 注册给服务：注册后 Media3 才会根据播放状态生成/更新
         // 媒体通知并调用 startForeground（否则 startForegroundService 会超时崩溃）。
         mediaSession?.let { addSession(it) }
+        Diag.log(DIAG_TAG, "service session created (notification/lockscreen ready)")
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -98,12 +104,19 @@ class PlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         // 用户从最近任务划掉 App：正在播放则继续后台播放，否则关闭服务
         val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+        val keepAlive = player != null && player.playWhenReady && player.mediaItemCount > 0
+        Diag.log(
+            DIAG_TAG,
+            "taskRemoved playWhenReady=${player?.playWhenReady} " +
+                "items=${player?.mediaItemCount} → ${if (keepAlive) "keep" else "stopSelf"}",
+        )
+        if (!keepAlive) {
             stopSelf()
         }
     }
 
     override fun onDestroy() {
+        Diag.log(DIAG_TAG, "service onDestroy")
         mediaSession?.player?.pause()
         mediaSession?.let { session ->
             removeSession(session)

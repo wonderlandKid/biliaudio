@@ -19,6 +19,7 @@ import coil3.asDrawable
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
+import com.wonderlandkid.biliaudio.util.Diag
 
 /**
  * 从当前歌曲封面取一个主题种子色（播放页局部主题用，不改变全局品牌色）。
@@ -39,7 +40,17 @@ internal fun rememberCoverAccentColor(cover: Any?, fallback: Color): Color {
             return@LaunchedEffect
         }
         val extracted = withContext(Dispatchers.IO) {
-            runCatching { extractAccent(context, cover) }.getOrNull()
+            runCatching { extractAccent(context, cover) }
+                .onFailure {
+                    // 只记封面类型，不记完整 URL（可能带签名）。
+                    Diag.log(
+                        "Theme",
+                        "cover accent extract FAILED cover=${cover.javaClass.simpleName}, " +
+                            "keep previous seed",
+                        it,
+                    )
+                }
+                .getOrNull()
         }
         accent = extracted ?: accent
     }

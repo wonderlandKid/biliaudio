@@ -68,7 +68,7 @@ class PlaybackEngine private constructor(
 ) : PlaybackController {
 
     companion object {
-        private const val TAG = "PlaybackEngine"
+        private const val TAG = "Play"
 
         /** 上一首：曲内进度超过该值先回到本曲开头（音乐播放器通用交互）。 */
         private const val PREVIOUS_RESTART_THRESHOLD_MS = 4_000L
@@ -214,6 +214,9 @@ class PlaybackEngine private constructor(
     /** 当前曲目是否已记录过音频 READY。 */
     private var itemReadyLogged = false
 
+    /** 当前曲目是否已记录过 BUFFERING（避免缓冲抖动刷屏）。 */
+    private var itemBufferingLogged = false
+
     /** 前台播放服务是否已拉起过（避免重复日志）。 */
     private var serviceStartLogged = false
 
@@ -308,11 +311,18 @@ class PlaybackEngine private constructor(
 
     override fun togglePlayPause() {
         if (player.playbackState == Player.STATE_ENDED) {
+            Diag.log(TAG, "cmd togglePlayPause → replay from start index=${player.currentMediaItemIndex}")
             player.seekToDefaultPosition(0)
             player.play()
             ensureServiceStarted()
             return
         }
+        val goingToPlay = !player.playWhenReady
+        Diag.log(
+            TAG,
+            "cmd togglePlayPause → ${if (goingToPlay) "play" else "pause"} " +
+                "index=${player.currentMediaItemIndex} pos=${player.currentPosition}ms",
+        )
         if (player.playWhenReady) pause() else play()
     }
 
@@ -328,6 +338,11 @@ class PlaybackEngine private constructor(
     }
 
     override fun next() {
+        Diag.log(
+            TAG,
+            "cmd next index=${player.currentMediaItemIndex} pos=${player.currentPosition}ms " +
+                "shuffle=${player.shuffleModeEnabled} repeat=${player.repeatMode}",
+        )
         if (player.mediaItemCount == 0) return
         if (player.shuffleModeEnabled) {
             // 随机模式交给播放器按随机顺序前进（会遵循循环模式）
@@ -349,6 +364,10 @@ class PlaybackEngine private constructor(
     }
 
     override fun previous() {
+        Diag.log(
+            TAG,
+            "cmd previous index=${player.currentMediaItemIndex} pos=${player.currentPosition}ms",
+        )
         if (player.mediaItemCount == 0) return
         // 播放超过 4 秒时，上一首先回本曲开头（音乐播放器通用行为）
         if (player.currentPosition > PREVIOUS_RESTART_THRESHOLD_MS) {
@@ -374,16 +393,27 @@ class PlaybackEngine private constructor(
 
     override fun seekToTrackPosition(positionMs: Long) {
         val entry = queueEntries.getOrNull(player.currentMediaItemIndex) ?: return
-        player.seekTo(positionMs.coerceIn(0L, entry.durationMs.coerceAtLeast(0L)))
+        val target = positionMs.coerceIn(0L, entry.durationMs.coerceAtLeast(0L))
+        Diag.log(
+            TAG,
+            "cmd seek index=${player.currentMediaItemIndex} target=${target}ms " +
+                "from=${player.currentPosition}ms",
+        )
+        player.seekTo(target)
         publishProgress()
     }
 
     override fun seekToAlbumPosition(albumPositionMs: Long) {
+        Diag.log(TAG, "cmd seek album position=${albumPositionMs}ms")
         val currentEntry = queueEntries.getOrNull(player.currentMediaItemIndex) ?: return
         val albumDuration = currentEntry.albumDurationMs.coerceAtLeast(currentEntry.durationMs)
         val target = PlaybackMapping.clampAlbumPosition(albumPositionMs, albumDuration)
         val localPosition = target - currentEntry.track.startMs
         if (localPosition in 0L..currentEntry.durationMs) {
+            Diag.log(
+                TAG,
+                "cmd seek album → index=${player.currentMediaItemIndex} local=${localPosition}ms",
+            )
             player.seekTo(localPosition)
         } else {
             // 目标落在本专辑别的曲目上：跳队列 + 曲内定位
@@ -392,16 +422,25 @@ class PlaybackEngine private constructor(
                 albumId = currentEntry.albumId,
                 albumPositionMs = target,
             )
-            if (targetIndex < 0) return
+            if (targetIndex < 0) {
+                Diag.log(TAG, "cmd seek album → target index not found, dropped (target=${target}ms)")
+                return
+            }
             val targetEntry = queueEntries[targetIndex]
             val targetLocal = (target - targetEntry.track.startMs)
                 .coerceIn(0L, targetEntry.durationMs.coerceAtLeast(0L))
+            Diag.log(TAG, "cmd seek album → jump index=$targetIndex local=${targetLocal}ms")
             player.seekTo(targetIndex, targetLocal)
         }
         publishProgress()
     }
 
     override fun jumpToQueueIndex(index: Int) {
+        Diag.log(
+            TAG,
+            "cmd jump queueIndex=$index size=${queueEntries.size} " +
+                "track=${queueEntries.getOrNull(index)?.track?.id}",
+        )
         if (index !in queueEntries.indices) return
         if (player.playbackState == Player.STATE_IDLE) player.prepare()
         player.seekToDefaultPosition(index)
@@ -410,6 +449,7 @@ class PlaybackEngine private constructor(
     }
 
     override fun setRepeatMode(mode: RepeatMode) {
+        Diag.log(TAG, "cmd repeatMode=${mode.name}")
         player.repeatMode = mode.toPlayerRepeatMode()
     }
 
@@ -418,10 +458,12 @@ class PlaybackEngine private constructor(
     }
 
     override fun toggleShuffle() {
+        Diag.log(TAG, "cmd toggleShuffle → ${!player.shuffleModeEnabled}")
         player.shuffleModeEnabled = !player.shuffleModeEnabled
     }
 
     override fun cyclePlaybackMode() {
+        Diag.log(TAG, "cmd cyclePlaybackMode from=${_state.value.playbackMode}")
         when (_state.value.playbackMode.next()) {
             PlaybackMode.SHUFFLE -> {
                 player.repeatMode = Player.REPEAT_MODE_OFF
@@ -464,6 +506,12 @@ class PlaybackEngine private constructor(
                 throw cancellation
             } catch (error: Exception) {
                 Log.w(TAG, "准备播放失败", error)
+                Diag.log(
+                    TAG,
+                    "prepare FAILED index=${_state.value.currentIndex} " +
+                        "queue=${queueEntries.size}: ${error.javaClass.simpleName}: ${error.message}",
+                    error,
+                )
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -581,7 +629,7 @@ class PlaybackEngine private constructor(
                 if (cacheAlbum) albumCache[album.id] = album
                 Diag.log(
                     TAG,
-                    "resolve CACHE HIT album=${album.id} file=${cached.filePath} " +
+                    "offlineCache HIT album=${album.id} file=${cached.filePath} " +
                         "quality=${cached.audioQualityLabel} bytes=${cached.bytes}",
                 )
                 return ResolvedStreams(
@@ -675,6 +723,7 @@ class PlaybackEngine private constructor(
         lastRecordedTrackId = null
         itemStartedAtMs = System.currentTimeMillis()
         itemReadyLogged = false
+        itemBufferingLogged = false
         player.setMediaItems(items, safeIndex, safePosition)
         player.prepare()
         player.play()
@@ -751,7 +800,10 @@ class PlaybackEngine private constructor(
         if (delta <= 0L) return
         scope.launch {
             runCatching { statsRepository.addListeningTime(albumId, uid, delta) }
-                .onFailure { Log.w(TAG, "写入收听时长失败", it) }
+                .onFailure {
+                    Diag.log("Stats", "addListeningTime FAILED album=$albumId delta=${delta}ms", it)
+                    Log.w(TAG, "写入收听时长失败", it)
+                }
         }
     }
 
@@ -796,7 +848,10 @@ class PlaybackEngine private constructor(
             runCatching {
                 albumRepository.markPlayed(entry.albumId, entry.track.id)
                 statsRepository.recordTrackStarted(entry.albumId, trackUid)
-            }.onFailure { Log.w(TAG, "记录播放统计失败", it) }
+            }.onFailure {
+                Diag.log("Stats", "recordPlayed FAILED album=${entry.albumId} track=${entry.track.id}", it)
+                Log.w(TAG, "记录播放统计失败", it)
+            }
         }
     }
 
@@ -811,8 +866,11 @@ class PlaybackEngine private constructor(
         }
         runCatching { PlaybackService.ensureStarted(appContext) }
             .onFailure {
-                Diag.log(TAG, "startForegroundService FAILED: ${it.javaClass.simpleName}: ${it.message}", it)
-                Log.w(TAG, "拉起播放服务失败", it)
+                Diag.log(
+                    "Service",
+                    "startForegroundService FAILED: ${it.javaClass.simpleName}: ${it.message}",
+                    it,
+                )
             }
     }
 
@@ -880,6 +938,7 @@ class PlaybackEngine private constructor(
                 player.play()
                 itemStartedAtMs = System.currentTimeMillis()
                 itemReadyLogged = false
+                itemBufferingLogged = false
                 _state.update { it.copy(isLoading = true, error = null) }
                 Diag.log(
                     TAG,
@@ -918,6 +977,7 @@ class PlaybackEngine private constructor(
             retriedForCurrentItem = false
             itemStartedAtMs = System.currentTimeMillis()
             itemReadyLogged = false
+            itemBufferingLogged = false
             publishCurrentItem()
             if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
                 recordPlayed(queueEntries.getOrNull(player.currentMediaItemIndex))
@@ -934,7 +994,22 @@ class PlaybackEngine private constructor(
             }
         }
 
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // reason = Media3 Player.PLAY_WHEN_READY_CHANGE_REASON_*（用户操作/音频焦点丢失/
+            // 耳机拔出/远程控制/播放结束）。事件驱动、频率极低，是「它自己暂停了」的唯一线索。
+            Diag.log(
+                TAG,
+                "playWhenReady=$playWhenReady reason=$reason " +
+                    "index=${player.currentMediaItemIndex} isPlaying=${player.isPlaying}",
+            )
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            Diag.log(
+                TAG,
+                "isPlaying=$isPlaying index=${player.currentMediaItemIndex} " +
+                    "pos=${player.currentPosition}ms",
+            )
             _state.update { it.copy(isPlaying = isPlaying) }
             if (isPlaying) {
                 ensureServiceStarted()
@@ -953,15 +1028,35 @@ class PlaybackEngine private constructor(
                     isPlaying = player.isPlaying,
                 )
             }
-            if (playbackState == Player.STATE_READY) {
-                publishProgress()
-                if (!itemReadyLogged) {
-                    itemReadyLogged = true
+            when (playbackState) {
+                Player.STATE_BUFFERING -> {
+                    // 每首歌最多一条；转圈卡住时能看出卡在哪首/哪个位置。
+                    if (!itemBufferingLogged) {
+                        itemBufferingLogged = true
+                        Diag.log(
+                            TAG,
+                            "audio BUFFERING index=${player.currentMediaItemIndex} " +
+                                "pos=${player.currentPosition}ms playWhenReady=${player.playWhenReady}",
+                        )
+                    }
+                }
+                Player.STATE_ENDED -> {
                     Diag.log(
                         TAG,
-                        "audio READY index=${player.currentMediaItemIndex} " +
-                            "in ${System.currentTimeMillis() - itemStartedAtMs}ms",
+                        "queue ENDED index=${player.currentMediaItemIndex} " +
+                            "size=${player.mediaItemCount}",
                     )
+                }
+                Player.STATE_READY -> {
+                    publishProgress()
+                    if (!itemReadyLogged) {
+                        itemReadyLogged = true
+                        Diag.log(
+                            TAG,
+                            "audio READY index=${player.currentMediaItemIndex} " +
+                                "in ${System.currentTimeMillis() - itemStartedAtMs}ms",
+                        )
+                    }
                 }
             }
         }

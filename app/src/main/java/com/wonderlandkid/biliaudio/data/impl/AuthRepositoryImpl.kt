@@ -10,6 +10,7 @@ import com.wonderlandkid.biliaudio.data.repository.AuthRepository
 import com.wonderlandkid.biliaudio.data.repository.AuthState
 import com.wonderlandkid.biliaudio.data.repository.QrLoginState
 import com.wonderlandkid.biliaudio.data.repository.QrPhase
+import com.wonderlandkid.biliaudio.util.Diag
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -68,6 +69,10 @@ class AuthRepositoryImpl(
             cookieStore.hasSession() -> AuthState.Unknown
             else -> AuthState.LoggedOut
         }
+        Diag.log(
+            "Auth",
+            "init state=${_authState.value::class.simpleName} hasSession=${cookieStore.hasSession()}",
+        )
     }
 
     override suspend fun refresh() {
@@ -90,11 +95,12 @@ class AuthRepositoryImpl(
                     ),
                 )
             } else {
+                Diag.log("Auth", "refresh nav → loggedOut hadSession=${cookieStore.hasSession()}")
                 applyLoggedOut(hadSession = cookieStore.hasSession())
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             // 网络失败：有本地缓存就保留登录态，避免网络抖动把用户踢成未登录
             val cached = currentProfile
             _authState.value = when {
@@ -102,6 +108,11 @@ class AuthRepositoryImpl(
                 cookieStore.hasSession() -> AuthState.Unknown
                 else -> AuthState.LoggedOut
             }
+            Diag.log(
+                "Auth",
+                "refresh FAILED keepCached=${cached != null} " +
+                    "hasSession=${cookieStore.hasSession()}: ${e.javaClass.simpleName}: ${e.message}",
+            )
         }
     }
 
@@ -109,11 +120,13 @@ class AuthRepositoryImpl(
         qrPollJob?.cancel()
         qrPollJob = null
         _qrState.value = QrLoginState(phase = QrPhase.LOADING, message = "正在获取二维码…")
+        Diag.log("Auth", "qr START")
         val generated = try {
             api.qrGenerate()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Diag.log("Auth", "qr GENERATE FAILED: ${e.javaClass.simpleName}: ${e.message}", e)
             _qrState.value = QrLoginState(phase = QrPhase.ERROR, message = e.message ?: "获取登录二维码失败")
             return
         }
@@ -129,6 +142,7 @@ class AuthRepositoryImpl(
         qrPollJob?.cancel()
         qrPollJob = null
         _qrState.value = QrLoginState()
+        Diag.log("Auth", "qr CANCEL")
     }
 
     override suspend fun logout() {
@@ -136,6 +150,7 @@ class AuthRepositoryImpl(
         qrPollJob = null
         _qrState.value = QrLoginState()
         val hadSession = cookieStore.hasSession()
+        Diag.log("Auth", "logout hadSession=$hadSession")
         cookieStore.clearSession()
         currentProfile = null
         persistProfile(null)
@@ -153,9 +168,12 @@ class AuthRepositoryImpl(
 
     private suspend fun pollQrCode(qrcodeKey: String) {
         val deadline = System.currentTimeMillis() + QR_LOGIN_TIMEOUT_MS
+        var lastPhase: QrPhase? = null
+        var pollErrorLogged = false
         while (true) {
             delay(QR_POLL_INTERVAL_MS)
             if (System.currentTimeMillis() > deadline) {
+                Diag.log("Auth", "qr EXPIRED (timeout, phase=$lastPhase)")
                 _qrState.value = _qrState.value.copy(phase = QrPhase.EXPIRED, message = "二维码已过期，请刷新")
                 return
             }
@@ -163,8 +181,16 @@ class AuthRepositoryImpl(
                 api.qrPoll(qrcodeKey)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
-                // 轮询网络抖动：继续重试直到超时
+            } catch (e: Exception) {
+                // 轮询网络抖动：继续重试直到超时；只记第一次，避免每 1.5s 刷屏
+                if (!pollErrorLogged) {
+                    pollErrorLogged = true
+                    Diag.log(
+                        "Auth",
+                        "qr poll network error (retry until timeout): " +
+                            "${e.javaClass.simpleName}: ${e.message}",
+                    )
+                }
                 continue
             }
             when (result.code) {
@@ -172,24 +198,38 @@ class AuthRepositoryImpl(
                     handleQrLoginSuccess()
                     return
                 }
-                86090 -> _qrState.value = _qrState.value.copy(
-                    phase = QrPhase.SCANNED,
-                    message = "已扫码，请在手机上确认登录",
-                )
+                86090 -> {
+                    if (lastPhase != QrPhase.SCANNED) {
+                        Diag.log("Auth", "qr phase → SCANNED")
+                        lastPhase = QrPhase.SCANNED
+                    }
+                    _qrState.value = _qrState.value.copy(
+                        phase = QrPhase.SCANNED,
+                        message = "已扫码，请在手机上确认登录",
+                    )
+                }
                 86038 -> {
+                    Diag.log("Auth", "qr EXPIRED (86038, phase=$lastPhase)")
                     _qrState.value = _qrState.value.copy(phase = QrPhase.EXPIRED, message = "二维码已失效，请刷新")
                     return
                 }
-                86101 -> _qrState.value = _qrState.value.copy(
-                    phase = QrPhase.WAITING,
-                    message = "等待扫码…",
-                )
+                86101 -> {
+                    if (lastPhase != QrPhase.WAITING) {
+                        Diag.log("Auth", "qr phase → WAITING")
+                        lastPhase = QrPhase.WAITING
+                    }
+                    _qrState.value = _qrState.value.copy(
+                        phase = QrPhase.WAITING,
+                        message = "等待扫码…",
+                    )
+                }
                 // 其他业务码：继续轮询
             }
         }
     }
 
     private suspend fun handleQrLoginSuccess() {
+        Diag.log("Auth", "qr SUCCESS")
         _qrState.value = _qrState.value.copy(phase = QrPhase.SUCCESS, message = "登录成功")
         // Cookie 已由 BiliApi 自动落盘；通知媒体流缓存失效
         onSessionChanged?.invoke()

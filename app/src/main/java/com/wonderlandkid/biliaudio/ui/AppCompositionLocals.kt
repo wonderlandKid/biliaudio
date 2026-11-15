@@ -7,10 +7,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -20,6 +22,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wonderlandkid.biliaudio.BiliAudioApp
 import com.wonderlandkid.biliaudio.di.AppContainer
+import com.wonderlandkid.biliaudio.util.Diag
+import com.wonderlandkid.biliaudio.ui.DiagTag
 import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.theme.BiliPink
 import com.wonderlandkid.biliaudio.ui.theme.rememberBiliPressIndication
@@ -80,6 +84,11 @@ fun AppTheme(content: @Composable () -> Unit) {
             .collect { cover -> value = cover }
     }
     val coverSeed = rememberCoverAccentColor(currentCover, BiliPink)
+    // 维测：全局主题种子色变化（封面取色），排查“主题颜色不对/不跟随封面”。
+    LaunchedEffect(coverSeed, dark) {
+        val argb = coverSeed.toArgb().toUInt().toString(16).padStart(8, '0')
+        Diag.log(DiagTag.THEME, "seed=#$argb dark=$dark")
+    }
     val view = LocalView.current
     // 系统栏图标明暗必须跟随 App 自己的深色设置，而不是只跟随系统深色模式：
     // 深色主题下状态栏时钟/图标用浅色，浅色主题下用深色。
