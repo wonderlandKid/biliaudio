@@ -60,6 +60,10 @@ import com.wonderlandkid.biliaudio.ui.components.coverModel
 import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
+import com.wonderlandkid.biliaudio.ui.components.BiliOutlinedButton
+import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
+import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,7 +104,7 @@ fun PlaylistDetailScreen(
         snackbarHostState = snackbarHostState,
         actions = {
             if (state.playlist != null) {
-                IconButton(onClick = { menuExpanded = true }) {
+                BiliIconButton(onClick = { menuExpanded = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "更多操作")
                 }
                 DropdownMenu(
@@ -170,7 +174,7 @@ fun PlaylistDetailScreen(
                             modifier = Modifier.padding(top = Spacing.md),
                             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
-                            Button(
+                            BiliButton(
                                 onClick = viewModel::playAll,
                                 enabled = playlist.tracks.isNotEmpty(),
                             ) {
@@ -178,7 +182,7 @@ fun PlaylistDetailScreen(
                                 Spacer(Modifier.width(Spacing.xs))
                                 Text("播放全部")
                             }
-                            OutlinedButton(onClick = { showAddSheet = true }) {
+                            BiliOutlinedButton(onClick = { showAddSheet = true }) {
                                 Icon(Icons.Rounded.Add, contentDescription = null)
                                 Spacer(Modifier.width(Spacing.xs))
                                 Text("添加歌曲")
@@ -242,7 +246,7 @@ fun PlaylistDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(
+                BiliTextButton(
                     onClick = {
                         showRenameDialog = false
                         viewModel.renamePlaylist(renameText)
@@ -251,7 +255,7 @@ fun PlaylistDetailScreen(
                 ) { Text("保存") }
             },
             dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) { Text("取消") }
+                BiliTextButton(onClick = { showRenameDialog = false }) { Text("取消") }
             },
         )
     }
@@ -262,7 +266,7 @@ fun PlaylistDetailScreen(
             title = { Text("删除歌单？") },
             text = { Text("只会删除歌单本身，不会删除音乐库里的歌曲。") },
             confirmButton = {
-                TextButton(
+                BiliTextButton(
                     onClick = {
                         showDeleteDialog = false
                         viewModel.deletePlaylist()
@@ -270,7 +274,7 @@ fun PlaylistDetailScreen(
                 ) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
+                BiliTextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
             },
         )
     }
@@ -297,7 +301,7 @@ private fun PlaylistTrackRow(
             )
         },
         trailing = {
-            IconButton(onClick = onRemove) {
+            BiliIconButton(onClick = onRemove) {
                 Icon(
                     imageVector = Icons.Rounded.RemoveCircleOutline,
                     contentDescription = "从歌单移除",
@@ -402,7 +406,7 @@ private fun AddSongsSheet(
                     }
                 }
             }
-            Button(
+            BiliButton(
                 onClick = {
                     onConfirm(filtered.filter { it.track.uid in selected })
                 },

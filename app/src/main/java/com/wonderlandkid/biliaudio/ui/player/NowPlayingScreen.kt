@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
@@ -311,6 +312,11 @@ private fun NowPlayingBody(
         }
         HorizontalPager(
             state = pagerState,
+            // v0.60.0：翻页吸附用弹簧（松手后自然归位，不再像 tween 那样机械）。
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                snapAnimationSpec = BiliMotion.springSettle(),
+            ),
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),

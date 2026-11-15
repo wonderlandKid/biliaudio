@@ -100,4 +100,26 @@ object BiliMotion {
 
     fun <T> standardEffectsSpring(): SpringSpec<T> =
         spring(dampingRatio = 1.0f, stiffness = 1600f)
+
+    // ---------------- iOS 肉感物理（v0.60.0） ----------------
+    // 目标：临界/微过冲弹簧，落位像有质量的物理材质（参考 skill「滑动肉感三大铁律」ζ≈0.75 边界回弹）。
+    // 约定：
+    // - 整页/大表面：不允许过冲（damping=1），只取弹簧的减速曲线；
+    // - 小控件按压/回弹：ζ=0.85，可见轻微回弹；
+    // - 抽屉/可拖拽面：ζ=0.75~0.9，松手归位有肉感但不晃荡。
+    /** 大表面/页面级弹簧：临界阻尼，无过冲（只享受 spring 的减速手感）。 */
+    fun <T> springPage(): SpringSpec<T> =
+        spring(dampingRatio = 1.0f, stiffness = 320f)
+
+    /** 交互归位（面板/抽屉/播放页）：轻微回弹。 */
+    fun <T> springSettle(): SpringSpec<T> =
+        spring(dampingRatio = 0.9f, stiffness = 360f)
+
+    /** 小控件按压回弹：明显一点点的肉感。 */
+    fun <T> springSnappy(): SpringSpec<T> =
+        spring(dampingRatio = 0.85f, stiffness = 500f)
+
+    /** 弹性最大的按钮/弹层：微弱过冲（ζ=0.75）。 */
+    fun <T> springBouncy(): SpringSpec<T> =
+        spring(dampingRatio = 0.75f, stiffness = 340f)
 }

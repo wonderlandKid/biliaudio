@@ -36,6 +36,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -84,7 +85,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -207,7 +210,7 @@ fun AppNavHost() {
         } else {
             systemBottomInset
         },
-        animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
+        animationSpec = BiliMotion.springSettle(),
         label = "miniBottomPadding",
     )
     // spring 不能出现过冲：padding 为负会直接抛 IllegalArgumentException（真机 v0.8.3 闪退根因）
@@ -215,6 +218,7 @@ fun AppNavHost() {
 
     // ---------------- 播放页连续展开状态 ----------------
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
 
     // 根 Tab 的滚动位置跨详情页保持：
     // 进入详情时底栏收起、NavHost 视口变高，LazyList 会把「到底」状态向上 clamp；
@@ -293,16 +297,18 @@ fun AppNavHost() {
             Animatable(playerProgress).animateTo(
                 targetValue = if (open) 1f else 0f,
                 animationSpec = spring(
-                    // 临界阻尼：不回弹/不过冲，避免松手后「闪一下」；
-                    // 配合较小初始速度，让惯性自然收敛而不是瞬间到顶。
-                    dampingRatio = 1f,
-                    stiffness = 380f,
+                    // v0.60.0：接近临界阻尼 + 轻微回弹（0.92），有 iOS 抽屉的落位肉感；
+                    // progress 全程 coerce 在 0..1，端部不会真的甩出边界。
+                    dampingRatio = 0.92f,
+                    stiffness = 360f,
                     visibilityThreshold = 0.001f,
                 ),
                 initialVelocity = velocity.coerceIn(-2.5f, 2.5f),
             ) { playerProgress = value.coerceIn(0f, 1f) }
             val reached = playerProgress
             playerProgress = if (open) 1f else 0f
+            // v0.60.0：播放页展开/收起完成时给一次轻触觉（iOS 式“落位”反馈）。
+            haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
             Diag.log(
                 DiagTag.SHELL,
                 "settle END source=$source open=$open reached=${diagProgress(reached)} " +
@@ -861,9 +867,12 @@ private fun RootTabPage(
 
 // 对称转场：进入/退出用完全相同的时长与曲线，只改变方向；
 // 不能一个 Decelerate 一个 Accelerate，否则同一对手势会觉得两侧速度不一致。
-private val PageSlideSpec = tween<androidx.compose.ui.unit.IntOffset>(
-    durationMillis = BiliMotion.AxisTotalMs,
-    easing = BiliMotion.Emphasized,
+// v0.60.0：层级页面转场从固定 500ms tween 换成临界阻尼弹簧（iOS 式减速落位，整页不做回弹），
+// 同时旧页只退 1/3 屏宽（iOS 视差），新页整页覆盖进来。
+private val PageSlideSpec = spring<androidx.compose.ui.unit.IntOffset>(
+    dampingRatio = 1f,
+    stiffness = 320f,
+    visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold,
 )
 
 private fun slideInFromRight(): EnterTransition =
@@ -873,7 +882,7 @@ private fun slideInFromLeft(): EnterTransition =
     slideInHorizontally(animationSpec = PageSlideSpec) { -it }
 
 private fun slideOutToLeft(): ExitTransition =
-    slideOutHorizontally(animationSpec = PageSlideSpec) { -it }
+    slideOutHorizontally(animationSpec = PageSlideSpec) { -it / 3 }
 
 // 一级 Tab 的转场只在「Tab ↔ 详情页」时生效：
 // - 从 Tab 进入详情：Tab 整页向左退出（新页从右进入）；
@@ -886,12 +895,23 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabExitTransition(
     if (targetState.destination.route in TAB_ROUTE_SET) ExitTransition.None else slideOutToLeft()
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.tabPopEnterTransition(): EnterTransition =
-    if (initialState.destination.route in TAB_ROUTE_SET) EnterTransition.None else slideInFromLeft()
+    if (initialState.destination.route in TAB_ROUTE_SET) {
+        EnterTransition.None
+    } else {
+        slideInHorizontally(animationSpec = PopSlideSpec) { -it / 3 }
+    }
 
 private val TAB_ROUTE_SET = setOf(Routes.HOME, Routes.LIBRARY, Routes.SETTINGS)
 
 private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(animationSpec = PageSlideSpec) { it }
+
+// pop 时上一页从「左侧 1/3」回位（与 push 的旧页视差对称）。
+private val PopSlideSpec = spring<androidx.compose.ui.unit.IntOffset>(
+    dampingRatio = 1f,
+    stiffness = 320f,
+    visibilityThreshold = androidx.compose.ui.unit.IntOffset.VisibilityThreshold,
+)
 
 // ---------------------------------------------------------------------------
 // 迷你播放条宿主

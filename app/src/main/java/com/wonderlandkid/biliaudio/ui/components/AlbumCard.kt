@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.data.model.Album
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
+import com.wonderlandkid.biliaudio.ui.theme.biliClickable
 
 /** 网格/列表通用的专辑卡片。 */
 @Composable
@@ -31,7 +32,7 @@ fun AlbumCard(
 ) {
     Column(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .biliClickable(onClick = onClick, pressedScale = 0.97f)
             .padding(bottom = Spacing.xs),
     ) {
         CoverImage(
@@ -96,7 +97,7 @@ fun AlbumCompactRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .biliClickable(onClick = onClick, pressedScale = 0.97f)
             .padding(vertical = Spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {

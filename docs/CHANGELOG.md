@@ -1,5 +1,28 @@
 # 版本记录
 
+## v0.60.0（2026-11-15 · tag `v0.60.0`）
+
+**iOS 式「肉感动画」第一批（P0 + P1 + 页面转场）**
+
+> 参考 mobile-design-system skill 的「滑动肉感三大铁律」（1:1 跟手、离手动量衰减、边界弹簧 ζ≈0.75），
+> 只取物理手感，不引入其视觉体系。按约定本轮**不做**：可打断转场、边缘侧滑返回、列表回弹 overscroll
+> （安卓原生拉伸已表达“到底”）。
+
+1. **弹簧 token 体系**（`BiliMotion.springPage/springSettle/springSnappy/springBouncy`）：
+   整页/大表面临界阻尼不过冲，小控件 ζ=0.85 可见回弹，抽屉/按钮 ζ=0.75 微过冲。
+2. **按压肉感**：新增 `Modifier.biliPressScale` / `biliClickable`；
+   新增 `BiliButton / BiliTextButton / BiliOutlinedButton / BiliIconButton / BiliFilledIconButton`
+   包装（内部用同一 InteractionSource 驱动 M3 组件 + 按压缩放 0.90~0.97 + 松手弹簧回弹），
+   全项目 8 个文件的主按钮、20 个文件的 M3 按钮已完成迁移；卡片/封面类自定义点击也有按压回弹。
+3. **层级页面转场**：固定 500ms tween 换成临界阻尼弹簧（iOS 式减速落位、整页不回弹），
+   旧页退出改为 1/3 屏宽视差（新页整页覆盖），push/pop 对称。
+4. **其它**：列表交错入场改弹簧；迷你条出现改弹簧；播放页松手归位改 ζ=0.92；
+   封面↔歌词 Pager 吸附改弹簧；播放页展开/收起完成加轻触觉反馈。
+5. 说明：material3 1.5.0-alpha22 的 `MotionScheme` 在 Kotlin 层仍是 internal，暂时无法全局注入
+   Expressive 弹簧（抽屉/胶囊等 M3 内置动画仍是默认 tween），等版本公开后再补。
+
+验证：207 单测全绿；Debug/Release 构建成功；模拟器验证播放页展开/收起（settle 539ms/385ms）、
+详情页 push/pop、弹层与列表交互正常。
 ## v0.59.3（2026-11-15 · tag `v0.59.3`）
 
 **修复：从播放页收回迷你条时「不透明材质 → 毛玻璃」突变**

@@ -1380,3 +1380,26 @@
      毛玻璃不会透出播放页残影，因此不再需要强制不透明。
 - **影响**：MiniPlayerBar（删除参数）、PlayerSurfaceLayer（调用/渐变区间）；207 单测；release v0.59.3。
   以后改迷你条材质时必须保持全程一致，材质切换只能做渐变不能做开关。
+
+
+## D86 iOS 式肉感动画（v0.60.0）
+
+- **日期**：2026-11-15
+- **背景**：希望全项目动画交互带 iPhone 的「肉感」（物理弹性），参考 mobile-design-system skill 的
+  「滑动肉感三大铁律」，但只取物理手感，不采用其视觉体系；并明确本轮**不做**三个中高难度项：
+  可打断转场、边缘侧滑返回、列表回弹 overscroll（安卓原生拉伸已表达“到底”，不做自定义）。
+- **决策**：
+  1. 弹簧 token 四档：`springPage`（damping 1.0/320，整页不过冲）、`springSettle`（0.9/360，面板归位）、
+     `springSnappy`（0.85/500，按下回弹/列表入场）、`springBouncy`（0.75/340，按钮松手弹回）；
+  2. 按压肉感走设计系统包装：`BiliButton/BiliTextButton/BiliOutlinedButton/BiliIconButton/
+     BiliFilledIconButton` + `Modifier.biliPressScale/biliClickable`；缩放只用 graphicsLayer
+     （不影响热区/布局），按下 90ms 到 0.90~0.97，松手 `springBouncy` 回弹；
+  3. 层级页转场：临界阻尼弹簧（320）+ 旧页 1/3 屏宽视差，push/pop 对称；
+  4. 其余：列表入场、迷你条出现、播放页 settle（ζ=0.92）、Pager 吸附、播放页完成触觉；
+  5. 明确限制：material3 1.5.0-alpha22 的 `MotionScheme` 在 Kotlin 层 internal，暂不能全局注入
+     M3 Expressive 弹簧；抽屉/AlertDialog 的内置动画维持默认，后续版本再包。
+- **原因**：M3 组件自带 ripple/动画绕过项目 `LocalIndication`，只能包一层才能统一按压反馈；
+  弹簧只作用于 transform/alpha，性能可控；整页转场保持临界阻尼避免露出背景/眩晕。
+- **影响**：`ui/theme/PressScale.kt`、`ui/components/BiliButtons.kt`、`Motion.kt`、`Entrance.kt`、
+  `AppNavHost.kt`、`MiniPlayerBar.kt`、`NowPlayingScreen.kt`、20+ 文件按钮迁移；207 单测；release v0.60.0。
+  新代码禁止直接使用 M3 按钮（见 AGENTS §9）。

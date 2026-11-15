@@ -5,19 +5,19 @@
 
 ## 当前状态（先读这个）
 
-- **版本：v0.59.3**（tag `v0.59.3`，2026-11-15；release commit 以 `git rev-parse v0.59.3` 为准）
+- **版本：v0.60.0**（tag `v0.60.0`，2026-11-15；release commit 以 `git rev-parse v0.60.0` 为准）
 - 详细交接信息见 **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)**
 - 设计决策记录见 **[docs/DECISIONS.md](docs/DECISIONS.md)**
 - 排障手册见 **[docs/DEBUGGING.md](docs/DEBUGGING.md)**
 - 版本变更见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**
-- 单元测试：**207 个**（v0.59.3；含 7 个 UI 架构守卫）
+- 单元测试：**207 个**（v0.60.0；含 7 个 UI 架构守卫）
 
 ## 快速开始
 
 ```bash
 export JAVA_HOME=/opt/android-studio/jbr        # 本机 JDK（Android Studio 自带 JBR 25）
 ./gradlew :app:assembleDebug                     # 构建 APK
-./gradlew :app:testDebugUnitTest                 # 单元测试（v0.59.3: 207 个）
+./gradlew :app:testDebugUnitTest                 # 单元测试（v0.60.0: 207 个）
 ./gradlew :app:assembleRelease                   # 性能/日常安装请用 release（R8）
 # 产物：app/build/outputs/apk/debug/app-debug.apk（开发调试，滚动会明显偏慢）
 #       app/build/outputs/apk/release/app-release.apk（R8 + debug 签名，可安装）
@@ -99,9 +99,10 @@ scripts/screenshot.sh home 8
 9. **动效规范（v0.8.2 起，参考 SPICaMusic_Android 统一）**：
    - **一级 Tab（发现/音乐库/设置）是平级页面，禁止滑动/缩放转场**：瞬时切换（EnterTransition.None），
      只保留底部导航指示器动画（参考项目就是同一个 HomeScreen 内 `when` 切换）；
-   - **层级页面统一 push/pop（完整宽度）**：push = 新页从右侧整页滑入、旧页同时整页向左滑出；
-     pop = 当前页整页向右滑出、上一页从左侧整页回位；**固定 500ms、进出同一条 Emphasized 曲线**
-     （只方向相反，保证对称），不跟手势速度联动；无 alpha、无 scale；Tab↔详情同理，Tab↔Tab 才瞬时；
+   - **层级页面统一 push/pop（完整宽度，v0.60.0 起走弹簧）**：push = 新页从右侧整页滑入、
+     旧页只退 1/3 宽（iOS 视差）；pop = 当前页整页右滑出、上一页从左侧 1/3 处回位；
+     转场用临界阻尼 `springPage()`（整页不过冲），与手势速度无关；无 alpha、无 scale；
+     Tab↔详情同理，Tab↔Tab 才瞬时；
    - **预测式返回不预演**：Manifest `enableOnBackInvokedCallback=false`，系统不做预测式预演；
      手势只提交普通 back，之后走 NavHost 普通 pop（方向稳定，避免反向扫动/快速浮现）；
    - **一级 Tab 行为平级**：音乐库/设置返回不回到发现，进入退出流程；根 Tab 返回需 2 秒内连续两次
@@ -127,6 +128,13 @@ scripts/screenshot.sh home 8
      详情页用系统 inset；出现/消失只做 alpha/位移，返回根 Tab 时直接以最终高度出现，保证滚动恢复不 clamp；
    - **所有自动动画必须有速度曲线**（Emphasized 或 spring），禁止 LinearEasing/匀速；时长统一用
      `BiliMotion` token，详见 [docs/MOTION.md](docs/MOTION.md)；
+   - **v0.60.0 起 iOS 式肉感物理**：新增 `springPage/springSettle/springSnappy/springBouncy`
+     四档弹簧（整页临界阻尼不过冲、小控件 ζ=0.85、按钮/弹层 ζ=0.75）；层级页转场、列表入场、
+     迷你条出现、播放页归位、Pager 吸附统一走弹簧；
+   - **M3 按钮统一用 Bili 包装**（`BiliButton/BiliTextButton/BiliOutlinedButton/BiliIconButton/
+     BiliFilledIconButton`，位于 `ui/components/BiliButtons.kt`）：它们用同一 InteractionSource
+     同时驱动 M3 组件与按压缩放回弹；**新代码不要直接用 M3 的 Button/TextButton/IconButton 等**；
+     行类/卡片类点击用 `Modifier.biliClickable`，纯行（列表行）不要缩放；
    - **按压反馈全局统一**：`AppTheme` 提供自绘 `LocalIndication`（水波纹 + 按压底色），
      Material 默认 ripple 关闭；只对 enabled 的可点击组件生效。
 10. **迷你条**：Haze blur（dev.chrisbanes.haze 2.0.1，API31+；低版本 fallback 半透明）+ 跟手拖拽；
@@ -175,7 +183,7 @@ scripts/screenshot.sh home 8
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | 当前版本、功能矩阵、验证状态、待办、交接说明 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 关键设计决策与原因（虚拟歌曲、队列语义、归档格式、缓存/歌词等） |
 | [docs/DEBUGGING.md](docs/DEBUGGING.md) | 诊断日志、常见故障排查（转圈、导入、Studio、网络） |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.59.3 版本记录 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | v0.1.0 → v0.60.0 版本记录 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 初版架构设计（含当前状态更新说明） |
 | [docs/API_NOTES.md](docs/API_NOTES.md) | B 站接口实测笔记（wbi、登录、播放流、选流策略） |
 | [docs/LIBRARY_ARCHIVE.md](docs/LIBRARY_ARCHIVE.md) | **归档 v3 格式规范（分域 bundle + 单分享文件）** |

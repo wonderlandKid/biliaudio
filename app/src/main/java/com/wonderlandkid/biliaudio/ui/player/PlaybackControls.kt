@@ -34,6 +34,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.wonderlandkid.biliaudio.player.PlaybackMode
 import com.wonderlandkid.biliaudio.player.PlaybackState
+import com.wonderlandkid.biliaudio.ui.components.BiliFilledIconButton
+import com.wonderlandkid.biliaudio.ui.components.BiliIconButton
 
 /**
  * 播放控制：合并播放模式 + 上一首 + 播放/暂停 + 下一首 + 播放列表。
@@ -55,7 +57,7 @@ internal fun ControlsRow(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onCyclePlaybackMode) {
+        BiliIconButton(onClick = onCyclePlaybackMode) {
             Icon(
                 imageVector = modeIcon(mode),
                 contentDescription = "播放模式：${modeLabel(mode)}（点击切换）",
@@ -66,14 +68,14 @@ internal fun ControlsRow(
                 },
             )
         }
-        IconButton(onClick = onPrevious, modifier = Modifier.size(52.dp)) {
+        BiliIconButton(onClick = onPrevious, modifier = Modifier.size(52.dp)) {
             Icon(
                 imageVector = Icons.Rounded.SkipPrevious,
                 contentDescription = "上一首",
                 modifier = Modifier.size(36.dp),
             )
         }
-        FilledIconButton(
+        BiliFilledIconButton(
             onClick = onTogglePlay,
             modifier = Modifier
                 .size(76.dp)
@@ -94,14 +96,14 @@ internal fun ControlsRow(
                 )
             }
         }
-        IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
+        BiliIconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
             Icon(
                 imageVector = Icons.Rounded.SkipNext,
                 contentDescription = "下一首",
                 modifier = Modifier.size(36.dp),
             )
         }
-        IconButton(onClick = onOpenPlaylist) {
+        BiliIconButton(onClick = onOpenPlaylist) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
                 contentDescription = "播放列表",

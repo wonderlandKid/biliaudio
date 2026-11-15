@@ -70,7 +70,7 @@ fun SectionHeader(
             }
         }
         if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            BiliTextButton(onClick = onAction) { Text(actionLabel) }
         }
     }
 }
@@ -133,7 +133,7 @@ fun SearchField(
             },
         )
         if (query.isNotEmpty()) {
-            IconButton(
+            BiliIconButton(
                 onClick = {
                     onQueryChange("")
                     runCatching { focusRequester.requestFocus() }
@@ -246,7 +246,7 @@ fun EmptyState(
         }
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(Spacing.lg))
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            BiliTextButton(onClick = onAction) { Text(actionLabel) }
         }
     }
 }

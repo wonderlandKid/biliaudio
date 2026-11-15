@@ -33,6 +33,7 @@ import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.BiliLayout
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import com.wonderlandkid.biliaudio.util.TimeUtils
+import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
 
 /**
  * 多 P 专辑：编辑每一 P 的曲目名。
@@ -69,7 +70,7 @@ fun MultiPageTrackEditorScreen(
         modifier = modifier,
         snackbarHostState = snackbarHostState,
         actions = {
-            TextButton(
+            BiliTextButton(
                 onClick = viewModel::save,
                 enabled = state.canSave,
             ) {

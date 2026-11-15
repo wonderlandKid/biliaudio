@@ -70,6 +70,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import com.wonderlandkid.biliaudio.ui.theme.biliClickable
 
 /**
  * 一次封面选择的结果（由调用方负责保存到数据库 / 文件）。
@@ -185,7 +186,7 @@ fun CoverPickerSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onDismiss) { Text("取消") }
+                BiliTextButton(onClick = onDismiss) { Text("取消") }
             }
             Spacer(Modifier.height(Spacing.md))
 
@@ -214,7 +215,7 @@ fun CoverPickerSheet(
             Spacer(Modifier.height(Spacing.lg))
 
             // ---- 从相册选择 ----
-            Button(
+            BiliButton(
                 onClick = {
                     localError = null
                     photoPicker.launch(
@@ -248,7 +249,7 @@ fun CoverPickerSheet(
             Spacer(Modifier.height(Spacing.sm))
 
             // ---- 网易云搜索（可折叠） ----
-            OutlinedButton(
+            BiliOutlinedButton(
                 onClick = {
                     if (searchOpen) {
                         searchOpen = false
@@ -274,7 +275,7 @@ fun CoverPickerSheet(
 
             // ---- 恢复 B 站封面 ----
             if (allowRestoreBilibili) {
-                TextButton(
+                BiliTextButton(
                     onClick = { onPick(CoverPick.RestoreBilibili) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -302,7 +303,7 @@ fun CoverPickerSheet(
                         Icon(Icons.Rounded.Search, contentDescription = null)
                     },
                     trailingIcon = {
-                        IconButton(
+                        BiliIconButton(
                             onClick = {
                                 focusManager.clearFocus()
                                 viewModel.search()
@@ -363,7 +364,7 @@ fun CoverPickerSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
-                        TextButton(onClick = { viewModel.search() }) { Text("重试") }
+                        BiliTextButton(onClick = { viewModel.search() }) { Text("重试") }
                     }
 
                     searchState.results.isNotEmpty() -> LazyVerticalGrid(
@@ -417,7 +418,7 @@ private fun CoverCandidateCell(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .biliClickable(onClick = onClick, pressedScale = 0.95f)
             .padding(2.dp),
     ) {
         CoverImage(
@@ -473,7 +474,7 @@ private fun CoverPickerError(
                 modifier = Modifier.weight(1f),
             )
             if (onRetry != null) {
-                TextButton(onClick = onRetry) {
+                BiliTextButton(onClick = onRetry) {
                     Text("重试", color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }

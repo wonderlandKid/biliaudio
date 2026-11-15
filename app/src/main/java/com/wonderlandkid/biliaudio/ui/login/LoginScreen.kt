@@ -55,6 +55,8 @@ import com.wonderlandkid.biliaudio.ui.template.BiliDetailScaffold
 import com.wonderlandkid.biliaudio.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.wonderlandkid.biliaudio.ui.components.BiliTextButton
+import com.wonderlandkid.biliaudio.ui.components.BiliButton
 
 /**
  * B 站扫码登录页。
@@ -204,7 +206,7 @@ private fun QrCard(
                 QrStatusRow(qrState)
                 if (qrState.phase == QrPhase.EXPIRED) {
                     Spacer(Modifier.height(Spacing.md))
-                    Button(
+                    BiliButton(
                         onClick = onRefresh,
                         shape = RoundedCornerShape(50),
                     ) {
@@ -284,7 +286,7 @@ private fun QrImageBox(
                             style = MaterialTheme.typography.titleSmall,
                             color = Color.White,
                         )
-                        TextButton(onClick = onRefresh) {
+                        BiliTextButton(onClick = onRefresh) {
                             Text("点击刷新", color = Color.White)
                         }
                     }
@@ -401,7 +403,7 @@ private fun QrErrorContent(
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(Spacing.lg))
-        Button(onClick = onRetry, shape = RoundedCornerShape(50)) {
+        BiliButton(onClick = onRetry, shape = RoundedCornerShape(50)) {
             Icon(
                 imageVector = Icons.Rounded.Refresh,
                 contentDescription = null,
@@ -532,7 +534,7 @@ private fun LoginSuccessContent(
             )
         }
         Spacer(Modifier.height(Spacing.xxl))
-        Button(
+        BiliButton(
             onClick = onLoggedIn,
             modifier = Modifier
                 .fillMaxWidth()
