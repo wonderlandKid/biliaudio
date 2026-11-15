@@ -20,6 +20,9 @@
 - 按压缩放只用 `graphicsLayer`（transform），不改布局/热区；行类元素不缩放，只做按压状态层；
 - M3 按钮必须用 `ui/components/BiliButtons.kt` 的 Bili 包装（新代码禁止直接用 M3 按钮）；
 - 本轮明确不做：可打断转场、边缘侧滑返回、自定义列表回弹 overscroll（安卓原生拉伸已表达到底）。
+- **v0.61.0**：material3 升级 1.5.0-rc01 并启用 `MotionScheme.expressive()`，M3 组件内置动画
+  （底部抽屉、NavigationBar/Tab、按钮/图标按钮、开关/勾选/单选、ListItem、AppBar、DropdownMenu、
+  SearchBar、SnackbarHost、Ripple 等）使用 M3 Expressive 弹簧；AlertDialog/Slider 暂未覆盖。
 
 ## 1. 总原则
 

@@ -1,5 +1,27 @@
 # 版本记录
 
+## v0.61.0（2026-11-15 · tag `v0.61.0`）
+
+**material3 升级到 1.5.0-rc01，全局启用 MotionScheme.expressive（M3 弹簧物理）**
+
+- v0.60.0 留下的限制：material3 1.5.0-alpha22 的 `MotionScheme` 在 Kotlin 层是 internal，
+  无法全局注入弹簧物理。经查 Maven 上 **1.5.0-rc01 已公开该 API**（`MotionScheme.standard/expressive`
+  与 `MaterialTheme(motionScheme = …)` 都是 public），且 rc01 依赖的 compose foundation/ui 1.12.0
+  与项目 BOM（1.12.1）兼容，升级成本低，因此直接把 material3 单独钉到 `1.5.0-rc01`
+  （`gradle/libs.versions.toml` 的 `material3` 版本，其余 compose 仍走 BOM），并启用
+  `MotionScheme.expressive()`。
+- 升级后自动获得弹簧物理的 M3 组件（rc01 源码确认消费 motionScheme 的组件）：
+  **底部抽屉（6 处播放列表/歌词来源/歌词偏移/封面选择/歌单选歌/导入方式）、按钮、图标按钮、
+  NavigationBar 底部导航、Tab/TabRow、Switch、Checkbox、RadioButton、ListItem、AppBar、
+  DropdownMenu、SearchBar、SnackbarHost、Ripple、PullToRefresh、TextField、SegmentedButton 等**；
+- 仍不覆盖：AlertDialog、Slider、CircularProgress（rc01 里这些组件尚未消费 motionScheme），
+  弹窗要肉感仍需后续自研包装。
+- 注意：material3 现在是显式钉版本（不再跟随 BOM），升级 Compose BOM 时要同步确认 material3
+  rc/稳定版兼容性。
+
+验证：207 单测全绿；Debug/Release 构建成功；`./gradlew :app:dependencies` 确认解析到
+material3 1.5.0-rc01；模拟器验证播放页/播放列表抽屉（ModalBottomSheet）、底部导航、按钮交互正常，
+无崩溃。
 ## v0.60.0（2026-11-15 · tag `v0.60.0`）
 
 **iOS 式「肉感动画」第一批（P0 + P1 + 页面转场）**

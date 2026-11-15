@@ -2,6 +2,7 @@ package com.wonderlandkid.biliaudio.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.materialkolor.PaletteStyle
@@ -27,8 +28,9 @@ fun BiliAudioTheme(
     )
     MaterialTheme(
         colorScheme = colorScheme,
-        // 说明：material3 1.5.0-alpha22 的 MotionScheme 在 Kotlin 层仍是 internal，
-        // 暂时无法通过 MaterialTheme 全局注入弹簧物理；等升级到公开版本再启用。
+        // v0.60.1：material3 1.5.0-rc01 起 MotionScheme 公开；Expressive = M3 弹簧物理，
+        // 底部抽屉/按钮/开关/勾选/导航栏/波纹/菜单等内置动画统一换成弹簧（iOS 肉感）。
+        motionScheme = MotionScheme.expressive(),
         typography = BiliTypography,
         shapes = BiliShapes,
         content = content,

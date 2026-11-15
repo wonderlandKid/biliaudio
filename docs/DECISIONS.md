@@ -1403,3 +1403,20 @@
 - **影响**：`ui/theme/PressScale.kt`、`ui/components/BiliButtons.kt`、`Motion.kt`、`Entrance.kt`、
   `AppNavHost.kt`、`MiniPlayerBar.kt`、`NowPlayingScreen.kt`、20+ 文件按钮迁移；207 单测；release v0.60.0。
   新代码禁止直接使用 M3 按钮（见 AGENTS §9）。
+
+
+## D87 material3 升级 1.5.0-rc01 + 全局 MotionScheme.expressive（v0.61.0）
+
+- **日期**：2026-11-15
+- **背景**：v0.60.0 想全局启用 M3 弹簧物理，但 project 的 material3（BOM 2026.09.00 → 1.5.0-alpha22）
+  中 `MotionScheme` 在 Kotlin 层是 internal、无法调用。用户询问是否有更近的支持版本。
+- **调查**：Maven（dl.google.com 可达）上 material3 最高版为 `1.5.0-rc01`；其源码中
+  `MotionScheme`、`standard()/expressive()`、`MaterialTheme(motionScheme = …)` 均为 public；
+  rc01 POM 依赖 compose foundation/ui/runtime **1.12.0**，与项目 BOM 的 1.12.1 兼容；
+  rc01 中消费 motionScheme 的组件覆盖 BottomSheet、Button、IconButton、NavigationBar、Tab、
+  Switch、Checkbox、RadioButton、ListItem、AppBar、Menu、SearchBar、SnackbarHost、Ripple 等。
+- **决策**：把 `material3` 单独钉到 `1.5.0-rc01`（`libs.versions.toml` 增加 `material3` 版本，
+  其余 compose 仍走 BOM），并在 `BiliAudioTheme` 启用 `MotionScheme.expressive()`。
+- **影响**：M3 组件内置动画（抽屉开关/吸附、导航栏 indicator、开关、勾选、菜单、波纹等）
+  全部弹簧化；AlertDialog/Slider 在 rc01 尚未消费 motionScheme，弹窗肉感需后续自研包装。
+  注意 material3 不再跟随 BOM，升级 Compose BOM 时必须同步核对 material3 版本兼容性。
